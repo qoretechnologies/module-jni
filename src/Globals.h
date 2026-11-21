@@ -179,6 +179,7 @@ public:
     DLLLOCAL static jmethodID methodQoreSandboxResolveClasspath;                  // static QoreURLClassLoader.ResolvedClasspath resolveClasspath(String, int)
     DLLLOCAL static jmethodID methodQoreSandboxExpandClasspath;                   // static void expandClasspath(ResolvedClasspath, int)
     DLLLOCAL static jmethodID methodQoreJavaApiGetStackTrace;                     // StackTraceElement[] getStackTrace()
+    DLLLOCAL static jmethodID methodQoreJavaApiGetStackProgramPtrs;               // long[] getStackProgramPtrs()
     DLLLOCAL static GlobalReference<jclass> classJavaCollectionTypes;             // org.qore.jni.JavaCollectionTypes
     DLLLOCAL static jmethodID methodJavaCollectionTypesIsStringKeyMap;            // boolean isStringKeyMap(Object)
     DLLLOCAL static jmethodID methodJavaCollectionTypesMayBeListOrMap;            // boolean mayBeListOrMap(Class)
@@ -894,6 +895,10 @@ public:
     DLLLOCAL virtual const QoreStackLocation* getNext() const;
 
 private:
+    //! the Qore code that Java calls records its own Program when it calls Java in turn: the caller of the enclosing
+    //! call from Qore into Java is cleared for it (qore#7023)
+    JniJavaCallerScope caller_clear{JniJavaCallerScope::Clear};
+
     int tid = q_gettid();
 
     mutable std::vector<std::string> stack_call;

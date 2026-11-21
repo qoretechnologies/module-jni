@@ -111,6 +111,9 @@ public class QoreURLClassLoader extends URLClassLoader {
         sandbox governs: getProgramPtr() throws ProgramDeletedException for it (qoretechnologies/qore#6845)
     */
     private volatile AtomicBoolean pgm_cleared = new AtomicBoolean(false);
+    //! the first Program pointer of the class loader (or of the class loader that it was derived from), which is kept
+    //! when the pointer is cleared: the Java code of its classes is attributed to that Program (qore#7023)
+    private volatile long origin_ptr;
 
     //! true while pgm_ptr is the holder of the parent class loader; guarded by ptr_lock
     private boolean shared_ptr = false;
@@ -201,7 +204,7 @@ public class QoreURLClassLoader extends URLClassLoader {
         // set classpath from system classpath
         String cp = System.getProperty("java.class.path");
         if (cp != null && !cp.isEmpty()) {
-            addPath(cp);
+            addPathIntern(cp);
         }
     }
 
@@ -233,6 +236,7 @@ public class QoreURLClassLoader extends URLClassLoader {
         @return the new class loader
     */
     public static QoreURLClassLoader createWithoutProgram(ClassLoader parent) {
+        checkProgramAccess0(0);
         return new QoreURLClassLoader(0, parent);
     }
 
@@ -245,6 +249,7 @@ public class QoreURLClassLoader extends URLClassLoader {
         super("QoreURLClassLoader", new URL[]{}, ClassLoader.getPlatformClassLoader());
         setContext();
         pgm_ptr.set(p_ptr);
+        origin_ptr = p_ptr;
         //System.out.printf("QoreURLClassLoader(long p_ptr: %x) this: %x\n", p_ptr, hashCode());
     }
 
@@ -255,6 +260,7 @@ public class QoreURLClassLoader extends URLClassLoader {
     QoreURLClassLoader(long p_ptr, ClassLoader parent) {
         super("QoreURLClassLoader", new URL[]{}, parent);
         pgm_ptr.set(p_ptr);
+        origin_ptr = p_ptr;
         // set the current classloader as the thread context classloader
         setContext();
         //System.out.printf("QoreURLClassLoader(long p_ptr: %x, ClassLoader parent: %s: %x) this: %x\n",
@@ -271,6 +277,7 @@ public class QoreURLClassLoader extends URLClassLoader {
             synchronized (parent.ptr_lock) {
                 pgm_ptr = parent.pgm_ptr;
                 pgm_cleared = parent.pgm_cleared;
+                origin_ptr = parent.origin_ptr != 0L ? parent.origin_ptr : parent.pgm_ptr.get();
             }
             shared_ptr = true;
         }
@@ -290,6 +297,7 @@ public class QoreURLClassLoader extends URLClassLoader {
         @return the new class loader
     */
     public static QoreURLClassLoader createDerived(QoreURLClassLoader parent) {
+        parent.checkAccess();
         return new QoreURLClassLoader(parent, true);
     }
 
@@ -309,7 +317,7 @@ public class QoreURLClassLoader extends URLClassLoader {
      * @param qualifiedClassName the name
      * @param javaFile           the file associated with the name
      */
-    public void add(final String qualifiedClassName, final QoreJavaFileObject javaFile) {
+    void addIntern(final String qualifiedClassName, final QoreJavaFileObject javaFile) {
         classes.put(qualifiedClassName, javaFile);
     }
 
@@ -363,12 +371,13 @@ public class QoreURLClassLoader extends URLClassLoader {
     }
 
     public void addPathOrig(String path) throws Exception {
+        checkAccess();
         //debugLog("QoreURLClassLoader.addPath(): file://" + path);
         super.addURL(new File(path).toURI().toURL());
     }
 
     //! adds byte code for an inner class to the byte code cache; requires a binary name (ex: \c my.package.MyClass$1)
-    public void addPendingClass(String bin_name, byte[] byte_code) {
+    void addPendingClassIntern(String bin_name, byte[] byte_code) {
         if (byte_code == null) {
             throw new RuntimeException("QoreURLClassLoader.addPendingClass() called with null byte_code");
         }
@@ -402,6 +411,7 @@ public class QoreURLClassLoader extends URLClassLoader {
         to clear all caches.
     */
     public void clearPendingClassesCache() {
+        checkAccess();
         pendingClasses.clear();
     }
 
@@ -413,6 +423,11 @@ public class QoreURLClassLoader extends URLClassLoader {
         clearPendingClassesCache();
     }
 
+    //! Clears the pending classes cache, for the jni module
+    void clearCacheIntern() {
+        pendingClasses.clear();
+    }
+
     //! Clears all caches in this classloader
     /** This method clears:
         - pendingClasses: byte code for classes being injected
@@ -421,6 +436,7 @@ public class QoreURLClassLoader extends URLClassLoader {
         - classInProgress: classes currently being created in the current Java call chain
     */
     public void clearAllCaches() {
+        checkAccess();
         pendingClasses.clear();
         classCache.clear();
         classes.clear();
@@ -524,6 +540,7 @@ public class QoreURLClassLoader extends URLClassLoader {
     }
 
     public byte[] removePendingByteCode(String bin_name) {
+        checkAccess();
         byte[] rv = pendingClasses.get(bin_name);
         return rv;
     }
@@ -788,7 +805,9 @@ public class QoreURLClassLoader extends URLClassLoader {
             return rv;
         }
         ClassLoader parent = getParent();
-        if (parent instanceof QoreURLClassLoader) {
+        // a dynamic class that the parent's Program has is not used for code that cannot reach that Program, as for
+        // the lookup of loadClass() (parentProgramReachable(), qore#7015, qore#7023)
+        if (parent instanceof QoreURLClassLoader && (!isDynamic(bin_name) || parentProgramReachable())) {
             return ((QoreURLClassLoader)parent).checkLoadedClass(bin_name);
         }
         return null;
@@ -863,7 +882,7 @@ public class QoreURLClassLoader extends URLClassLoader {
                         if (shared != null) {
                             return shared;
                         }
-                        return target.defineClassUnconditional(bin_name, bytes);
+                        return target.defineClassUnconditionalIntern(bin_name, bytes);
                     }
                 } catch (ClassNotFoundException e) {
                     // canonical loader can't make this class; fall through
@@ -1051,7 +1070,7 @@ public class QoreURLClassLoader extends URLClassLoader {
                         if (shared != null) {
                             return shared;
                         }
-                        return target.defineClassUnconditional(bin_name, bytes);
+                        return target.defineClassUnconditionalIntern(bin_name, bytes);
                     }
                 } catch (ClassNotFoundException e) {
                     // canonical loader can't make this class; fall through
@@ -1267,19 +1286,79 @@ public class QoreURLClassLoader extends URLClassLoader {
         return rv;
     }
 
-    public Class<?> defineClassUnconditional(String name, byte[] byte_code) throws ClassFormatError {
+    Class<?> defineClassUnconditionalIntern(String name, byte[] byte_code) throws ClassFormatError {
         // create the class and return it
         return defineClassIntern(name, byte_code, 0, byte_code.length);
     }
 
-    public Class<?> defineResolveClass(String name, byte[] b, int off, int len) throws ClassFormatError {
+    Class<?> defineResolveClassIntern(String name, byte[] b, int off, int len) throws ClassFormatError {
         QoreURLClassLoader shared_loader = getSharedDynamicClassLoader(name);
         if (shared_loader != null && shared_loader != this) {
-            return shared_loader.defineResolveClass(name, b, off, len);
+            return shared_loader.defineResolveClassIntern(name, b, off, len);
         }
         Class<?> rv = defineClassIntern(name, b, off, len);
         resolveClass(rv);
         return rv;
+    }
+
+    //! Returns the Program pointer of the class loader, or the first one that it had if it has been cleared
+    /** For the attribution of the Java code of its classes (qore#7023)
+    */
+    long getOriginPtr() {
+        long ptr = pgm_ptr.get();
+        return ptr != 0L ? ptr : origin_ptr;
+    }
+
+    //! Refuses an operation on this class loader to code that cannot reach its Program (qore#7023)
+    /** The Program pointer of a class loader names the Program that Java code of its classes runs for: code that a
+        sandbox governs cannot change another Program's class loader (its classpath, its classes, its pointer), or
+        create a class loader for another Program
+    */
+    void checkAccess() {
+        checkProgramAccess0(getOriginPtr());
+    }
+
+    //! Throws the refusal of the jni module if the calling code cannot reach the Program \a ptr (qore#7023)
+    static native void checkProgramAccess0(long ptr);
+
+    public void add(final String qualifiedClassName, final QoreJavaFileObject javaFile) {
+        checkAccess();
+        addIntern(qualifiedClassName, javaFile);
+    }
+
+    public void addPendingClass(String bin_name, byte[] byte_code) {
+        checkAccess();
+        addPendingClassIntern(bin_name, byte_code);
+    }
+
+    public Class<?> defineClassUnconditional(String name, byte[] byte_code) throws ClassFormatError {
+        checkAccess();
+        return defineClassUnconditionalIntern(name, byte_code);
+    }
+
+    public Class<?> defineResolveClass(String name, byte[] b, int off, int len) throws ClassFormatError {
+        checkAccess();
+        return defineResolveClassIntern(name, b, off, len);
+    }
+
+    public void clearProgramPtr() {
+        checkAccess();
+        clearProgramPtrIntern();
+    }
+
+    public void addParentPath(String classpath) {
+        checkAccess();
+        addParentPathIntern(classpath);
+    }
+
+    public void addPath(String classpath) {
+        checkAccess();
+        addPathIntern(classpath);
+    }
+
+    public void addWildcard(File dir, String nam) {
+        checkAccess();
+        addWildcardIntern(dir, nam);
     }
 
     //! Returns the program pointer
@@ -1308,7 +1387,7 @@ public class QoreURLClassLoader extends URLClassLoader {
     /** After calling this method, the classloader should not be used for operations
         that require a valid Qore Program.
     */
-    public void clearProgramPtr() {
+    void clearProgramPtrIntern() {
         setPtrIntern(0, true);
         sharedDynamicClassLoaders.entrySet().removeIf(entry -> entry.getValue() == this);
     }
@@ -1347,6 +1426,9 @@ public class QoreURLClassLoader extends URLClassLoader {
     */
     private void setPtrIntern(long ptr, boolean cleared) {
         synchronized (ptr_lock) {
+            if (origin_ptr == 0L && ptr != 0L) {
+                origin_ptr = ptr;
+            }
             if (shared_ptr) {
                 pgm_ptr = new AtomicLong(ptr);
                 pgm_cleared = new AtomicBoolean(cleared);
@@ -1435,12 +1517,12 @@ public class QoreURLClassLoader extends URLClassLoader {
         parent is the platform class loader), the path is added to this class loader.  An error while the path is
         added is thrown to the caller (qore#6779).
     */
-    public void addParentPath(String classpath) {
+    void addParentPathIntern(String classpath) {
         ClassLoader parent = getParent();
         if (parent instanceof QoreURLClassLoader) {
-            ((QoreURLClassLoader)parent).addPath(classpath);
+            ((QoreURLClassLoader)parent).addPathIntern(classpath);
         } else {
-            addPath(classpath);
+            addPathIntern(classpath);
         }
     }
 
@@ -1481,7 +1563,7 @@ public class QoreURLClassLoader extends URLClassLoader {
         with resolveClasspath() and addResolvedPath(), so that every file that is added is one that the policy
         checked (qore#6818).
     */
-    public void addPath(String classpath) {
+    void addPathIntern(String classpath) {
         //debugLog(String.format("%x: addPath(): %s", hashCode(), classpath));
         if (classpath == null) {
             throw new IllegalArgumentException("the classpath must not be null");
@@ -1518,7 +1600,7 @@ public class QoreURLClassLoader extends URLClassLoader {
 
             if (basename != null && !basename.isEmpty()) {
                 //debugLog("addWildcard() parent: " + fileentry.getParentFile().getPath() + " basename: " + basename);
-                addWildcard(fileentry.getParentFile(), basename);
+                addWildcardIntern(fileentry.getParentFile(), basename);
             } else if (!fileentry.exists()) { // s/never be due getCanonicalFile() above
                 //errorLog("Could not find classpath element '" + fileentry + "'");
             } else if (fileentry.isDirectory()) {
@@ -2195,7 +2277,7 @@ public class QoreURLClassLoader extends URLClassLoader {
      * Adds a set of files using a generic base name to this loader's classpath.  See @ref addPath() for
      * details of the generic base name; only \c '*' is a wildcard (see wildcardMatches()).
      */
-    public void addWildcard(File dir, String nam) {
+    void addWildcardIntern(File dir, String nam) {
         if (!dir.exists()) {
             errorLog("Cannot find directory for classpath element '" + dir + File.separator + nam + "'");
             return;
@@ -2345,6 +2427,7 @@ public class QoreURLClassLoader extends URLClassLoader {
         BooleanWrapper created = new BooleanWrapper();
         long ptr = getContextProgram0(this, created, static_bootstrap);
         pgm_ptr.set(ptr);
+        origin_ptr = ptr;
 
         if (created.val) {
             Runtime.getRuntime().addShutdownHook(new Thread() {

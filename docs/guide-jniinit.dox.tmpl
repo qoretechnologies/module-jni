@@ -14,6 +14,26 @@
     - \c QORE_JNI_MAX_HEAP_SIZE: will set the <tt><b>-Xmx</b></tt> JVM initialization option for the maximum heap size
     - \c QORE_JNI_DISABLE_NATIVE_ACCESS: when set to \c 1, do not add
       <tt><b>--enable-native-access=ALL-UNNAMED</b></tt> to JVM initialization options
+    - \c QORE_JNI_RESTRICTED_JVM: when set to \c 1, start the JVM restricted for hosts that run Java code of
+      sandboxed Programs:
+      - no native access for code of unnamed modules through the JDK's restricted methods
+        (<tt><b>--illegal-native-access=deny</b></tt>, and no <tt><b>--enable-native-access=ALL-UNNAMED</b></tt>)
+      - no memory access through \c sun.misc.Unsafe (<tt><b>--sun-misc-unsafe-memory-access=deny</b></tt>)
+      - no agents loaded into the running JVM (<tt><b>-XX:+DisableAttachMechanism</b></tt>,
+        <tt><b>-XX:-EnableDynamicAgentLoading</b></tt>), so attach-based tools such as \c jcmd are not available
+
+      It needs a module built for Java 24 or later: with an earlier Java, the module refuses to start the JVM rather
+      than start it without the restrictions.  As many JVM options could undo the restrictions, the module also refuses
+      to start the JVM if \c JAVA_TOOL_OPTIONS or \c _JAVA_OPTIONS has a value, if \c QORE_JNI_DEBUG gives a debugger
+      port, or if \c QORE_JNI_JVM_ARGS has any option other than <tt>-Xms</tt>, <tt>-Xmx</tt> and <tt>-Xss</tt>, and
+      refuses to load if it is given a JVM that it did not start (the \c jvm-ptr module option).  Java libraries that
+      need native access or \c sun.misc.Unsafe fail in a restricted JVM; this includes the Kotlin compiler, so Kotlin
+      compilation is not available.
+
+    @warning A sandbox that allows uncontrolled APIs, and so Java, is not an isolation boundary against malicious
+    code, also in a restricted JVM: Java code has the rights of the JVM, which can read or change any state of the
+    process; the restricted start removes some of the most direct ways, as defense in depth.  Code that must be
+    isolated is not given uncontrolled APIs.
 
     For example:
     @verbatim

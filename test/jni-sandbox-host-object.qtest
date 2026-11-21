@@ -1,0 +1,1132 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../build"
+%requires QUnit
+%requires jni
+%module-cmd(jni) add-relative-classpath qore-jni-test.jar
+%module-cmd(jni) add-relative-classpath ../build/qore-jni-compiler.jar
+%module-cmd(jni) import org.qore.jni.compiler.QoreJavaCompiler
+%module-cmd(jni) import org.qore.jni.test.HostObjectProbe
+%module-cmd(jni) import java.lang.Class
+%module-cmd(jni) import java.util.concurrent.ExecutorService
+%module-cmd(jni) import java.util.concurrent.Executors
+
+%exec-class JniSandboxHostObjectTest
+
+#! Java objects of another Program do not give sandboxed code that Program's reach (qoretechnologies/qore#7023)
+/** A call of a Java method of an object runs in the Program that owns the object, which libqore also makes the Program
+    context of the call.  The check of Java's calls into Qore for code that a sandbox governs (qore#6845) took that
+    Program as the Program of the calling code, so Java code that sandboxed code reached through a Java object of
+    another Program could call into that Program; the Java classes generated for the Qore definitions of a Program
+    (constructors, static methods, functions) did not check their caller at all.  The Program of the calling code is
+    now the Program of the Qore code that made the call into Java.  Qore code that a Program hands to other code as a
+    callback (a closure, a Qore object, an invocation handler) still runs in its own Program, as in Qore.
+*/
+class JniSandboxHostObjectTest inherits QUnit::Test {
+    public {
+        #! the code of the sandboxed Program
+        const TenantSource = "%modern
+%requires jni
+%module-cmd(jni) import org.qore.jni.test.HostObjectProbe
+%module-cmd(jni) import org.qore.jni.test.GovernedProgramProbe
+%module-cmd(jni) import org.qore.jni.compiler.QoreJavaCompiler
+%module-cmd(jni) import java.lang.Class
+
+string sub tenant_fn() {
+    return \"tenant\";
+}
+
+class TenantClass {
+}
+
+# returns \"OK: <value>\" or the exception
+string sub run(code c) {
+    try {
+        return sprintf(\"OK: %s\", c());
+    } catch (hash<ExceptionInfo> ex) {
+        return sprintf(\"%s: %s\", ex.err, ex.desc);
+    }
+}
+
+# a method of a class loader: the class is generated in the class loader's Program
+string sub load(object loader, string name) {
+    return run(auto sub () { return loader.loadClass(name).getName(); });
+}
+
+# an object of a generated class of the class loader's Program, and a call of its method
+string sub instantiate(object loader, string name) {
+    return run(auto sub () {
+        Class cls = loader.loadClass(name);
+        object o = cls.getDeclaredConstructor().newInstance();
+        return cls.getMethod(\"secret\").invoke(o);
+    });
+}
+
+# a static method of a generated class of the class loader's Program
+string sub static_call(object loader, string name, string method) {
+    return run(auto sub () { return loader.loadClass(name).getMethod(method).invoke(NOTHING); });
+}
+
+# returns the java.lang.String and Class.forName() objects reached from the Java object given
+list<object> sub reflection(object any) {
+    object clscls = any.getClass().getClass();
+    object strcls = clscls.getMethod(\"getName\").getReturnType();
+    return (strcls, clscls.getMethod(\"forName\", strcls));
+}
+
+# QoreJavaApi.callFunction() through reflection, with the class of the class loader given
+string sub loader_call(object loader, string func) {
+    return run(auto sub () {
+        object cls = loader.loadClass(\"org.qore.jni.QoreJavaApi\");
+        list<object> r = reflection(cls);
+        object m = cls.getMethod(\"callFunction\", r[0], r[1].invoke(NOTHING, \"[Ljava.lang.Object;\"));
+        return m.invoke(NOTHING, func, NOTHING);
+    });
+}
+
+# QoreJavaApi.callFunction() through reflection, reached from any Java object
+string sub any_call(object any, string func) {
+    return run(auto sub () {
+        list<object> r = reflection(any);
+        object cls = r[1].invoke(NOTHING, \"org.qore.jni.QoreJavaApi\");
+        object m = cls.getMethod(\"callFunction\", r[0], r[1].invoke(NOTHING, \"[Ljava.lang.Object;\"));
+        return m.invoke(NOTHING, func, NOTHING);
+    });
+}
+
+# a method of the Java object that calls into Qore
+string sub probe_call(object probe, string func) {
+    return probe.callQore(func);
+}
+
+# a chain of objects returned by the methods of the Java object
+string sub chain_call(object probe, string func) {
+    return probe.next().next().next().callQore(func);
+}
+
+# the object in a field of the Java object
+string sub field_call(object probe, string func) {
+    return probe.field.callQore(func);
+}
+
+# writes a field of the Java object, which Java reads
+string sub field_write_call(object probe, string func) {
+    probe.field = new HostObjectProbe();
+    return HostObjectProbe::readField(probe).callQore(func);
+}
+
+# the object in a static field
+string sub static_field_call(string func) {
+    return HostObjectProbe::staticField.callQore(func);
+}
+
+# a static method that calls into Qore with the host's object
+string sub static_method_call(object probe, string func) {
+    return HostObjectProbe::staticCallVia(probe, func);
+}
+
+# a constructor that calls into Qore with the host's object
+string sub constructor_call(object probe, string func) {
+    return (new HostObjectProbe(probe, func)).created;
+}
+
+# the identity of the class of the object in a field of the host's object, as the tenant sees it
+string sub field_identity(object probe) {
+    return probe.field.classIdentity();
+}
+
+# gadgets of pure JDK classes on a Java object of the host
+string sub gadget_call(object probe, string gadget, string func) {
+    switch (gadget) {
+        case \"method-handle\": return probe.methodHandleCall(func);
+        case \"method-handle-proxy\": return probe.methodHandleProxyCall(func);
+        case \"proxy\": return probe.proxyCall(func);
+    }
+    throw \"UNKNOWN\", gadget;
+}
+
+# a call of the Java object's method on another thread
+string sub thread_call(object probe, string mode, string func, *object pool) {
+    return probe.threadCall(mode, func, pool);
+}
+
+# the class loader of the class of a Java object of the host (a proxy that the host implemented)
+string sub proxy_loader_load(object proxy, string name) {
+    return run(auto sub () { return proxy.getClass().getClassLoader().loadClass(name).getName(); });
+}
+
+# an exception thrown by a method of the Java object, and the object that it carries
+string sub exception_call(object probe, string func) {
+    try {
+        probe.fail();
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.arg.probe.callQore(func);
+    }
+    return \"no exception\";
+}
+
+# a call into another Program through the class loader given, by Java code that this Program calls directly
+string sub direct_call(object loader, string func) {
+    return GovernedProgramProbe::callIn(loader, func);
+}
+
+# a callback that the host handed to the tenant
+auto sub call_code(code c) {
+    return c();
+}
+
+# a Java closure that the host handed to the tenant, called with an argument
+auto sub call_code_arg(code c, string func) {
+    return c(func);
+}
+
+# a Java closure of the tenant, passed through a Java object of the host
+code sub echo_code(object probe) {
+    return probe.echo(HostObjectProbe::caller());
+}
+
+# a Java closure of the tenant, passed through a Java object of the host, called with an argument
+auto sub echo_code_call(object probe, string func) {
+    code c = probe.echo(HostObjectProbe::caller());
+    return c(func);
+}
+
+# a method of a Qore object that the host handed to Java, called by Java for the tenant
+auto sub java_call_method(object holder, string method) {
+    return HostObjectProbe::callHeldMethod(get_class_loader(), holder, method);
+}
+
+# a method of an interface implemented by the host, called by Java
+auto sub supplier_get(object supplier) {
+    return HostObjectProbe::supply(supplier);
+}
+
+# closures of the tenant that the host calls directly
+code sub tenant_closures(string which) {
+    switch (which) {
+        # a static Java method that calls into the Program of the class loader given
+        case \"static\": return string sub (object loader, string func) {
+            return GovernedProgramProbe::callIn(loader, func);
+        };
+        # a static Java method with the class loader of the calling code's Program
+        case \"static-own\": return string sub (string func) {
+            return GovernedProgramProbe::callIn(get_class_loader(), func);
+        };
+        # a method of a Java object that calls into Qore
+        case \"object\": return string sub (object probe, string func) {
+            return probe.callQore(func);
+        };
+        # a static Java method that calls into Qore with the host's object
+        case \"static-probe\": return string sub (object probe, string func) {
+            return HostObjectProbe::staticCallVia(probe, func);
+        };
+    }
+    throw \"UNKNOWN\", which;
+}
+
+# the name that the host gave the tenant
+our string tenant_name_value;
+nothing sub set_tenant_name(string name) {
+    tenant_name_value = name;
+}
+string sub tenant_name() {
+    return tenant_name_value;
+}
+
+# a Qore closure of the tenant called by Java on a thread of the given kind, in the context of the class loader given
+string sub callback_ctx(string mode, object loader) {
+    return HostObjectProbe::callbackWithContext(mode, loader, string sub (code c) { return c(\"host_fn\"); });
+}
+
+# a call into the Program of the class loader given on a thread of the given kind
+string sub thread_call_in(string mode, object loader, string func) {
+    return HostObjectProbe::threadCallIn(mode, loader, func);
+}
+
+# a call into the Program of the class loader given as a task of the pool given
+string sub submit_call_in(object pool, object loader, string func) {
+    return HostObjectProbe::submitCallIn(pool, loader, func);
+}
+
+# hands a Java closure to the consumer given
+nothing sub give_caller(object consumer) {
+    HostObjectProbe::giveCaller(consumer);
+}
+
+# a call into the Program whose class loader is the context class loader of a live thread, on the ForkJoin pool
+string sub context_loader_call(int ptr, string func) {
+    return HostObjectProbe::contextLoaderCall(ptr, func);
+}
+
+# a Java class that the tenant compiled
+Class sub compile_class(string name, string src) {
+    QoreJavaCompiler compiler(get_class_loader(), NOTHING);
+    on_exit compiler.close();
+    object out = compiler.compile(name, src);
+    return out.cls;
+}
+
+# a Java object of a Java class compiled in a Program that the tenant creates, which has no sandbox of its own
+our *Program child;
+object sub child_object(string child_src, string src) {
+    child = new Program(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+    child.parse(child_src, \"child\");
+    return child.callFunction(\"make_object\", src);
+}
+
+# the byte code of a Java class that the tenant compiles
+binary sub compile_bytes(string name, string src) {
+    QoreJavaCompiler compiler(get_class_loader(), NOTHING);
+    on_exit compiler.close();
+    object out = compiler.compile(name, src);
+    return out.file.openInputStream().readAllBytes();
+}
+
+# a Java object of TenantProbe, made in a way that tries to hide the tenant from the attribution of its Java code;
+# returns the object or the exception
+auto sub spoofed_object(string how, string src, string loader_src, string fake_src) {
+    try {
+        switch (how) {
+            # a class loader for the global Java context Program
+            case \"null-parent\": {
+                object loader = new Jni::org::qore::jni::QoreURLClassLoader(\"x\", NOTHING);
+                QoreJavaCompiler compiler(loader, NOTHING);
+                on_exit compiler.close();
+                object out = compiler.compile(\"TenantProbe\", src);
+                return out.cls.getDeclaredConstructor().newInstance();
+            }
+            # a class loader with no Program
+            case \"no-program\": {
+                object loader = Jni::org::qore::jni::QoreURLClassLoader::createWithoutProgram(NOTHING);
+                loader.addPendingClass(\"TenantProbe\", compile_bytes(\"TenantProbe\", src));
+                return loader.loadClass(\"TenantProbe\").getDeclaredConstructor().newInstance();
+            }
+            # the pointer of the tenant's own class loader, cleared
+            case \"cleared\": {
+                object obj = make_tenant_object(src);
+                obj.getClass().getClassLoader().clearProgramPtr();
+                return obj;
+            }
+            # a class loader of a class of the tenant named org.qore.jni.QoreURLClassLoader, which reports no Program
+            case \"fake-name\": {
+                object lcls = compile_class(\"TenantLoader2\", replace(loader_src, \"TenantLoader\", \"TenantLoader2\"));
+                object own = lcls.getDeclaredConstructor().newInstance();
+                object fake_cls = own.def(\"org.qore.jni.QoreURLClassLoader\",
+                    compile_bytes(\"org.qore.jni.QoreURLClassLoader\", fake_src));
+                object fake = fake_cls.getDeclaredConstructor().newInstance();
+                # called with reflection: the class has the name of a class of the module
+                object def = fake_cls.getMethod(\"def\", fake_cls.getMethod(\"toString\").getReturnType(),
+                    Class::forName(\"[B\"));
+                return def.invoke(fake, \"TenantProbe\", compile_bytes(\"TenantProbe\", src))
+                    .getDeclaredConstructor().newInstance();
+            }
+            # a class loader of the tenant's own class
+            case \"own-loader\": {
+                object lcls = compile_class(\"TenantLoader\", loader_src);
+                object loader = lcls.getDeclaredConstructor().newInstance();
+                return loader.def(\"TenantProbe\", compile_bytes(\"TenantProbe\", src)).getDeclaredConstructor()
+                    .newInstance();
+            }
+        }
+        throw \"UNKNOWN\", how;
+    } catch (hash<ExceptionInfo> ex) {
+        return sprintf(\"%s: %s\", ex.err, ex.desc);
+    }
+}
+
+# clears the pointer of the class loader given; returns the exception or \"cleared\"
+string sub clear_loader(object loader) {
+    try {
+        loader.clearProgramPtr();
+        return \"cleared\";
+    } catch (hash<ExceptionInfo> ex) {
+        return sprintf(\"%s: %s\", ex.err, ex.desc);
+    }
+}
+
+# a Java object of a Java class that the tenant compiled
+object sub make_tenant_object(string src) {
+    return compile_class(\"TenantProbe\", src).getDeclaredConstructor().newInstance();
+}
+
+# the parent of the tenant's own class loader
+object sub parent_loader() {
+    return get_class_loader().getParent();
+}
+
+object sub tenant_loader() {
+    return get_class_loader();
+}
+";
+
+        #! a Java class that the tenant compiles, whose method calls into the Program of the class loader given
+        const TenantProbeSource = "public class TenantProbe implements java.util.function.Consumer<Object> {
+    public static String last;
+    public String callIn(Object loader, String function) {
+        return sCall(loader, function);
+    }
+    public static String sCall(Object loader, String function) {
+        try {
+            ((org.qore.jni.QoreURLClassLoader)loader).setContext();
+            return \"ok: \" + org.qore.jni.QoreJavaApi.callFunction(function);
+        } catch (Throwable e) {
+            return e.toString();
+        }
+    }
+    public String toString() {
+        return reach();
+    }
+    public void accept(Object o) {
+        last = reach();
+    }
+    private static String reach() {
+        try {
+            return \"ok: \" + org.qore.jni.QoreJavaApi.callFunction(\"host_fn\");
+        } catch (Throwable e) {
+            return e.toString();
+        }
+    }
+}
+";
+
+        #! trusted code under a sandbox that sets only resource limits
+        const LimitsOnlySource = "%modern
+%requires jni
+%module-cmd(jni) import org.qore.jni.test.GovernedProgramProbe
+string sub direct_call(object loader, string func) {
+    return GovernedProgramProbe::callIn(loader, func);
+}
+";
+
+        #! the code of a Program that the tenant creates
+        const ChildSource2 = "%modern
+%requires jni
+%module-cmd(jni) import org.qore.jni.compiler.QoreJavaCompiler
+%module-cmd(jni) import java.lang.Class
+object sub make_object(string src) {
+    QoreJavaCompiler compiler(get_class_loader(), NOTHING);
+    on_exit compiler.close();
+    object out = compiler.compile(\"TenantProbe\", src);
+    Class cls = out.cls;
+    return cls.getDeclaredConstructor().newInstance();
+}
+";
+
+        #! a Java class that extends a Qore class of the host
+        const ParentLeakSource = "package org.qore.jni.test.leak;
+public class HostChild extends qore.ParentLeakBase {
+    public HostChild() throws Throwable {
+        super();
+    }
+}
+";
+
+        #! a class loader of the tenant's own class, with no parent
+        const TenantLoaderSource = "public class TenantLoader extends ClassLoader {
+    public TenantLoader() {
+        super(null);
+    }
+    public Class<?> def(String name, byte[] b) {
+        return defineClass(name, b, 0, b.length);
+    }
+}
+";
+
+        #! a class loader class of the tenant with the name of the module's class loader class, which reports no Program
+        const FakeLoaderSource = "package org.qore.jni;
+public class QoreURLClassLoader extends ClassLoader {
+    public QoreURLClassLoader() {
+        super(null);
+    }
+    public long getPtr() {
+        return 0L;
+    }
+    public Class<?> def(String name, byte[] b) {
+        return defineClass(name, b, 0, b.length);
+    }
+}
+";
+
+        #! a Java class that the tenant compiles, whose static initializer calls into the Program of the class loader
+        #! context
+        const TenantClinitSource = "public class TenantClinit {
+    public static String result;
+    static {
+        try {
+            result = \"ok: \" + org.qore.jni.QoreJavaApi.callFunction(\"host_fn\");
+        } catch (Throwable e) {
+            result = e.toString();
+        }
+    }
+}
+";
+
+        #! a Qore class that a Java class extends (qore#7041)
+        const BaseSource = "%modern
+%requires jni
+class Base {
+    constructor() {}
+}
+object sub base_loader() {
+    return get_class_loader();
+}
+";
+
+        #! a Java class whose static initializer tries to call the host through every class loader it can find
+        const ClinitSource = "public class Clinit {
+    public static String result = run();
+    static String run() {
+        StringBuilder sb = new StringBuilder();
+        java.util.Set<ClassLoader> seen = new java.util.HashSet<>();
+        java.util.List<ClassLoader> cands = new java.util.ArrayList<>();
+        for (ClassLoader l = Clinit.class.getClassLoader(); l != null; l = l.getParent()) {
+            cands.add(l);
+        }
+        for (Thread t : Thread.getAllStackTraces().keySet()) {
+            ClassLoader l = t.getContextClassLoader();
+            if (l != null) {
+                cands.add(l);
+            }
+        }
+        for (ClassLoader l : cands) {
+            if (!seen.add(l) || !(l instanceof org.qore.jni.QoreURLClassLoader)) {
+                continue;
+            }
+            try {
+                ((org.qore.jni.QoreURLClassLoader)l).setContext();
+                sb.append(\"ok: \" + org.qore.jni.QoreJavaApi.callFunction(\"host_count_fn\") + \"; \");
+            } catch (Throwable e) {
+                sb.append(\"refused: \" + e + \"; \");
+            }
+        }
+        return sb.toString();
+    }
+}
+";
+
+        #! the Java class that extends it
+        const ChildSource = "public class JavaChild extends qore.Base {
+    public JavaChild() throws Throwable {
+        super();
+    }
+}
+";
+
+        #! a trusted Program that the tenant never calls
+        const UntouchedSource = "%modern
+%requires jni
+%module-cmd(jni) import org.qore.jni.test.HostObjectProbe
+string sub x_fn() {
+    return \"x\";
+}
+# a thread that makes the Program's class loader its context class loader and keeps it until done
+nothing sub hold_context(Queue ready, Queue done) {
+    background sub () {
+        # a static Java call sets the thread's context to the Program's class loader
+        HostObjectProbe::staticCallVia(new HostObjectProbe(), \"x_fn\");
+        ready.push(get_class_loader().getPtr());
+        done.get();
+    }();
+}
+";
+
+        #! the refusal
+        const NotGoverned = "cannot call into a Qore Program other than the one of the calling code";
+
+        #! the result of a call of a host function in the tenant's own Program, where the function does not exist
+        const NoHostFn = "NO-FUNCTION";
+    }
+
+    private {
+        #! the host's Java object, which the tenant gets
+        HostObjectProbe probe();
+
+        #! the sandboxed Program
+        Program tenant;
+    }
+
+    constructor() : QUnit::Test("jni sandbox host object", "1.0") {
+        addTestCase("a class loader of another Program", \loaderTest());
+        addTestCase("any Java object of another Program", \anyObjectTest());
+        addTestCase("objects returned by calls, fields and exceptions", \propagationTest());
+        addTestCase("static members and constructors", \staticTest());
+        addTestCase("generated classes of another Program", \generatedTest());
+        addTestCase("gadgets of pure JDK classes", \gadgetTest());
+        addTestCase("Java threads", \threadTest());
+        addTestCase("callbacks, Java closures, other tenants and tenant objects", \reviewTest());
+        addTestCase("a trusted Program that the tenant never calls", \untouchedTest());
+        addTestCase("Java code of the tenant that the host runs", \tenantCodeTest());
+        addTestCase("Java code of a Program that the tenant creates", \tenantChildTest());
+        addTestCase("Java code of the tenant that hides from the attribution", \spoofTest());
+        addTestCase("Java code of a tenant that has been deleted", \deletedTenantTest());
+        addTestCase("the class loader of another Program", \loaderLockTest());
+        addTestCase("a dynamic class of the parent class loader", \parentClassTest());
+        addTestCase("module commands that trusted code issues (qore#7041)", \trustedCommandTest());
+        addTestCase("Java code of a tenant that runs while its code is parsed", \parseTimeTest());
+        addTestCase("trusted code under a sandbox that restricts no I/O", \limitsOnlyTest());
+        addTestCase("callbacks that the host hands to the tenant", \callbackTest());
+        addTestCase("re-entrant calls", \reentrantTest());
+        addTestCase("a tenant closure called by the host (qore#7028)", \residualTest());
+        addTestCase("host-only use", \hostTest());
+        addTestCase("the same code without a sandbox", \trustedTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        tenant = getTenant();
+        reenter_code = \reenter();
+        # the host uses the generated classes of its own Program first, as a host that uses them from Java does
+        auto setup_loader = get_class_loader();
+        setup_loader.loadClass("qore.HostPregenerated");
+        setup_loader.loadClass("qore.$Functions");
+    }
+
+    loaderTest() {
+        auto host_loader = get_class_loader();
+        # a method of the host's class loader generates a class in the host's Program
+        assertRegex(NotGoverned, tenant.callFunction("load", host_loader, "qore.HostSecret"));
+        # an object of a host class, and its methods
+        assertRegex(NotGoverned, tenant.callFunction("instantiate", host_loader, "qore.HostSecretInstance"));
+        # a host function through QoreJavaApi with the class of the host's class loader
+        assertRegex(NotGoverned, tenant.callFunction("loader_call", host_loader, "host_fn"));
+        # the tenant's own Program is reachable through the same calls
+        object own = tenant.callFunction("tenant_loader");
+        assertEq("OK: tenant", tenant.callFunction("loader_call", own, "tenant_fn"));
+        assertEq("OK: qore.TenantClass", tenant.callFunction("load", own, "qore.TenantClass"));
+    }
+
+    anyObjectTest() {
+        # any Java object of the host reaches the class loader context of its Program
+        string rv = tenant.callFunction("any_call", probe, "host_fn");
+        assertRegex(NotGoverned, rv);
+        # a method of the host's object that calls into Qore
+        rv = tenant.callFunction("probe_call", probe, "host_fn");
+        assertRegex(NotGoverned, rv);
+        # a Java closure of the tenant obtained through a Java object of the host is a callback of the tenant, which
+        # calls into the tenant's Program only
+        assertRegex(NoHostFn, tenant.callFunction("echo_code_call", probe, "host_fn"));
+        # a Java object of the tenant reaches the tenant's Program only
+        rv = tenant.callFunction("any_call", tenant.callFunction("tenant_loader"), "host_fn");
+        assertRegex(NoHostFn, rv);
+        assertEq("OK: tenant", tenant.callFunction("any_call", tenant.callFunction("tenant_loader"), "tenant_fn"));
+    }
+
+    propagationTest() {
+        # the objects returned by the host object's methods
+        assertRegex(NotGoverned, tenant.callFunction("chain_call", probe, "host_fn"));
+        # a field of the host object, written by the host: the object in it is the host's, of the host's class
+        HostObjectProbe fp();
+        probe.field = fp;
+        assertEq(fp.classIdentity(), tenant.callFunction("field_identity", probe));
+        assertRegex(NotGoverned, tenant.callFunction("field_call", probe, "host_fn"));
+        # a field written by the tenant
+        assertRegex(NotGoverned, tenant.callFunction("field_write_call", probe, "host_fn"));
+        # an exception thrown by a method of the host object, and the object that it carries, which Java code of
+        # the host's call created
+        assertRegex(NotGoverned, tenant.callFunction("exception_call", probe, "host_fn"));
+        # the caller is restored after the exception: the tenant is still refused, and the host still reaches its
+        # own Program
+        assertRegex(NotGoverned, tenant.callFunction("probe_call", probe, "host_fn"));
+        assertEq("ok: host", probe.callQore("host_fn"));
+    }
+
+    staticTest() {
+        HostObjectProbe sp();
+        HostObjectProbe::staticField = sp;
+        assertRegex(NotGoverned, tenant.callFunction("static_field_call", "host_fn"));
+        # a static method and a constructor that the tenant calls with the host's object
+        assertRegex(NotGoverned, tenant.callFunction("static_method_call", probe, "host_fn"));
+        assertRegex(NotGoverned, tenant.callFunction("constructor_call", probe, "host_fn"));
+        # the host's own calls
+        assertEq("ok: host", HostObjectProbe::staticCallVia(probe, "host_fn"));
+        assertEq("ok: host", (new HostObjectProbe(probe, "host_fn")).created);
+    }
+
+    generatedTest() {
+        # the classes that the host generated are defined by the parent of the tenant's class loader: their
+        # constructors, static methods and functions are not called for the tenant
+        auto parent = tenant.callFunction("parent_loader");
+        auto host_loader = get_class_loader();
+        assertEq(host_loader.getProgramPtr(), parent.getProgramPtr());
+        assertRegex(NotGoverned, tenant.callFunction("instantiate", parent, "qore.HostPregenerated"));
+        assertRegex(NotGoverned, tenant.callFunction("static_call", parent, "qore.HostPregenerated", "staticSecret"));
+        assertRegex(NotGoverned, tenant.callFunction("static_call", parent, "qore.$Functions", "host_fn"));
+    }
+
+    gadgetTest() {
+        # every gadget is refused; compared as a whole, so that a failure shows each result
+        list<string> gadgets = ("method-handle", "method-handle-proxy", "proxy");
+        hash<auto> rv = map {$1: tenant.callFunction("gadget_call", probe, $1, "host_fn")}, gadgets;
+        hash<auto> expected = map {$1: True}, gadgets;
+        hash<auto> actual = map {$1.key: regex($1.value, NotGoverned)}, rv.pairIterator();
+        assertEq(expected, actual, sprintf("%y", rv));
+        # the host's own use
+        assertEq("ok: host", probe.methodHandleCall("host_fn"));
+        assertEq("ok: host", probe.methodHandleProxyCall("host_fn"));
+        assertEq("ok: host", probe.proxyCall("host_fn"));
+        # the class loader of a proxy that the host implemented is the host's
+        QoreInvocationHandler handler(auto sub (object method, *list<auto> args) { return host_fn(); });
+        object supplier = implement_interface(get_class_loader(), handler,
+            Class::forName("java.util.function.Supplier"));
+        assertRegex(NotGoverned, tenant.callFunction("proxy_loader_load", supplier, "qore.HostProxySecret"));
+    }
+
+    threadTest() {
+        # Java threads that the tenant's call into a Java object of the host creates, or hands work to
+        ExecutorService pool = Executors::newFixedThreadPool(1);
+        on_exit pool.shutdown();
+        # the pool's thread exists before the tenant's call
+        HostObjectProbe::prestart(pool);
+        # every mode is refused; compared as a whole, so that a failure shows each result
+        list<string> modes = ("thread", "executor", "completable", "timer", "forkjoin", "pool");
+        hash<auto> rv = map {$1: tenant.callFunction("thread_call", probe, $1, "host_fn", pool)}, modes;
+        hash<auto> expected = map {$1: True}, modes;
+        hash<auto> actual = map {$1.key: regex($1.value, NotGoverned)}, rv.pairIterator();
+        assertEq(expected, actual, sprintf("%y", rv));
+        # a Qore closure that the host hands to a Java thread is a callback, which runs in its own Program
+        assertEq("ok: host", HostObjectProbe::threadCallClosure(string sub () { return host_fn(); }));
+    }
+
+    reviewTest() {
+        auto host_loader = get_class_loader();
+        Program tenant_b = getTenant();
+        tenant.callFunction("set_tenant_name", "A");
+        tenant_b.callFunction("set_tenant_name", "B");
+        object a_loader = tenant.callFunction("tenant_loader");
+        object b_loader = tenant_b.callFunction("tenant_loader");
+        hash<auto> rv;
+        # a Qore closure of the tenant that Java calls in the context of the host's class loader, on a thread that
+        # the tenant's call creates and on a virtual thread, which inherits no thread-locals
+        rv."callback-thread" = tenant.callFunction("callback_ctx", "thread", host_loader);
+        rv."callback-virtual" = tenant.callFunction("callback_ctx", "virtual", host_loader);
+        # a Java closure that the tenant hands to a listener of the host, which the host calls
+        *code listener;
+        QoreInvocationHandler handler(sub (object method, *list<auto> args) { listener = args[0]; });
+        object consumer = implement_interface(handler, Class::forName("java.util.function.Consumer"));
+        tenant.callFunction("give_caller", consumer);
+        rv."listener" = listener("host_fn");
+        # the Program of another tenant, from threads that inherit no thread-locals
+        rv."tenant-virtual" = tenant.callFunction("thread_call_in", "virtual", b_loader, "tenant_name");
+        rv."tenant-noinherit" = tenant.callFunction("thread_call_in", "noinherit", b_loader, "tenant_name");
+        # the host's Program from such threads
+        rv."host-virtual" = tenant.callFunction("thread_call_in", "virtual", host_loader, "host_fn");
+        rv."host-noinherit" = tenant.callFunction("thread_call_in", "noinherit", host_loader, "host_fn");
+        # the thread of a shared single-thread executor, created by the call of one tenant and reused by the call of
+        # another tenant
+        ExecutorService pool = Executors::newSingleThreadExecutor();
+        on_exit pool.shutdown();
+        rv."pool-first" = tenant.callFunction("submit_call_in", pool, a_loader, "tenant_name");
+        rv."pool-other-tenant" = tenant_b.callFunction("submit_call_in", pool, a_loader, "tenant_name");
+        # a method of a Java object of the tenant (of a class that it compiled) that the host calls
+        object tenant_obj = tenant.callFunction("make_tenant_object", TenantProbeSource);
+        rv."tenant-object" = tenant_obj.callIn(host_loader, "host_fn");
+        # a Java closure of the tenant, passed through a Java object of the host, that the host calls: it stays the
+        # tenant's, and its call reaches only the tenant's Program
+        code laundered = tenant.callFunction("echo_code", probe);
+        rv."laundered-closure" = laundered("host_fn");
+        # every call is refused, except that the Java closure stays the tenant's: its call reaches only the tenant's
+        # Program, which does not have the host's function
+        hash<string, string> pattern = map {$1: ($1 == "listener" || $1 == "laundered-closure") ? NoHostFn
+            : NotGoverned}, keys rv;
+        hash<auto> expected = map {$1: True}, keys rv;
+        hash<auto> actual = map {$1.key: regex($1.value, pattern{$1.key})}, rv.pairIterator();
+        assertEq(expected, actual, sprintf("%y", rv));
+    }
+
+    limitsOnlyTest() {
+        # trusted code that a sandbox governs only for its resource limits, which allows uncontrolled APIs: it is not
+        # sandboxed, and its Java code reaches another Program, as without the sandbox
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        SandboxManager mgr();
+        mgr.setFilesystemDefaultPolicy(True);
+        mgr.setNetworkDefaultPolicy(True);
+        mgr.setUncontrolledApiPolicy(True);
+        mgr.setMaxThreads(100);
+        p.setSandboxManager(mgr);
+        p.issueModuleCmd("jni", "add-classpath " + get_script_dir() + "/qore-jni-test.jar");
+        p.parse(LimitsOnlySource, "limits-only");
+        auto host_loader = get_class_loader();
+        string rv = p.callFunction("direct_call", host_loader, "host_fn");
+        assertEq("ok: host", rv, rv);
+    }
+
+    trustedCommandTest() {
+        # the byte code of a Java class that extends the Qore class Base, compiled in a Program that has the class
+        Program h(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        h.loadModule("jni");
+        h.parse(BaseSource, "base-compile");
+        object compiler = new QoreJavaCompiler(h.callFunction("base_loader"), NOTHING);
+        on_exit compiler.close();
+        object out = compiler.compile("JavaChild", ChildSource);
+        binary b = out.file.openInputStream().readAllBytes();
+        # trusted code defines the class in a Program with a sandbox that restricts nothing (a host's sandbox of
+        # trusted code), in a Program that a restricting sandbox governs, and in one with no sandbox, with committed
+        # and pending code: the command acts for its Program
+        foreach hash<auto> c in (
+                {"name": "unrestricting", "sm": True, "restricting": False},
+                {"name": "restricting", "sm": True, "restricting": True},
+                {"name": "none", "sm": False, "restricting": False},
+                {"name": "limits-only", "sm": True, "restricting": False, "limits": True},
+            ) {
+            foreach bool pending in ((False, True)) {
+                Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+                if (c.sm) {
+                    SandboxManager mgr();
+                    if (!c.restricting) {
+                        mgr.setFilesystemDefaultPolicy(True);
+                        mgr.setNetworkDefaultPolicy(True);
+                    }
+                    mgr.setUncontrolledApiPolicy(True);
+                    if (c.limits) {
+                        mgr.setMaxThreads(100);
+                    }
+                    p.setSandboxManager(mgr);
+                }
+                p.loadModule("jni");
+                if (pending) {
+                    p.parsePending(BaseSource, "base");
+                } else {
+                    p.parse(BaseSource, "base");
+                }
+                string label = sprintf("%s %s", c.name, pending ? "pending" : "committed");
+                try {
+                    p.issueModuleCmd("jni", "define-class JavaChild " + b.toBase64());
+                    if (pending) {
+                        p.parseCommit();
+                    }
+                    # the class was defined by the Program's own class loader
+                    object cls = p.callFunction("base_loader").loadClass("JavaChild");
+                    assertEq("JavaChild", cls.getName(), label);
+                } catch (hash<ExceptionInfo> ex) {
+                    fail(sprintf("%s: %s: %s", label, ex.err, ex.desc));
+                }
+            }
+        }
+    }
+
+    parseTimeTest() {
+        QoreJavaCompiler compiler(get_class_loader(), NOTHING);
+        object out = compiler.compile("Clinit", ClinitSource);
+        binary b = out.file.openInputStream().readAllBytes();
+        compiler.close();
+        string b64 = make_base64_string(b, 0);
+        # the tenant's sandbox is set before its code is parsed; its class is defined, imported and used in a
+        # constant at parse time
+        foreach hash<auto> c in (
+                {"name": "define", "src": "%module-cmd(jni) define-class Clinit " + b64
+                    + "\nstring sub get() { return Clinit::result; }\n"},
+                {"name": "import", "src": "%module-cmd(jni) define-class Clinit " + b64
+                    + "\n%module-cmd(jni) import Clinit\nstring sub get() { return Clinit::result; }\n"},
+                {"name": "const", "src": "%module-cmd(jni) define-class Clinit " + b64
+                    + "\n%module-cmd(jni) import Clinit\nconst R = Clinit::result;\nstring sub get() { return R; }\n"},
+            ) {
+            host_count_calls = 0;
+            Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+            SandboxManager sm();
+            sm.setUncontrolledApiPolicy(True);
+            p.setSandboxManager(sm);
+            p.parse("%modern\n%requires jni\n" + c.src, "tenant-" + c.name);
+            assertEq(0, host_count_calls, c.name + ": no host call at parse time");
+            # the static initializer has run by now; every attempt to call the host was refused
+            string rv = p.callFunction("get");
+            # the host's class loader is refused by the sandbox, not merely missing the function
+            assertRegex(NotGoverned, rv, c.name + ": refused by the sandbox");
+            assertNRegex("ok:", rv, c.name + ": no host call");
+            assertEq(0, host_count_calls, c.name + ": no host call after parsing");
+        }
+    }
+
+    tenantCodeTest() {
+        auto host_loader = get_class_loader();
+        hash<auto> rv;
+        # a wrapper of the host for a Java object of the tenant, made by a Java object of the host
+        object tenant_obj = tenant.callFunction("make_tenant_object", TenantProbeSource);
+        object rewrapped = probe.echo(tenant_obj);
+        rv."rewrap" = rewrapped.callIn(host_loader, "host_fn");
+        # Java code of the host that calls Java code of the tenant: toString() and a listener
+        rv."to-string" = HostObjectProbe::callToString(rewrapped);
+        HostObjectProbe::callAccept(rewrapped);
+        object cls = probe.echo(rewrapped.getClass());
+        rv."listener" = cls.getField("last").get(NOTHING);
+        # a static method of the tenant's class, called with a wrapper of the host
+        rv."static" = callTenantStatic(cls, host_loader);
+        # the static initializer of the tenant's class, run by the host
+        object clinit_cls = tenant.callFunction("compile_class", "TenantClinit", TenantClinitSource);
+        object loader = probe.echo(clinit_cls).getClassLoader();
+        Class::forName("TenantClinit", True, loader);
+        rv."clinit" = probe.echo(clinit_cls).getField("result").get(NOTHING);
+        hash<auto> expected = map {$1: True}, keys rv;
+        hash<auto> actual = map {$1.key: regex($1.value, NotGoverned)}, rv.pairIterator();
+        assertEq(expected, actual, sprintf("%y", rv));
+    }
+
+    tenantChildTest() {
+        # a Program that sandboxed code creates is sandboxed without a sandbox of its own: only a Qore library that
+        # tells so attributes its Java code to a sandboxed Program
+        if (!get_module_hash().jni.info.program_creator_sandbox) {
+            testSkip("the Qore library cannot tell that a Program that sandboxed code created is sandboxed");
+        }
+        object child_obj = tenant.callFunction("child_object", ChildSource2, TenantProbeSource);
+        auto host_loader = get_class_loader();
+        string rv = child_obj.callIn(host_loader, "host_fn");
+        assertRegex(NotGoverned, rv, rv);
+    }
+
+    spoofTest() {
+        auto host_loader = get_class_loader();
+        hash<auto> rv;
+        foreach string how in (("null-parent", "no-program", "cleared", "own-loader", "fake-name")) {
+            auto obj = tenant.callFunction("spoofed_object", how, TenantProbeSource, TenantLoaderSource,
+                FakeLoaderSource);
+            if (obj.typeCode() == NT_STRING) {
+                # refused while it was made
+                rv{how} = obj;
+                continue;
+            }
+            # the host runs it through a wrapper of its own
+            rv{how} = reflectCallIn(probe.echo(obj), host_loader);
+        }
+        hash<auto> expected = map {$1: True}, keys rv;
+        hash<auto> actual = map {$1.key: regex($1.value, NotGoverned)}, rv.pairIterator();
+        assertEq(expected, actual, sprintf("%y", rv));
+    }
+
+    deletedTenantTest() {
+        # a Java object of a tenant that the host keeps after the tenant has been deleted
+        Program t = getTenant();
+        object obj = probe.echo(t.callFunction("make_tenant_object", TenantProbeSource));
+        delete t;
+        auto host_loader = get_class_loader();
+        string rv = reflectCallIn(obj, host_loader);
+        assertRegex(NotGoverned, rv, rv);
+    }
+
+    #! calls TenantProbe.callIn() of \a o through reflection objects of the host (classes of the same name can have
+    #! been loaded by other class loaders)
+    private string reflectCallIn(object o, auto host_loader) {
+        object cls = probe.echo(o.getClass());
+        object str = probe.echo(cls.getMethod("toString").getReturnType());
+        object obj = probe.echo(cls.getSuperclass());
+        object m = probe.echo(cls.getMethod("callIn", obj, str));
+        return m.invoke(o, host_loader, "host_fn");
+    }
+
+    parentClassTest() {
+        # a Java class that extends a Qore class of the first Program, defined by the first Program and by the tenant:
+        # the tenant's definition does not link to the class that the parent class loader defined for the first Program
+        QoreJavaCompiler compiler(get_class_loader(), NOTHING);
+        on_exit compiler.close();
+        hash<auto> out = compiler.compile({"org.qore.jni.test.leak.HostChild": ParentLeakSource});
+        string b64 = make_base64_string(out."org.qore.jni.test.leak.HostChild".file.openInputStream().readAllBytes(),
+            0);
+        string src = "%modern\n%requires jni\nobject sub make() { return create_object("
+            "'Jni::org::qore::jni::test::leak::HostChild'); }\n%module-cmd(jni) define-class "
+            "org.qore.jni.test.leak.HostChild " + b64 + "\n";
+        Program p0(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p0.loadModule("jni");
+        p0.parse(src, "first");
+        int calls = parent_leak_calls ?? 0;
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        SandboxManager sm();
+        sm.setUncontrolledApiPolicy(True);
+        p.setSandboxManager(sm);
+        p.loadModule("jni");
+        try {
+            p.parse(src, "tenant-leak");
+            p.callFunction("make");
+        } catch (hash<ExceptionInfo> ex) {
+        }
+        # the Qore constructor of the class of the host did not run for the tenant
+        assertEq(calls, parent_leak_calls ?? 0);
+    }
+
+    loaderLockTest() {
+        # the tenant cannot clear the pointer of the host's class loader, which would break the host's calls
+        auto host_loader = get_class_loader();
+        string rv = tenant.callFunction("clear_loader", host_loader);
+        assertRegex(NotGoverned, rv, rv);
+        assertEq("ok: host", HostObjectProbe::callIn(host_loader, "host_fn"));
+    }
+
+    #! calls TenantProbe.sCall() through a reflection Method object of the host
+    private string callTenantStatic(object cls, object host_loader) {
+        object str = probe.echo(cls.getMethod("toString").getReturnType());
+        object obj = probe.echo(cls.getSuperclass());
+        object m = probe.echo(cls.getMethod("sCall", obj, str));
+        return m.invoke(NOTHING, host_loader, "host_fn");
+    }
+
+    untouchedTest() {
+        # a trusted Program that the tenant never calls, whose class loader is the context class loader of a thread
+        Program x(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        x.issueModuleCmd("jni", "add-classpath " + get_script_dir() + "/qore-jni-test.jar");
+        x.parse(UntouchedSource, "untouched");
+        Queue ready();
+        Queue done();
+        x.callFunction("hold_context", ready, done);
+        on_exit done.push(True);
+        int ptr = ready.get();
+        # the tenant finds the class loader in the JVM's state and calls into the Program on the ForkJoin pool
+        string rv = tenant.callFunction("context_loader_call", ptr, "x_fn");
+        assertRegex(NotGoverned, rv, rv);
+    }
+
+    callbackTest() {
+        # a closure of the host runs in the host's Program, also when it uses the host's Java objects
+        code hc = string sub () { return probe.callQore("host_fn"); };
+        assertEq("ok: host", tenant.callFunction("call_code", hc));
+        # a Qore object of the host, whose method Java calls
+        # the host keeps the object, which Java references weakly
+        HostCallback hcb();
+        HostObjectProbe holder();
+        holder.field = hcb;
+        assertEq("host callback", tenant.callFunction("java_call_method", holder, "secret"));
+        # a Java object that the host obtained as a Qore closure is a callback of the host, as a Qore closure is
+        auto jc = HostObjectProbe::caller();
+        assertEq("ok: host", tenant.callFunction("call_code_arg", jc, "host_fn"));
+        assertEq("ok: host", jc("host_fn"));
+        # an interface implemented by the host with an invocation handler
+        QoreInvocationHandler handler(auto sub (object method, *list<auto> args) { return host_fn(); });
+        object supplier = implement_interface(handler, Class::forName("java.util.function.Supplier"));
+        assertEq("host", tenant.callFunction("supplier_get", supplier));
+    }
+
+    reentrantTest() {
+        # the host calls Java, which calls back into the host, which calls the tenant: the tenant's calls into Java
+        # are governed by the tenant, and the host's calls after it by the host again
+        string rv = probe.callQore("host_reenter");
+        assertRegex("^ok: ok: tenant: .*" + NotGoverned + ".*\\|ok: host\\|ok: host$", rv, rv);
+        # a tenant callback that the host calls
+        # closures of the tenant that the host calls directly: the Program context of the call is the host's
+        auto host_loader = get_class_loader();
+        code tc = tenant.callFunction("tenant_closures", "static");
+        assertRegex(NotGoverned, tc(host_loader, "host_fn"));
+        assertEq("ok: tenant", tc(tenant.callFunction("tenant_loader"), "tenant_fn"));
+        tc = tenant.callFunction("tenant_closures", "static-own");
+        assertNRegex("^ok: host", tc("host_fn"));
+        assertEq("ok: tenant", tc("tenant_fn"));
+        # the host is not refused after the tenant's calls
+        assertEq("ok: host", probe.callQore("host_fn"));
+    }
+
+    #! a method of a Java class of the host called by a tenant closure that the host calls directly (qore#7028)
+    residualTest() {
+        # libqore records the Program that called the closure as the Program of the call's frame, and the method's
+        # call enters the class's Program: the call site's Program is known only with the libqore API of qore#7028
+        if (!get_module_hash().jni.info.builtin_call_site_program) {
+            testSkip("qore#7028: the Qore library has no builtin call-site Program API");
+        }
+        code tc = tenant.callFunction("tenant_closures", "object");
+        assertRegex(NotGoverned, tc(probe, "host_fn"));
+        tc = tenant.callFunction("tenant_closures", "static-probe");
+        assertRegex(NotGoverned, tc(probe, "host_fn"));
+        assertEq("ok: host", probe.callQore("host_fn"));
+    }
+
+    hostTest() {
+        auto host_loader = get_class_loader();
+        assertEq("qore.HostSecret", host_loader.loadClass("qore.HostSecret").getName());
+        Class cls = host_loader.loadClass("qore.HostSecretInstance");
+        object o = cls.getDeclaredConstructor().newInstance();
+        assertEq("host secret", cls.getMethod("secret").invoke(o));
+        assertEq("ok: host", probe.callQore("host_fn"));
+        assertEq("ok: host", probe.next().next().callQore("host_fn"));
+    }
+
+    trustedTest() {
+        Program p = getTenant(False);
+        auto host_loader = get_class_loader();
+        assertEq("OK: host", p.callFunction("loader_call", host_loader, "host_fn"));
+        assertEq("ok: host", p.callFunction("probe_call", probe, "host_fn"));
+        assertEq("ok: host", p.callFunction("chain_call", probe, "host_fn"));
+        assertEq("OK: host", p.callFunction("any_call", probe, "host_fn"));
+        assertEq("OK: host secret", p.callFunction("instantiate", host_loader, "qore.HostTrusted"));
+    }
+
+    #! returns a Program that a sandbox governs, which trusts it with uncontrolled APIs, as Java needs
+    private Program getTenant(bool sandboxed = True) {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.issueModuleCmd("jni", "add-classpath " + get_script_dir() + "/qore-jni-test.jar");
+        p.issueModuleCmd("jni", "add-classpath " + get_script_dir() + "/../build/qore-jni-compiler.jar");
+        p.parse(TenantSource, "tenant");
+        if (sandboxed) {
+            SandboxManager sm();
+            sm.setUncontrolledApiPolicy(True);
+            p.setSandboxManager(sm);
+        }
+        return p;
+    }
+
+    #! called back by Java code that the host calls: calls the tenant, then the host's Java object again
+    string reenter() {
+        return sprintf("ok: tenant: %s|%s|%s", tenant.callFunction("probe_call", probe, "host_fn"),
+            probe.callQore("host_fn"), (new HostObjectProbe()).callQore("host_fn"));
+    }
+}
+
+class HostSecret {
+}
+
+class HostSecretInstance {
+    string secret() {
+        return "host secret";
+    }
+}
+
+class HostTrusted {
+    string secret() {
+        return "host secret";
+    }
+}
+
+class HostPregenerated {
+    string secret() {
+        return "host secret";
+    }
+
+    static string staticSecret() {
+        return "host static secret";
+    }
+}
+
+#! the number of the calls of the constructor of ParentLeakBase
+our *int parent_leak_calls;
+
+class ParentLeakBase {
+    constructor() {
+        parent_leak_calls = (parent_leak_calls ?? 0) + 1;
+    }
+}
+
+class HostProxySecret {
+}
+
+class HostCallback {
+    string secret() {
+        return "host callback";
+    }
+}
+
+string sub host_fn() {
+    return "host";
+}
+
+#! the number of calls of host_count_fn()
+our int host_count_calls;
+
+#! a host function that counts its calls
+string sub host_count_fn() {
+    ++host_count_calls;
+    return "host";
+}
+
+#! the re-entrant call of the test, which Java calls back
+our *code reenter_code;
+
+string sub host_reenter() {
+    return reenter_code();
+}

@@ -113,9 +113,12 @@ string get_version() {
     }
 }
 
-//! Returns true if native access is enabled for unnamed modules at JVM initialization.
-/**
-    @return true if native access is enabled for unnamed modules
+//! Returns true if the JVM was started with an option that grants native access to all unnamed modules
+/** A return value of @ref False does not mean that native access is refused: without such an option, the JVM's
+    default for code of unnamed modules applies (a warning in current Java versions) unless the JVM was started
+    restricted (\c QORE_JNI_RESTRICTED_JVM)
+
+    @return true if the JVM's options include <tt>--enable-native-access=ALL-UNNAMED</tt>
  */
 bool native_access_option_enabled() {
     return jni::Functions::nativeAccessOptionEnabled();
@@ -252,6 +255,8 @@ nothing check_class_option(string provider, string option, *string what) [flags=
     @endcode
  */
 Jni::java::lang::Class load_class(string class_name) [dom=UNCONTROLLED_API;flags=NAMED_ARGS] {
+    // the Program of the calling code, for Java's calls into Qore during the call (qore#7023)
+    JniJavaCallerScope caller(JniJavaCallerScope::callSite());
     try {
         // the class is loaded with the class loader of the Program, whose jni data is created if it has none
         // (qore#6801)
@@ -283,6 +288,8 @@ Jni::java::lang::Class load_class(string class_name) [dom=UNCONTROLLED_API;flags
       of a class that is not converted is a Java object
  */
 auto invoke(Jni::java::lang::reflect::Method[QoreJniPrivateData] method, *Jni::java::lang::Object[QoreJniPrivateData] object, ...) [dom=UNCONTROLLED_API] {
+    // the Program of the calling code, for Java's calls into Qore during the call (qore#7023)
+    JniJavaCallerScope caller(JniJavaCallerScope::callSite());
     try {
         Env env;
         // qore#6551: the Java method runs in the context of the calling code, which is also the context that the
@@ -325,6 +332,8 @@ auto invoke(Jni::java::lang::reflect::Method[QoreJniPrivateData] method, *Jni::j
       of a class that is not converted is a Java object
  */
 auto invoke_nonvirtual(Jni::java::lang::reflect::Method[QoreJniPrivateData] method, *Jni::java::lang::Object[QoreJniPrivateData] object, ...) [dom=UNCONTROLLED_API] {
+    // the Program of the calling code, for Java's calls into Qore during the call (qore#7023)
+    JniJavaCallerScope caller(JniJavaCallerScope::callSite());
     try {
         Env env;
         // qore#6551: the Java method runs in the context of the calling code, which is also the context that the
@@ -365,6 +374,8 @@ auto invoke_nonvirtual(Jni::java::lang::reflect::Method[QoreJniPrivateData] meth
     @endcode
  */
 Jni::java::lang::Object implement_interface(Jni::org::qore::jni::QoreInvocationHandler[jni::InvocationHandler] invocation_handler, Jni::java::lang::Class[QoreJniPrivateData] interface_class) [dom=UNCONTROLLED_API;flags=NAMED_ARGS] {
+    // the Program of the calling code, for Java's calls into Qore during the call (qore#7023)
+    JniJavaCallerScope caller(JniJavaCallerScope::callSite());
     // the Qore class of the interface is found or created in the try block: it raises a C++ exception if it fails (ex:
     // for a name with a NUL character, qore#6738), which must be converted
     try {
@@ -402,6 +413,8 @@ Jni::java::lang::Object implement_interface(Jni::org::qore::jni::QoreInvocationH
     @endcode
  */
 Jni::java::lang::Object implement_interface(Jni::java::lang::ClassLoader[QoreJniPrivateData] class_loader, Jni::org::qore::jni::QoreInvocationHandler[jni::InvocationHandler] invocation_handler, Jni::java::lang::Class[QoreJniPrivateData] interface_class) [dom=UNCONTROLLED_API;flags=NAMED_ARGS] {
+    // the Program of the calling code, for Java's calls into Qore during the call (qore#7023)
+    JniJavaCallerScope caller(JniJavaCallerScope::callSite());
     // the Qore class of the interface is found or created in the try block: it raises a C++ exception if it fails (ex:
     // for a name with a NUL character, qore#6738), which must be converted
     try {
@@ -428,6 +441,8 @@ Jni::java::lang::Object implement_interface(Jni::java::lang::ClassLoader[QoreJni
     @return the allocated array
  */
 Jni::org::qore::jni::JavaArray new_array(Jni::java::lang::Class[QoreJniPrivateData] component_class, int size) [dom=UNCONTROLLED_API;flags=NAMED_ARGS] {
+    // the Program of the calling code, for Java's calls into Qore during the call (qore#7023)
+    JniJavaCallerScope caller(JniJavaCallerScope::callSite());
     try {
         // attaches the thread to the JVM before the class reference is used: the Class object can come from another
         // thread, and this can be this thread's first call into Java
@@ -460,6 +475,8 @@ java::lang::Class cls = define_class(class_name: class_name, bytecode: bytecode)
     @since %jni 1.1
 */
 Jni::org::qore::jni::Class define_class(string class_name, binary bytecode) [dom=UNCONTROLLED_API;flags=NAMED_ARGS] {
+    // the Program of the calling code, for Java's calls into Qore during the call (qore#7023)
+    JniJavaCallerScope caller(JniJavaCallerScope::callSite());
     try {
         Utf8String utf8_name(class_name);
         jni::Env env;
@@ -552,6 +569,8 @@ ClassLoader loader = get_class_loader();
     @since jni 2.0
 */
 Jni::java::lang::Object get_class_loader() [dom=UNCONTROLLED_API] {
+    // the Program of the calling code, for Java's calls into Qore during the call (qore#7023)
+    JniJavaCallerScope caller(JniJavaCallerScope::callSite());
     try {
         jni::Env env;
 
@@ -589,6 +608,8 @@ binary byte_code = get_byte_code(class_name: "::Qore::Thread::Condition");
     @since jni 2.0
 */
 binary get_byte_code(string class_name) [dom=UNCONTROLLED_API;flags=NAMED_ARGS] {
+    // the Program of the calling code, for Java's calls into Qore during the call (qore#7023)
+    JniJavaCallerScope caller(JniJavaCallerScope::callSite());
     TempEncodingHelper cn(class_name, QCS_UTF8, xsink);
     if (*xsink) {
         return QoreValue();
@@ -705,6 +726,8 @@ auto result = kotlin_eval(script: "1 + 2");  // returns 3
     @since jni 3.0
 */
 auto kotlin_eval(string script) [dom=UNCONTROLLED_API;flags=NAMED_ARGS] {
+    // the Program of the calling code, for Java's calls into Qore during the call (qore#7023)
+    JniJavaCallerScope caller(JniJavaCallerScope::callSite());
     try {
         jni::Env env;
         // qore#6551: the script engine's discovery, which the first use makes through the thread's context class
@@ -785,6 +808,8 @@ if (kotlin_scripting_available()) {
     @since jni 3.0
 */
 bool kotlin_scripting_available() [dom=UNCONTROLLED_API] {
+    // the Program of the calling code, for Java's calls into Qore during the call (qore#7023)
+    JniJavaCallerScope caller(JniJavaCallerScope::callSite());
     try {
         jni::Env env;
         // qore#6551: the script engine's discovery runs in the context of the calling code
@@ -826,6 +851,8 @@ if (kotlin_scripting_retry()) {
     @since jni 3.0
 */
 bool kotlin_scripting_retry() [dom=UNCONTROLLED_API] {
+    // the Program of the calling code, for Java's calls into Qore during the call (qore#7023)
+    JniJavaCallerScope caller(JniJavaCallerScope::callSite());
     try {
         jni::Env env;
         // qore#6551: the script engine's discovery runs in the context of the calling code

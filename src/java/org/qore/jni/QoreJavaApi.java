@@ -308,6 +308,54 @@ public class QoreJavaApi {
         deregisterJavaThread0();
     }
 
+    //! Returns the Program pointers of the class loaders that defined the classes of the calling thread's stack
+    /** For each frame, the nearest org.qore.jni.QoreURLClassLoader among the class loader that defined the frame's class
+        and its parents; frames of the JDK and of other class loaders are left out.  The module refuses a call into a
+        Program from Java code of a sandboxed Program other than that Program (qore#7023)
+
+        @return the distinct Program pointers, in stack order
+    */
+    static long[] getStackProgramPtrs() {
+        return StackWalker.getInstance(StackWalker.Option.RETAIN_CLASS_REFERENCE).walk(frames -> frames
+            .map(f -> f.getDeclaringClass().getClassLoader())
+            .mapToLong(QoreJavaApi::getLoaderProgramPtr)
+            .filter(ptr -> ptr != 0L)
+            .distinct()
+            .toArray());
+    }
+
+    //! the class loaders of the JDK and of the JVM's classpath, whose classes are trusted
+    private static final ClassLoader PLATFORM_LOADER = ClassLoader.getPlatformClassLoader();
+    private static final ClassLoader SYSTEM_LOADER = ClassLoader.getSystemClassLoader();
+
+    //! Returns the Program that the Java code of the classes of the class loader \a first is attributed to (qore#7023)
+    /** @return 0 for a class loader of the JDK or of the JVM's classpath (trusted); the Program pointer of the nearest
+        class loader of a Program among \a first and its parents (the first pointer of a class loader whose pointer has
+        been cleared, ex: one whose Program has been deleted); -1 for any other class loader (unknown: code that a
+        sandbox governs can create class loaders), which counts as a sandboxed Program
+
+        Only objects of this module's QoreURLClassLoader class count: a class of another class loader with the same
+        name (ex: one that Java code defined) is an unknown class loader
+    */
+    private static long getLoaderProgramPtr(ClassLoader first) {
+        if (first == null || first == PLATFORM_LOADER || first == SYSTEM_LOADER) {
+            return 0L;
+        }
+        for (ClassLoader cl = first; cl != null; cl = cl.getParent()) {
+            if (cl instanceof QoreURLClassLoader) {
+                long ptr = ((QoreURLClassLoader)cl).getOriginPtr();
+                // a class loader that never had a Program is attributed to its parent's
+                if (ptr != 0L) {
+                    return ptr;
+                }
+            }
+            if (cl == PLATFORM_LOADER || cl == SYSTEM_LOADER) {
+                break;
+            }
+        }
+        return -1L;
+    }
+
     //! Returns the current stack trace, not including the call to this method
     public static StackTraceElement[] getStackTrace() {
         StackTraceElement[] stack = new Exception().getStackTrace();

@@ -217,8 +217,13 @@ GeneratedBindingLease::~GeneratedBindingLease() {
     release_lease(binding->lifetime);
 }
 
-GeneratedBindingContext::GeneratedBindingContext(jlong handle, GeneratedBindingKind kind, ExceptionSink* xsink)
-        : binding(handle, kind) {
+GeneratedBindingContext::GeneratedBindingContext(jlong handle, GeneratedBindingKind kind, ExceptionSink* xsink,
+        void (*check_program)(const QoreProgram*)) : binding(handle, kind) {
+    if (check_program) {
+        // before any entry, so that a refused call runs no code of the Program (an entry handler, thread
+        // initialization code)
+        check_program(binding->pgm);
+    }
     if (binding->metadata_pgm != binding->pgm) {
         metadata_context.reset(new QoreExternalProgramContextHelper(xsink, binding->metadata_pgm));
         if (*xsink) {

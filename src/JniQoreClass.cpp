@@ -58,6 +58,9 @@ QoreValue JniQoreClass::memberGate(const QoreMethod& meth, void* m, QoreObject* 
 
     //printd(LogLevel, "JniQoreClass::memberGate: '%s'\n", mname->c_str());
 
+    // the Program of the calling code, recorded before the class's Program is entered: Java code that converting the
+    // field's value runs is governed by the caller (qore#7023)
+    JniJavaCallerScope caller(JniJavaCallerScope::callSite());
     jobject jobj = jd->getObject();
     try {
         Env env;

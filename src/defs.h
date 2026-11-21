@@ -479,6 +479,11 @@ private:
     JniObjectHandle& operator=(const JniObjectHandle&) = delete;
 };
 
+//! Counts an attachment of the calling thread to Qore by the module (\a attached true) or its end (false)
+/** A thread that the module attached is one that Java started: its Qore caller is not known (qore#7023)
+*/
+DLLLOCAL void jni_java_thread_attached(bool attached);
+
 class QoreThreadAttacher {
 public:
     DLLLOCAL QoreThreadAttacher() : attached(false) {
@@ -517,6 +522,7 @@ private:
         int rc = q_register_foreign_thread();
         if (rc == QFT_OK) {
             attached = true;
+            jni_java_thread_attached(true);
             printd(LogLevel, "Thread %ld attached to Qore\n", pthread_self());
         } else if (rc != QFT_REGISTERED) {
             throw UnableToRegisterException();
@@ -526,7 +532,9 @@ private:
     DLLLOCAL void detachIntern() {
         assert(attached);
         printd(LogLevel, "Detaching thread %ld from Qore\n", pthread_self());
-        q_deregister_foreign_thread();
+        if (!q_deregister_foreign_thread()) {
+            jni_java_thread_attached(false);
+        }
         attached = false;
     }
 };
@@ -595,6 +603,98 @@ DLLLOCAL void jni_teardown_step(const char* step, F&& f) noexcept {
         jni_report_current_exception(step);
     }
 }
+
+//! Throws the refusal of qore#6845 if jni_governed_caller_reaches() refuses \a pgm
+/** For the calls from Java into a Program that a generated binding or the Program context of the call names, which
+    do not pass through JniJavaProgramRef: the functions, static methods, constants and constructors of the Java classes
+    generated for Qore definitions, and the objects that QoreJavaApi creates (qore#7023).  The instance methods of an
+    existing Qore object are not checked: the object was handed to Java by the code that has it, as a callback that
+    runs in its own Program, as a call of a method of a Qore object does in Qore.
+
+    @throw BasicException the calling code is governed by a sandbox and \a pgm is not the Program of the calling code
+*/
+DLLLOCAL void jni_check_governed_caller_reaches(const QoreProgram* pgm);
+
+//! The record of the %Qore code that calls Java (see JniJavaCallerScope)
+struct JniJavaCallerRecord {
+    //! true if a Program (also none) is recorded
+    bool set = false;
+    //! true if the record reaches no Program
+    bool deny = false;
+    //! the Program of the calling code (nullptr: no Program, which reaches none when a sandbox governs the call)
+    QoreProgram* pgm = nullptr;
+};
+
+//! Returns the record of the code that obtained a value from Java on the thread (qore#7023)
+/** The record of the innermost call from %Qore into Java, else the record that the innermost call from Java into
+    %Qore cleared (the caller of the Java code that supplies the value), else a record that reaches no Program
+*/
+DLLLOCAL JniJavaCallerRecord jni_java_caller_owner();
+
+//! Makes Java threads whose Qore caller is not known reach no Program by a Program pointer from now on (qore#7023)
+/** As once code that a sandbox governs has called Java in the process (see jni_governed_caller_reaches()); for the
+    \c set-java-thread-policy module command
+*/
+DLLLOCAL void jni_set_java_thread_policy_strict();
+
+//! Returns true if Java threads whose Qore caller is not known reach no Program by a Program pointer (qore#7023)
+DLLLOCAL bool jni_java_thread_policy_strict();
+
+
+
+//! Records the Program of the %Qore code that calls Java, for the duration of the call (qore#7023)
+/** The calls from %Qore into Java that can call back into %Qore (a Java method, constructor or field of an object or
+    a class, a Java functional interface called as a %Qore callable, and the functions and builtin methods of the
+    module that run Java code; see design/java-sandbox-io.md for the list) record the Program of the calling code
+    before they enter any other Program; jni_governed_caller_reaches() decides with it while the call runs.  The calls
+    from Java into %Qore code (QoreJniStackLocationHelper, and the natives that run constructors and destructors)
+    clear the record for the %Qore code that they run, which records its own Program when it calls Java in turn; a
+    call from %Qore into Java that does not record its caller is then judged by the rule for no recorded call, never
+    with the caller of an enclosing call.  The previous record is restored when the scope ends, also when an exception propagates, so nested
+    and re-entrant calls (host code, a tenant callback, a callback of the host again) each have their own caller.
+
+    The record is thread-local: a thread that Java starts has none.
+*/
+class JniJavaCallerScope {
+public:
+    //! Selects the clearing constructor
+    enum ClearTag { Clear };
+
+    //! Records \a pgm as the Program of the calling code, or, with \a deny, a record that reaches no Program
+    DLLLOCAL explicit JniJavaCallerScope(QoreProgram* pgm, bool deny = false);
+
+    //! Records \a rec
+    DLLLOCAL explicit JniJavaCallerScope(const JniJavaCallerRecord& rec);
+
+    //! Clears the record, for %Qore code that Java calls
+    DLLLOCAL explicit JniJavaCallerScope(ClearTag);
+
+    //! Restores the previous record
+    DLLLOCAL ~JniJavaCallerScope();
+
+    JniJavaCallerScope(const JniJavaCallerScope&) = delete;
+    JniJavaCallerScope& operator=(const JniJavaCallerScope&) = delete;
+
+    //! Returns the Program of the code that made the innermost builtin call: the Program that libqore records in the
+    //! call's frame, for a Java method, static method or constructor and for the module's functions and builtin
+    //! methods; neither the current Program nor the Program context of the call names it when the call has entered
+    //! the Program of a class of another Program, or the object's Program
+    DLLLOCAL static QoreProgram* callSite();
+
+    //! Returns the current Program, for the calls from Qore into Java that are not builtin calls (a member access, a
+    //! Java object called as a Qore closure), which libqore makes in the Program of the calling code
+    DLLLOCAL static QoreProgram* current() {
+        return ::getProgram();
+    }
+
+private:
+    //! the previous record
+    JniJavaCallerRecord prev;
+    //! the previous record of the code that supplies converted values (restored by a clearing scope)
+    JniJavaCallerRecord prev_supplier;
+    //! true for a clearing scope
+    bool clearing = false;
+};
 
 } // namespace jni
 
