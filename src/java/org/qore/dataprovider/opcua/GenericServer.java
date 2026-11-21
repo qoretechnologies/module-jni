@@ -27,6 +27,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -145,8 +146,8 @@ public class GenericServer {
     private boolean shutDown;
 
     // test hook (see holdPortReleaseForTest()): the hold armed for the next listener channel closed, the hold last
-    // armed, whether the hold ends once stop() waits for the release, and whether a closed listener channel took the
-    // armed hold
+    // armed, whether the hold ends once stop() waits for the release, and whether the close of a listener channel took
+    // the armed hold
     private static final AtomicReference<CountDownLatch> portReleaseHoldArmed = new AtomicReference<>();
     private static volatile CountDownLatch portReleaseHold;
     private static volatile boolean portReleaseHoldUntilWaited;
@@ -162,6 +163,10 @@ public class GenericServer {
     // test hook (see completeListenerCloseFirstForTest()): whether the next listener channel bound returns from a
     // close() made outside its event loop only once the close has completed
     private static volatile boolean listenerCloseCompletesFirst;
+    // test hook (see stallCloseListenersForTest()): the stall armed for the next listener channel closed, and the
+    // stall that stop() ends when it waits for the release
+    private static final AtomicReference<CountDownLatch> closeListenersStallArmed = new AtomicReference<>();
+    private static volatile CountDownLatch closeListenersStall;
 
     /** Creates a server without a runtime callback dispatcher. */
     public GenericServer(Map<String, Object> options) throws Exception {
@@ -283,6 +288,7 @@ public class GenericServer {
             // a test hold of the release that ends once the release is waited for
             releasePortReleaseHoldForTest();
         }
+        endCloseListenersStall();
         long timeout = portReleaseTimeoutMillis;
         if (!group.terminationFuture().await(timeout, TimeUnit.MILLISECONDS)) {
             throw new IllegalStateException((osAssignedPort ? "the OS-assigned port " : "the configured port ") + port
@@ -306,7 +312,9 @@ public class GenericServer {
         The event loop that serves the listener is held right after the listener's channel is closed, before the
         channel releases the port, until releasePortReleaseHoldForTest() is called (or for at most 60 seconds), or,
         if \a untilWaited is true, until stop() waits for the release as well; this lets a test check
-        deterministically that stop() returns only once the port is released.  Not for production use.
+        deterministically that stop() returns only once the port is released.  The hold is taken by a close made
+        through the channel's pipeline, as stop() makes it; a close that bypasses the pipeline (ex: when the event loop
+        shuts down) does not take it, and it stays armed until it is released.  Not for production use.
     */
     public static void holdPortReleaseForTest(boolean untilWaited) {
         CountDownLatch hold = new CountDownLatch(1);
@@ -317,7 +325,7 @@ public class GenericServer {
         portReleaseHoldArmed.set(hold);
     }
 
-    /** Test hook: returns true if a listener channel closed since holdPortReleaseForTest() took the hold */
+    /** Test hook: returns true if the close of a listener channel took the hold of holdPortReleaseForTest() */
     public static boolean isPortReleaseHeldForTest() {
         return portReleaseHeld;
     }
@@ -335,6 +343,8 @@ public class GenericServer {
         if (hold != null) {
             hold.countDown();
         }
+        // a stall of the close future's listeners does not outlive the hold
+        endCloseListenersStall();
     }
 
     /** Test hook: makes a close() of the next listener channel bound, made outside its event loop, return only once
@@ -346,6 +356,46 @@ public class GenericServer {
     */
     public static void completeListenerCloseFirstForTest(boolean enable) {
         listenerCloseCompletesFirst = enable;
+    }
+
+    /** Test hook: delays the close future's listeners of the next listener channel closed
+
+        The listeners run once stop() waits for the release of the port or releasePortReleaseHoldForTest() is called,
+        or after at most 60 seconds, which isPortReleaseHoldTimedOutForTest() then reports.  A close future wakes its
+        waiters before it runs its listeners, so this gives deterministically the order in which stop() goes on from
+        the listener's close before the event loop has run them.  Do not combine this with
+        completeListenerCloseFirstForTest(), whose close waits for a promise that completes only after the stall, so
+        stop() would block until the stall's bound.  Not for production use.
+    */
+    public static void stallCloseListenersForTest() {
+        CountDownLatch stall = new CountDownLatch(1);
+        closeListenersStall = stall;
+        closeListenersStallArmed.set(stall);
+    }
+
+    // stalls the close future's listeners that follow this one if a test armed a stall
+    private static void stallCloseListeners() {
+        CountDownLatch stall = closeListenersStallArmed.getAndSet(null);
+        if (stall == null) {
+            return;
+        }
+        try {
+            if (!stall.await(PORT_RELEASE_HOLD_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+                portReleaseHoldTimedOut = true;
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    // ends a stall made by stallCloseListenersForTest(), if any
+    private static void endCloseListenersStall() {
+        closeListenersStallArmed.set(null);
+        CountDownLatch stall = closeListenersStall;
+        if (stall != null) {
+            closeListenersStall = null;
+            stall.countDown();
+        }
     }
 
     /** Test hook: sets the bound of the wait for the release of an OS-assigned port when the server is stopped
@@ -361,23 +411,29 @@ public class GenericServer {
         portReleaseTimeoutMillis = millis == 0 ? DEFAULT_PORT_RELEASE_TIMEOUT_MILLIS : millis;
     }
 
-    // holds the event loop of the given closed listener channel if a test armed a hold
+    // holds the event loop of the given listener channel, which is being closed, if a test armed a hold
     private static void holdPortRelease(io.netty.channel.Channel channel) {
         CountDownLatch hold = portReleaseHoldArmed.getAndSet(null);
         if (hold == null) {
             return;
         }
-        portReleaseHeld = true;
-        // queued, so the close completes first, and run before the channel is deregistered, which releases the port
-        channel.eventLoop().execute(() -> {
-            try {
-                if (!hold.await(PORT_RELEASE_HOLD_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
-                    portReleaseHoldTimedOut = true;
+        // queued by the event loop's close task, so the close completes first, and run before the channel is
+        // deregistered, which releases the port
+        try {
+            channel.eventLoop().execute(() -> {
+                try {
+                    if (!hold.await(PORT_RELEASE_HOLD_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+                        portReleaseHoldTimedOut = true;
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
                 }
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
-        });
+            });
+        } catch (RejectedExecutionException e) {
+            // the event loop has shut down, so nothing is held, which the test sees as the hold not being taken
+            return;
+        }
+        portReleaseHeld = true;
     }
 
     private OpcUaServer createServer() {
@@ -456,7 +512,25 @@ public class GenericServer {
                             }
                         });
                 }
-                listenerChannel.closeFuture().addListener(f -> holdPortRelease(listenerChannel));
+                // the first listener of the close future, so it delays any other listener
+                listenerChannel.closeFuture().addListener(f -> stallCloseListeners());
+                // the hold is taken before the close, not by a listener of the close future: that future wakes its
+                // waiters before it runs its listeners, so stop() could otherwise reach its wait for the release, which
+                // ends the hold, before the hold was taken.  This handler is added last, so it is next to the pipeline's
+                // head and runs on the event loop, also when the handler above runs on the closing thread
+                listenerChannel.pipeline().addFirst("qore-port-release-hold", new ChannelOutboundHandlerAdapter() {
+                    @Override
+                    public void close(ChannelHandlerContext ctx, ChannelPromise promise) throws Exception {
+                        try {
+                            if (ctx.channel().isOpen()) {
+                                holdPortRelease(ctx.channel());
+                            }
+                        } finally {
+                            // always closed, as stop() waits for the close without a bound
+                            super.close(ctx, promise);
+                        }
+                    }
+                });
                 channels.add(listenerChannel);
             }
 
