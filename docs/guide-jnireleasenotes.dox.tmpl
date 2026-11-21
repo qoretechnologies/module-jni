@@ -16,9 +16,10 @@
       \c QoreKotlinCompiler loads for its stubs, or a package of an on-demand import) was looked up in the parent class
       loader, whose Program the sandboxed code cannot reach, and the Kotlin compiler's classes, loaded from the
       classpath that every Program shares, link to \c kotlin.* standard library classes, which were first generated
-      in that class loader's Program.  The parent is now not asked when its Program cannot be reached (the class is
-      not found), and a \c kotlin.* class is then loaded from the classpath; an explicit class load or call through
-      the class loader of another Program is still refused (qore#7015)
+      in that class loader's Program.  The parent is now not asked when its Program cannot be reached (only the class
+      loader's own classpath is searched, and the class is otherwise not found), and a \c kotlin.* class is then
+      loaded from the classpath; an explicit class load or call through the class loader of another Program is still
+      refused (qore#7015)
     - Clearing a Program's compilation cache, which the Java compiler does when it ends, did not take the Program's
       code generation lock, so a class generated at the same time could be stored in the cache as it was cleared and
       stay there; the clear is now serialized with code generation without waiting for its lock: it is made at once,

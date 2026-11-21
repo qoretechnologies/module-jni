@@ -285,6 +285,7 @@ object sub make_kotlin_compiler() {
         if (ENV.HOME) {
             push homes, ENV.HOME + "/.sdkman/candidates/kotlin/current";
         }
+        homes += map dirname(dirname($1)), glob("/snap/kotlin/*/lib/kotlin-compiler.jar") ?? ();
         foreach string home in (homes) {
             string compiler = home + "/lib/kotlin-compiler.jar";
             string stdlib = home + "/lib/kotlin-stdlib.jar";

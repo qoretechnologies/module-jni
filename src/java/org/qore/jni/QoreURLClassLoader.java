@@ -970,7 +970,7 @@ public class QoreURLClassLoader extends URLClassLoader {
                 }
             } catch (ClassNotFoundException e) {
                 throw new ClassNotFoundException(String.format("could not find a Qore source class to create Java "
-                    + "class '%s'", bin_name));
+                    + "class '%s'", bin_name), e);
             }
         }
 
