@@ -7,7 +7,9 @@
     @section jni_3_0_0 jni Module Version 3.0.0
 
     - The connection classes of the data provider modules declare the functional domains of their clients, so code
-      restricted only from other domains can create them; Camel connections use all of them (qore#7096)
+      restricted only from other domains can create them; Camel connections use all of them, and JDBC connections
+      declare \c FILESYSTEM because their \c classpath option loads driver jars from the file system, unlike the
+      core's \c DatasourceConnection, which loads no files (qore#7096)
     - Trusted code could not define, with \c define-class, a Java class that extends a Qore class (\c qore.*) of a
       %Qore Program that has a sandbox manager, also one that allows uncontrolled APIs, as Qorus gives every
       interface: the command failed with \c JNI-ERROR ("cannot call into a Qore Program other than the one of the
