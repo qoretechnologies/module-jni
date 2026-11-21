@@ -25,7 +25,7 @@ class JdbcSensitiveOptionsTest inherits QUnit::Test {
     }
 
     optionInfo() {
-%ifdef QoreHasDbiSensitiveOptions
+%ifdef QORE_HAVE_DBI_SENSITIVE_OPTIONS
         hash<auto> h = dbi_get_driver_options("jdbc");
         assertTrue(h.url.sensitive, "the JDBC URL is sensitive");
         foreach hash<auto> i in (h.pairIterator()) {
@@ -39,7 +39,7 @@ class JdbcSensitiveOptionsTest inherits QUnit::Test {
     }
 
     maskedOptions() {
-%ifdef QoreHasDbiSensitiveOptions
+%ifdef QORE_HAVE_DBI_SENSITIVE_OPTIONS
         # the driver must be loaded for the options that are not sensitive to be shown
         dbi_get_driver_options("jdbc");
         assertEq({"url": "****", "lob-max-size": 1024}, mask_datasource_options("jdbc", {
