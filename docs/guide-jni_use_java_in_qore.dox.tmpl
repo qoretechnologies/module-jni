@@ -201,7 +201,42 @@ class Outer {
     code that obtained it from Java, and the Java code of a call of a Java object of another sandboxed Program (ex: a
     tenant's object that a host calls) reaches no Program; Java code of the classes of a sandboxed Program's class
     loader reaches only that Program, whatever code runs it, and code that cannot reach a Program cannot change or
-    create its class loaders.
+    create its class loaders.  An operation on a class loader is checked against the class loader that it changes.
+    The classes of a Kotlin script evaluated with \c kotlin_eval() or \c kotlin-eval belong to the Program that
+    evaluated it.  A class loader that is not a \c QoreURLClassLoader belongs to no Program, whatever its parent: once
+    sandboxed code has used Java, the calls into %Qore of Java code of its classes are refused.
+
+    The Java thread rule also applies to class loaders and compilers.  In a JVM started with %Qore as a library, the
+    JVM's main thread can create a \c QoreURLClassLoader; once sandboxed code has used Java, a new thread that Java
+    started, with no %Qore caller, cannot.
+
+    @note <b>Known limit:</b> after any call of Java by code that a sandbox governs, trusted Java-started threads can
+    no longer add classpaths or build compilers, for the rest of the process.  Threads that %Qore code calls are not
+    affected.  The limit is process-wide, so one sandboxed Program can cause it for all trusted Java-started threads;
+    it refuses the operation and grants nothing.  The module does not decide per thread origin because that cannot be
+    proven safe: work that sandboxed code submits to a shared thread (ex: a common pool or a host's executor) looks
+    the same as trusted work there.  A host that needs these operations performs them from %Qore code.  This also
+    applies to threads started by a host's interface code or by third-party JARs that it loads, which must not rely
+    on these operations once sandboxed code can run in the process.  An explicit grant for trusted worker threads is
+    tracked in qoretechnologies/qore#7229.
+
+    @par Closing class loaders and compilers
+    Closing a \c QoreURLClassLoader or a compiler is refused with \c JNI-ERROR to code that cannot reach its Program:
+    code that a sandbox governs and that belongs to another Program, Java code of a class loader of another sandboxed
+    Program or of an unknown class loader, and, once sandboxed code has used Java in the process, a thread that Java
+    started and that no %Qore code calls (ex: an \c Executor, a \c Cleaner or a shutdown hook).  This also applies when
+    the object belongs to trusted code: such a thread is refused because the Java stack does not reliably identify the
+    code that supplied the work that it runs, so the module cannot tell a trusted owner from sandboxed code.
+
+    @par
+    A compiler whose close is refused stays open, with its class loader and JAR files, until code that can reach its
+    Program closes it or the process exits.  A host that uses compilers alongside sandboxed code therefore closes them
+    from the %Qore code that owns them, and not from a Java thread.
+
+    @par
+    Once the module's shutdown has started, the caller can no longer be checked: class loaders and compilers are then
+    not closed and their compilation caches are not cleared, for any caller, no exception is raised, and the process
+    releases their resources when it exits.
 
     @note Java objects have no Program of their own: when host code runs a Java object or closure that sandboxed code
     supplied or could have built (a listener, a \c Runnable, \c toString(), a closure that it passes on), its calls into

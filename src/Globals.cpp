@@ -70,6 +70,7 @@ ExceptionSink& Globals::getGlobalXsink() {
 bool Globals::already_initialized = false;
 std::atomic<bool> Globals::jni_shutting_down{false};
 std::atomic<QoreProgram*> Globals::context_pgm{nullptr};
+std::atomic<bool> Globals::shutdown_gate_closing{false};
 std::atomic<int> Globals::context_holders{0};
 // the number of JniContextProgramHolder objects that hold the global context Program in this thread
 static thread_local int context_holders_in_thread = 0;
@@ -2771,6 +2772,51 @@ static bool qore_cleanup_needs_jvm_shutdown_hook() {
     return Globals::getAlreadyInitialized();
 }
 
+//! True once the class loader that the JVM creates at its start has initialized the module (qore#7131)
+static std::atomic<bool> bootstrap_finalized{false};
+
+//! Refuses a new class loader to code that cannot reach the global Java context Program, before the object exists
+/** The class loader that the JVM creates at its start runs before any Qore code; with no global context Program yet,
+    no code that a sandbox governs exists either.  After the module's shutdown no Qore API is used: the constructor
+    then gets no Program (qore#7131)
+*/
+static void JNICALL qore_url_classloader_check_new_loader(JNIEnv* jenv, jclass jcls, jboolean bootstrap) try {
+    if ((bootstrap && !bootstrap_finalized.load(std::memory_order_acquire)) || q_libqore_shutdown()
+        || Globals::isShuttingDown()) {
+        return;
+    }
+    const QoreProgram* pgm = Globals::peekContextProgram();
+    if (!pgm) {
+        return;
+    }
+    QoreThreadAttachHelper attach_helper;
+    attach_helper.attach();
+    jni_check_governed_caller_reaches(pgm);
+} JNI_NATIVE_CATCH(jenv)
+
+//! Checks that the calling code can reach the Program \a ptr, unless the module's shutdown has started
+/** Holds the shutdown gate while it uses Qore APIs, also to raise a refusal, so that the module's teardown does not
+    start under it (qore#7131)
+
+    @return JNI_TRUE if the code can reach the Program; JNI_FALSE, with no Qore API used, if the shutdown has started,
+    or with a pending Java exception if it is refused
+*/
+static jboolean JNICALL qore_url_classloader_check_unless_shut_down(JNIEnv* jenv, jclass jcls, jlong ptr) try {
+    std::shared_lock<std::shared_mutex> gate;
+    if (!Globals::enterShutdownGate(gate)) {
+        return JNI_FALSE;
+    }
+    try {
+        QoreThreadAttachHelper attach_helper;
+        attach_helper.attach();
+        jni_check_governed_caller_reaches(reinterpret_cast<const QoreProgram*>(ptr));
+    } catch (...) {
+        jni_native_exception(jenv);
+        return JNI_FALSE;
+    }
+    return JNI_TRUE;
+} JNI_NATIVE_CATCH(jenv, JNI_FALSE)
+
 static jlong JNICALL qore_url_classloader_get_context_program(JNIEnv* jenv, jclass jcls, jobject new_syscl,
         jobject created, jboolean finalize_init) try {
     Env env(jenv);
@@ -2783,7 +2829,11 @@ static jlong JNICALL qore_url_classloader_get_context_program(JNIEnv* jenv, jcla
     }
 
     printd(5, "qore_url_classloader_get_context_program() new_syscl: %p finalize_init: %d\n", new_syscl, finalize_init);
-    if (finalize_init) {
+    // the Java flag stays set for the life of a JVM that uses this class as its system class loader: only the first
+    // class loader, which the JVM creates at its start, is the system class loader and initializes the module; a later
+    // one is an ordinary class loader, which changes neither and is checked below (qore#7131)
+    const bool finalize = finalize_init && !bootstrap_finalized.exchange(true, std::memory_order_acq_rel);
+    if (finalize) {
         Globals::syscl = GlobalReference<jobject>::fromLocal(new_syscl);
         Globals::bootstrap = true;
         jni_module_init_finalize(true);
@@ -2792,11 +2842,11 @@ static jlong JNICALL qore_url_classloader_get_context_program(JNIEnv* jenv, jcla
     // Globals::getContextProgram() reports whether it created the global context Program; that
     // is not what "created" means to the caller here - see below.
     bool ignored_created;
-    jlong rv = Globals::getContextProgram(finalize_init ? nullptr : new_syscl, ignored_created);
+    jlong rv = Globals::getContextProgram(finalize ? nullptr : new_syscl, ignored_created);
     // a class loader for the global Java context Program is not created for code that cannot reach it (code that a
     // sandbox governs, a thread that Java started once such code has called Java): its classes would be attributed
     // to that trusted Program (qore#7023)
-    if (!finalize_init) {
+    if (!finalize) {
         jni_check_governed_caller_reaches(reinterpret_cast<const QoreProgram*>(rv));
     }
 
@@ -2816,36 +2866,58 @@ static jlong JNICALL qore_url_classloader_get_context_program(JNIEnv* jenv, jcla
     return rv;
 } JNI_NATIVE_CATCH(jenv, 0)
 
-static jobject JNICALL qore_url_classloader_clear_compilation_cache(JNIEnv* jenv, jobject class_loader, jlong ptr)
-        try {
-    Env env(jenv);
-    // the thread is attached before the Program is entered
-    QoreThreadAttachHelper attach_helper;
+//! Checks the access of the calling code to \a origin_ptr and clears the compilation cache of the Program \a ptr
+/** Both are made under the shutdown gate, as they use Qore APIs (qore#7131)
+
+    @return JNI_TRUE if the access was granted; JNI_FALSE if the module's shutdown has started (nothing is done), or
+    with a pending Java exception if it was refused
+*/
+static jboolean JNICALL qore_url_classloader_clear_compilation_cache(JNIEnv* jenv, jobject class_loader,
+        jlong origin_ptr, jlong ptr) try {
+    std::shared_lock<std::shared_mutex> gate;
+    if (!Globals::enterShutdownGate(gate)) {
+        return JNI_FALSE;
+    }
     try {
+        Env env(jenv);
+        // the thread is attached before the Program is entered
+        QoreThreadAttachHelper attach_helper;
         attach_helper.attach();
-    } catch (Exception& e) {
-        jni_throw_runtime_exception(*env, "Unable to attach thread to Qore");
-        return nullptr;
+        jni_check_governed_caller_reaches(reinterpret_cast<const QoreProgram*>(origin_ptr));
+        if (!ptr) {
+            return JNI_TRUE;
+        }
+        // the Program pointer is the class loader's, which Java passed: the Program can have been deleted, and is
+        // validated and held; it is not entered, as a Java compiler can run on another thread than the one parsing the
+        // Program, and its jni data is kept alive by the lock that its destructor takes (see JniJavaProgramRef).  A
+        // Program deleted meanwhile has no cache left to clear: as for a class loader whose pointer has been cleared,
+        // nothing is done, and no exception is raised, as the caller clears the cache in a finally block, where an
+        // exception would replace the result of the compilation
+        std::optional<JniJavaProgramRef> java_pgm;
+        try {
+            java_pgm.emplace(env, ptr, class_loader);
+        } catch (JavaProgramDeletedException& e) {
+            static_cast<Exception&>(e).ignore();
+            // the class loader now names another Program, which the access check was not made for; a refusal of the
+            // Program is not caught here, and stays a refusal
+            jlong current = env.callLongMethod(class_loader, Globals::methodQoreURLClassLoaderGetPtr, nullptr);
+            if (current && current != ptr) {
+                throw BasicException("the Qore Program of the Java class loader changed while its compilation cache "
+                    "was being cleared");
+            }
+            // the Program has been deleted
+            return JNI_TRUE;
+        }
+        if (java_pgm->get()) {
+            JniExternalProgramData::clearCompilationCache(java_pgm->get());
+        }
+        return JNI_TRUE;
+    } catch (...) {
+        // raised while the gate is held, as raising it uses Qore APIs
+        jni_native_exception(jenv);
+        return JNI_FALSE;
     }
-    // the Program pointer is the class loader's, which Java passed: the Program can have been deleted, and is
-    // validated and held; it is not entered, as a Java compiler can run on another thread than the one parsing the
-    // Program, and its jni data is kept alive by the lock that its destructor takes (see JniJavaProgramRef).  A
-    // Program deleted meanwhile has no cache left to clear: as for a class loader whose pointer has been cleared,
-    // nothing is done, and no exception is raised, as the caller clears the cache in a finally block, where an
-    // exception would replace the result of the compilation
-    std::optional<JniJavaProgramRef> java_pgm;
-    try {
-        java_pgm.emplace(env, ptr, class_loader);
-    } catch (BasicException& e) {
-        // the Program has been deleted
-        static_cast<Exception&>(e).ignore();
-        return nullptr;
-    }
-    if (java_pgm->get()) {
-        JniExternalProgramData::clearCompilationCache(java_pgm->get());
-    }
-    return nullptr;
-} JNI_NATIVE_CATCH(jenv, nullptr)
+} JNI_NATIVE_CATCH(jenv, JNI_FALSE)
 
 //! Runs the %Qore library cleanup sequence from a JVM shutdown hook
 /** Registered by QoreURLClassLoader.setContextProgram() on the loader that established the
@@ -3612,7 +3684,7 @@ static JNINativeMethod qoreURLClassLoaderNativeMethods[] = {
     },
     {
         const_cast<char*>("clearCompilationCache0"),
-        const_cast<char*>("(J)V"),
+        const_cast<char*>("(JJ)Z"),
         reinterpret_cast<void*>(qore_url_classloader_clear_compilation_cache),
     },
     {
@@ -3634,6 +3706,16 @@ static JNINativeMethod qoreURLClassLoaderNativeMethods[] = {
         const_cast<char*>("checkProgramAccess0"),
         const_cast<char*>("(J)V"),
         reinterpret_cast<void*>(qore_url_classloader_check_program_access),
+    },
+    {
+        const_cast<char*>("checkNewLoader0"),
+        const_cast<char*>("(Z)V"),
+        reinterpret_cast<void*>(qore_url_classloader_check_new_loader),
+    },
+    {
+        const_cast<char*>("checkAccessUnlessShutDown0"),
+        const_cast<char*>("(J)Z"),
+        reinterpret_cast<void*>(qore_url_classloader_check_unless_shut_down),
     },
     {
         const_cast<char*>("programReachable0"),
@@ -4210,7 +4292,7 @@ void Globals::defineQoreURLClassLoader(Env& env) {
     methodQoreURLClassLoaderClearCache = env.getMethod(classQoreURLClassLoader, "clearCacheIntern", "()V");
     methodQoreURLClassLoaderDefineClassUnconditional = env.getMethod(classQoreURLClassLoader, "defineClassUnconditionalIntern",
         "(Ljava/lang/String;[B)Ljava/lang/Class;");
-    methodQoreURLClassLoaderGetPtr = env.getMethod(classQoreURLClassLoader, "getPtr", "()J");
+    methodQoreURLClassLoaderGetPtr = env.getMethod(classQoreURLClassLoader, "getPtrIntern", "()J");
     methodQoreURLClassLoaderGetCurrent = env.getStaticMethod(classQoreURLClassLoader, "getCurrent",
         "()Lorg/qore/jni/QoreURLClassLoader;");
     methodQoreURLClassLoaderCheckInProgress = env.getMethod(classQoreURLClassLoader, "checkInProgress",
@@ -4218,7 +4300,7 @@ void Globals::defineQoreURLClassLoader(Env& env) {
     methodQoreURLClassLoaderClearProgramPtr = env.getMethod(classQoreURLClassLoader, "clearProgramPtrIntern", "()V");
     methodQoreURLClassLoaderClearContext = env.getMethod(classQoreURLClassLoader, "clearContext", "()V");
     methodQoreURLClassLoaderRegisterSharedDynamicClass = env.getMethod(classQoreURLClassLoader,
-        "registerSharedDynamicClass", "(Ljava/lang/String;)V");
+        "registerSharedDynamicClassIntern", "(Ljava/lang/String;)V");
 
     //printd(5, "defineQoreURLClassLoader() done\n");
 }
@@ -5645,9 +5727,33 @@ QoreProgram* JniContextProgramHolder::acquire() {
     return rv;
 }
 
+std::shared_mutex& Globals::getShutdownGate() {
+    static std::shared_mutex* gate = new std::shared_mutex;
+    return *gate;
+}
+
+bool Globals::enterShutdownGate(std::shared_lock<std::shared_mutex>& lock) {
+    // a child process created with fork() cannot use the JVM, and the gate can be held by a thread that it does not have
+    if (jni::Jvm::isForkedChild() || shutdown_gate_closing.load(std::memory_order_seq_cst)) {
+        return false;
+    }
+    lock = std::shared_lock<std::shared_mutex>(getShutdownGate());
+    return !shutdown_gate_closing.load(std::memory_order_seq_cst) && !q_libqore_shutdown() && !isShuttingDown();
+}
+
 void Globals::clearGlobalContext() {
     std::unique_ptr<QoreProgramHelper> old;
     {
+        // announced before the wait, so that new checks do not take the gate and only those running are waited for
+        shutdown_gate_closing.store(true, std::memory_order_seq_cst);
+        // taken first and released before the Program is deleted: an access check that runs ends before the flag is
+        // set, and takes neither of the other locks while this thread waits for it; in a child process created with
+        // fork(), the gate can be held by a thread of the parent, which does not exist there, so only the gate is
+        // skipped: the context lock below and the wait for the Program's holders are not
+        std::unique_lock<std::shared_mutex> gate(getShutdownGate(), std::defer_lock);
+        if (!jni::Jvm::isForkedChild()) {
+            gate.lock();
+        }
         std::lock_guard<std::recursive_mutex> guard(getContextLock());
         // sequentially consistent, as the holders of the Program check it (see context_holders)
         jni_shutting_down.store(true, std::memory_order_seq_cst);
