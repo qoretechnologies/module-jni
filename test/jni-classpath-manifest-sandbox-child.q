@@ -17,6 +17,31 @@
 #! the package of the classes of the test jars
 const Pkg = "org.qore.jni.test.cpman.";
 
+#! the JDK feature versions on which manifest Class-Path attributes are expected to be checked and followed
+/** Deliberately not read from the product (QoreURLClassLoader.VERIFIED_CLASS_PATH_JDK_FEATURES): a change to that set
+    must fail this test until the expectation is updated with it.  On any other JDK, a sandboxed classpath with a
+    manifest Class-Path attribute is expected to be refused (qore#7204).
+*/
+const VerifiedJdkFeatures = (25,);
+
+#! a sandboxed classpath that is expected to be refused on a JDK outside VerifiedJdkFeatures (qore#7204)
+hashdecl RefusedClasspath {
+    #! the name of the check
+    string label;
+    #! the directories of the test tree that the policy allows
+    list<string> allowed;
+    #! the paths of the test tree that the policy denies
+    list<string> denied = ();
+    #! the classpath entries, relative to the root of the test tree
+    list<string> classpath;
+    #! the jars, relative to the root, of which the refusal can name one (a wildcard's matches are in no fixed order)
+    list<string> jars;
+    #! the simple names of the classes that must not be loaded
+    list<string> classes;
+    #! True if the policy also allows /dev/null
+    bool device = False;
+}
+
 #! the source of a Program that lists the classpath of its class loaders and loads classes
 const LoaderSource = "%requires jni
 %module-cmd(jni) import java.lang.ClassLoader
@@ -102,9 +127,9 @@ Program sub new_program(*SandboxManager sm) {
 hash<auto> sub add_classpath(Program p, string cp) {
     try {
         p.issueModuleCmd("jni", "add-classpath " + cp);
-        return {"err": "ok", "desc": ""};
+        return {"err": "ok", "desc": "", "cp": cp};
     } catch (hash<ExceptionInfo> ex) {
-        return {"err": ex.err, "desc": ex.desc};
+        return {"err": ex.err, "desc": ex.desc, "cp": cp};
     }
 }
 
@@ -206,9 +231,16 @@ sub deny_case(string root) {
     result("deny: its error says so", True, h.desc =~ /not a regular file/);
     result("deny: the jar that names the special file is not added", (), jar_paths(p, root));
 
-    # a classpath entry or a wildcard match that is not a regular file is refused in the same way, and not opened
-    p = new_program(smv);
-    h = add_classpath(p, root + "/v/fifo.jar");
+    deny_not_regular(root, smv);
+}
+
+#! a classpath entry or a wildcard match that is not a regular file is refused, on any JDK, and not opened
+/** The refusal of a file that is not a regular file is reached before the refusal of any manifest Class-Path of the
+    same classpath, as the latter is added after the elements that were listed.
+*/
+sub deny_not_regular(string root, SandboxManager smv) {
+    Program p = new_program(smv);
+    hash<auto> h = add_classpath(p, root + "/v/fifo.jar");
     result("deny: an entry that is not a regular file is refused", "JNI-CLASSPATH-ERROR", h.err);
     result("deny: its error says that it is not a regular file", True, h.desc =~ /not a regular file/);
     result("deny: the entry is not added", (), jar_paths(p, root));
@@ -384,8 +416,169 @@ sub jdkgate_case(string root) {
     result("jdkgate: the running JDK version is used again", "ok", add_classpath(p, root + "/a/cp-ref.jar").err);
 }
 
+#! returns the feature version of the running JVM, the value that the product's check reads
+int sub running_jdk_feature() {
+    Program p(PO_NEW_STYLE);
+    p.parse("%requires jni
+%module-cmd(jni) import java.lang.Runtime
+int sub feature() { return Jni::java::lang::Runtime::version().feature(); }", "jdk-feature");
+    return p.callFunction("feature");
+}
+
+#! returns the exact description of the refusal of a jar on an unverified JDK (qore#7204)
+/** The last part is added by Program::issueModuleCmd(), which names the command that failed.
+*/
+string sub unverified_refusal(string jar, int feature, string cp) {
+    return sprintf("cannot add the classpath: the classpath jar '%s' has a manifest Class-Path attribute, which "
+        "cannot be checked against the sandbox filesystem policy on an unverified JDK version %d for manifest "
+        "Class-Path checking (verified: [%s]): module command error from command 'add-classpath %s'", jar, feature,
+        join(", ", (map string($1), VerifiedJdkFeatures)), cp);
+}
+
+#! checks that a classpath was refused as documented on an unverified JDK, and that nothing of it was loaded
+sub check_refused(string label, Program p, hash<auto> h, string root, list<string> jars, list<string> classes,
+        int feature) {
+    result(label + ": it is refused", "JNI-CLASSPATH-ERROR", h.err);
+    list<string> messages = map unverified_refusal(root + DirSep + $1, feature, h.cp), jars;
+    result(label + ": the error is the documented refusal", inlist(h.desc, messages) ? h.desc : messages[0], h.desc);
+    result(label + ": nothing is added", (), jar_paths(p, root));
+    foreach string cls in (classes) {
+        result(sprintf("%s: the class %s is not loaded", label, cls), False, loads(p, cls));
+    }
+}
+
+#! returns the classpaths of each case that are expected to be refused on a JDK outside VerifiedJdkFeatures
+hash<string, list<hash<RefusedClasspath>>> sub refused_classpaths() {
+    list<string> ref_classes = ("CpRef", "CpTarget");
+    return {
+        "deny": cast<list<hash<RefusedClasspath>>>((
+            <RefusedClasspath>{"label": "deny: named", "allowed": ("d",), "denied": ("d/lib",),
+                "classpath": ("d/cp-ref.jar",), "jars": ("d/cp-ref.jar",), "classes": ref_classes},
+            <RefusedClasspath>{"label": "deny: wildcard", "allowed": ("d",), "denied": ("d/lib",),
+                "classpath": ("d/*.jar",), "jars": ("d/cp-ref.jar",), "classes": ref_classes},
+            <RefusedClasspath>{"label": "deny: two entries", "allowed": ("a", "d"), "denied": ("d/lib",),
+                "classpath": ("a/cp-ref.jar", "d/cp-ref.jar"), "jars": ("a/cp-ref.jar",), "classes": ref_classes},
+            <RefusedClasspath>{"label": "deny: chain", "allowed": ("n",), "denied": ("n/b/c",),
+                "classpath": ("n/cp-nesta.jar",), "jars": ("n/cp-nesta.jar",),
+                "classes": ("NestA", "NestB", "NestC")},
+            <RefusedClasspath>{"label": "deny: an entry that is not a file", "allowed": ("h",),
+                "classpath": ("h/cp-http.jar",), "jars": ("h/cp-http.jar",), "classes": ("CpHttp",)},
+            <RefusedClasspath>{"label": "deny: zip file", "allowed": ("d",), "denied": ("d/lib",),
+                "classpath": ("d/cp-ref.zip",), "jars": ("d/cp-ref.zip",), "classes": ref_classes},
+            <RefusedClasspath>{"label": "deny: a named file that is not a jar", "allowed": ("j",),
+                "classpath": ("j/cp-ref.jar",), "jars": ("j/cp-ref.jar",), "classes": ("CpRef",)},
+            <RefusedClasspath>{"label": "deny: a named device", "allowed": ("v",), "device": True,
+                "classpath": ("v/cp-ref.jar",), "jars": ("v/cp-ref.jar",), "classes": ("CpRef",)},
+        )),
+        "escape": cast<list<hash<RefusedClasspath>>>((
+            <RefusedClasspath>{"label": "escape", "allowed": ("s",), "classpath": ("s/cp-ref.jar",),
+                "jars": ("s/cp-ref.jar",), "classes": ref_classes},
+        )),
+        "relative": cast<list<hash<RefusedClasspath>>>((
+            <RefusedClasspath>{"label": "relative: denied", "allowed": ("w", "o"), "denied": ("w/lib",),
+                "classpath": ("w/cp-upref.jar",), "jars": ("w/cp-upref.jar",),
+                "classes": ("CpUpRef", "CpUp", "CpTarget")},
+            <RefusedClasspath>{"label": "relative: allowed", "allowed": ("w", "o"),
+                "classpath": ("w/cp-upref.jar",), "jars": ("w/cp-upref.jar",),
+                "classes": ("CpUpRef", "CpUp", "CpTarget")},
+        )),
+        "cycle": cast<list<hash<RefusedClasspath>>>((
+            <RefusedClasspath>{"label": "cycle: named", "allowed": ("cy",), "classpath": ("cy/cp-cyca.jar",),
+                "jars": ("cy/cp-cyca.jar",), "classes": ("CycA", "CycB")},
+            <RefusedClasspath>{"label": "cycle: wildcard", "allowed": ("cy",), "classpath": ("cy/*.jar",),
+                "jars": ("cy/cp-cyca.jar", "cy/cp-cycb.jar"), "classes": ("CycA", "CycB")},
+        )),
+        "nested": cast<list<hash<RefusedClasspath>>>((
+            <RefusedClasspath>{"label": "nested", "allowed": ("n",), "classpath": ("n/cp-nesta.jar",),
+                "jars": ("n/cp-nesta.jar",), "classes": ("NestA", "NestB", "NestC")},
+        )),
+        "allowed": cast<list<hash<RefusedClasspath>>>((
+            <RefusedClasspath>{"label": "allowed: named", "allowed": ("a",), "classpath": ("a/cp-ref.jar",),
+                "jars": ("a/cp-ref.jar",), "classes": ref_classes},
+            <RefusedClasspath>{"label": "allowed: a missing named jar", "allowed": ("m",),
+                "classpath": ("m/cp-ref.jar",), "jars": ("m/cp-ref.jar",), "classes": ("CpRef",)},
+        )),
+    };
+}
+
+#! on a JDK outside VerifiedJdkFeatures, the classpaths of the case are refused (qore#7204)
+sub unverified_case(string name, string root, int feature) {
+    hash<string, list<hash<RefusedClasspath>>> cases = refused_classpaths();
+    if (!cases{name}) {
+        printf("unknown case %y\n", name);
+        exit(1);
+    }
+    foreach hash<RefusedClasspath> c in (cases{name}) {
+        SandboxManager sm = get_sandbox(root, c.allowed, c.denied);
+        if (c.device) {
+            sm.addFilesystemAllowedPath("/dev/null", QSEC_READ);
+        }
+        Program p = new_program(sm);
+        hash<auto> h = add_classpath(p, join(PathSep, (map root + DirSep + $1, c.classpath)));
+        check_refused(c.label, p, h, root, c.jars, c.classes, feature);
+    }
+    if (name == "deny") {
+        SandboxManager smv = get_sandbox(root, ("v",));
+        smv.addFilesystemAllowedPath("/dev/null", QSEC_READ);
+        deny_not_regular(root, smv);
+    }
+}
+
+#! on a JDK outside VerifiedJdkFeatures, no assumed version makes the check follow a Class-Path (qore#7204)
+/** An assumed version can only make the check stricter, so the refusal names the running JDK's version.
+*/
+sub unverified_jdkgate_case(string root, int feature) {
+    list<string> ref_classes = ("CpRef", "CpTarget");
+    set_jdk_feature(25);
+    Program p = new_program(get_sandbox(root, ("a",)));
+    hash<auto> h = add_classpath(p, root + "/a/cp-ref.jar");
+    check_refused("jdkgate: a verified version assumed", p, h, root, ("a/cp-ref.jar",), ref_classes, feature);
+
+    set_jdk_feature(9999);
+    p = new_program(get_sandbox(root, ("a",)));
+    h = add_classpath(p, root + "/a/cp-ref.jar");
+    check_refused("jdkgate: an unknown version assumed", p, h, root, ("a/cp-ref.jar",), ref_classes, feature);
+    p = new_program(get_sandbox(root, ("a",)));
+    h = add_classpath(p, root + "/a/*.jar");
+    check_refused("jdkgate: a wildcard", p, h, root, ("a/cp-ref.jar",), ref_classes, feature);
+    p = new_program(get_sandbox(root, ("d",), ("d/lib",)));
+    h = add_classpath(p, root + "/d/cp-ref.zip");
+    check_refused("jdkgate: a zip file", p, h, root, ("d/cp-ref.zip",), ref_classes, feature);
+
+    # a jar with no manifest Class-Path is accepted
+    p = new_program(get_sandbox(root, ("a",)));
+    h = add_classpath(p, root + "/a/lib/cp-target.jar");
+    result("jdkgate: a jar with no Class-Path is accepted", "ok", h.err);
+    result("jdkgate: its class is loaded", True, loads(p, "CpTarget"));
+
+    # no sandbox, no check
+    p = new_program();
+    h = add_classpath(p, root + "/a/cp-ref.jar");
+    result("jdkgate: an unsandboxed classpath is unaffected", "ok", h.err);
+    result("jdkgate: the class of the named jar is loaded with no sandbox", True, loads(p, "CpTarget"));
+
+    set_jdk_feature();
+    p = new_program(get_sandbox(root, ("a",)));
+    h = add_classpath(p, root + "/a/cp-ref.jar");
+    check_refused("jdkgate: the running version again", p, h, root, ("a/cp-ref.jar",), ref_classes, feature);
+}
+
 sub main() {
     string root = ARGV[1];
+    # the same value that the product's check reads; it decides which behavior is expected (qore#7204)
+    int feature = running_jdk_feature();
+    bool verified = inlist(feature, VerifiedJdkFeatures);
+    printf("jdk-gate: %s %d\n", verified ? "verified" : "refused", feature);
+    # the check applies only to a sandboxed classpath, so the unsandboxed case is the same on every JDK
+    if (!verified && ARGV[0] != "unsandboxed") {
+        if (ARGV[0] == "jdkgate") {
+            unverified_jdkgate_case(root, feature);
+        } else {
+            unverified_case(ARGV[0], root, feature);
+        }
+        printf("end\n");
+        return;
+    }
     switch (ARGV[0]) {
         case "deny": deny_case(root); break;
         case "escape": escape_case(root); break;

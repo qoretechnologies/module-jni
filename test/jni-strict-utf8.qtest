@@ -182,7 +182,7 @@ class JniStrictUtf8Test inherits QUnit::Test {
     private static string childCmd(string env, string args = "") {
         # an absolute path, as the child can run in another directory
         string child = normalize_dir(get_script_dir() + "/jni-strict-utf8-child.q");
-        return sprintf("env -u JAVA_TOOL_OPTIONS -u _JAVA_OPTIONS -u JDK_JAVA_OPTIONS %s %s -b --enable-debug %s %s "
+        return sprintf("unset JAVA_TOOL_OPTIONS _JAVA_OPTIONS JDK_JAVA_OPTIONS && %s %s -b --enable-debug %s %s "
             "2>&1", env, shellQuote(QORE_ARGV[0]), shellQuote(child), args);
     }
 

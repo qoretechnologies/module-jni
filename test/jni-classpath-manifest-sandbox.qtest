@@ -10,6 +10,9 @@
 # On a JDK feature version whose class loader has not been verified for this check, a jar with a manifest Class-Path
 # attribute refuses a sandboxed classpath; the jdkgate case assumes such a version with
 # Jni::org::qore::jni::dbg_jni_set_classpath_jdk_feature(), so it needs a debug build of the module.
+# When the running JDK itself is outside the versions that the child expects to be verified (VerifiedJdkFeatures), the
+# child asserts that documented refusal instead, with its exact error and that nothing is loaded (qore#7204); if such
+# a JDK stops being refused, the test fails until the child's expectation is updated.
 #
 # Each case runs test/jni-classpath-manifest-sandbox-child.q in a new process, with a test tree made here from the
 # jars in test/jni-classpath-manifest-jars (made by the build; each has one class, org.qore.jni.test.cpman.*):
@@ -38,6 +41,17 @@ class JniClasspathManifestSandboxTest inherits QUnit::Test {
     public {
         #! the directory of the test jars, in the directory of this script
         const JarDirName = "jni-classpath-manifest-jars";
+
+        #! the number of checks that each case makes on a JDK outside the child's verified versions (qore#7204)
+        const UnverifiedResultCounts = {
+            "deny": 47,
+            "escape": 5,
+            "relative": 12,
+            "cycle": 10,
+            "nested": 6,
+            "allowed": 9,
+            "jdkgate": 29,
+        };
     }
 
     private {
@@ -272,7 +286,15 @@ class JniClasspathManifestSandboxTest inherits QUnit::Test {
         string out = backquote(cmd, \rc);
         assertEq(0, rc, "exit code: " + out);
         list<string> lines = select out.split("\n"), $1 =~ /^result: /;
-        assertEq(expected, lines, out);
+        *list<*string> gate = (out =~ x/^jdk-gate: (verified|refused) ([0-9]+)$/m);
+        assertEq(2, gate.size(), "the child did not report the JDK gate: " + out);
+        if (gate[0] == "verified" || name == "unsandboxed") {
+            assertEq(expected, lines, out);
+        } else {
+            # the JDK is outside the verified versions: every check of the documented refusal must hold (qore#7204)
+            assertEq(UnverifiedResultCounts{name}, lines.size(), "the number of refusal checks: " + out);
+            assertEq((), (select lines, $1 !~ /: OK$/), "the refusal on JDK " + gate[1] + " (qore#7204): " + out);
+        }
         assertTrue(out =~ /^end$/m, "the child did not reach its end: " + out);
         assertFalse(out =~ /unhandled QORE System exception/, "an unhandled exception was printed: " + out);
     }
