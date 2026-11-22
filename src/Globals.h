@@ -234,6 +234,7 @@ public:
     DLLLOCAL static jmethodID methodResolvedClasspathEncodedPath;                 // byte[] ResolvedClasspath.encodedPath(int)
     DLLLOCAL static jmethodID methodResolvedClasspathIsWildcardMatch;             // boolean ResolvedClasspath.isWildcardMatch(int)
     DLLLOCAL static jmethodID methodResolvedClasspathManifestReferrer;            // String ResolvedClasspath.manifestReferrer(int)
+    DLLLOCAL static jmethodID methodResolvedClasspathGivenEntry;                  // String ResolvedClasspath.givenEntry(int)
     DLLLOCAL static jmethodID methodResolvedClasspathRefusal;                     // String ResolvedClasspath.refusal(int)
     DLLLOCAL static jmethodID methodQoreURLClassLoaderAddParentPath;              // void QoreURLClassLoader.addParentPath(String)
     DLLLOCAL static jmethodID methodQoreURLClassLoaderLoadClass;                  // Class QoreURLClassLoader.loadClass(String)

@@ -171,8 +171,8 @@ sub deny_case(string root) {
     Program p = new_program(sm);
     hash<auto> h = add_classpath(p, root + "/d/cp-ref.jar");
     result("deny: the classpath is refused", "JNI-CLASSPATH-ERROR", h.err);
-    result("deny: the error names the denied file", True, h.desc.find(root + "/d/lib/cp-target.jar") >= 0);
-    result("deny: the error names the jar whose manifest names it", True, h.desc.find(root + "/d/cp-ref.jar") >= 0);
+    result("deny: the error names no resolved path", -1, h.desc.find(root + "/d/lib/cp-target.jar"));
+    result("deny: the error names the entry as it was given", True, h.desc.find("'" + root + "/d/cp-ref.jar'") >= 0);
     result("deny: nothing is added", (), jar_paths(p, root));
     result("deny: the class of the referring jar is not loaded", False, loads(p, "CpRef"));
     result("deny: the class of the denied jar is not loaded", False, loads(p, "CpTarget"));
@@ -181,7 +181,9 @@ sub deny_case(string root) {
     p = new_program(sm);
     h = add_classpath(p, root + "/d/*.jar");
     result("deny: a wildcard that selects the referring jar is refused", "JNI-CLASSPATH-ERROR", h.err);
-    result("deny: its error names the denied file", True, h.desc.find(root + "/d/lib/cp-target.jar") >= 0);
+    result("deny: its error names no resolved path", -1, h.desc.find(root + "/d/lib/cp-target.jar"));
+    result("deny: its error names no file that the wildcard selects", -1, h.desc.find(root + "/d/cp-ref.jar"));
+    result("deny: its error names the wildcard as it was given", True, h.desc.find("'" + root + "/d/*.jar'") >= 0);
     result("deny: the wildcard adds nothing", (), jar_paths(p, root));
 
     # an allowed entry before the referring jar is not added either
@@ -195,8 +197,8 @@ sub deny_case(string root) {
     p = new_program(get_sandbox(root, ("n",), ("n/b/c",)));
     h = add_classpath(p, root + "/n/cp-nesta.jar");
     result("deny: a denied jar at the end of a chain is refused", "JNI-CLASSPATH-ERROR", h.err);
-    result("deny: the error names the denied jar of the chain", True, h.desc.find(root + "/n/b/c/cp-nestc.jar") >= 0);
-    result("deny: the error names the jar whose manifest names it", True, h.desc.find(root + "/n/b/cp-nestb.jar") >= 0);
+    result("deny: the error names no jar of the chain", -1, h.desc.find(root + "/n/b/"));
+    result("deny: the error names the entry as it was given", True, h.desc.find("'" + root + "/n/cp-nesta.jar'") >= 0);
     result("deny: no jar of the chain is added", (), jar_paths(p, root));
     result("deny: the class of the first jar of the chain is not loaded", False, loads(p, "NestA"));
 
@@ -212,7 +214,8 @@ sub deny_case(string root) {
     p = new_program(sm);
     h = add_classpath(p, root + "/d/cp-ref.zip");
     result("deny: a zip file whose manifest names the denied jar is refused", "JNI-CLASSPATH-ERROR", h.err);
-    result("deny: its error names the denied jar", True, h.desc.find(root + "/d/lib/cp-target.jar") >= 0);
+    result("deny: its error names no resolved path", -1, h.desc.find(root + "/d/lib/cp-target.jar"));
+    result("deny: its error names the zip file as it was given", True, h.desc.find("'" + root + "/d/cp-ref.zip'") >= 0);
     result("deny: the zip file is not added", (), jar_paths(p, root));
 
     # a named jar whose manifest cannot be read cannot be checked, and refuses the classpath
@@ -264,8 +267,8 @@ sub escape_case(string root) {
     Program p = new_program(get_sandbox(root, ("s",)));
     hash<auto> h = add_classpath(p, root + "/s/cp-ref.jar");
     result("escape: the classpath is refused", "JNI-CLASSPATH-ERROR", h.err);
-    result("escape: the error names the file that the link points to", True,
-        h.desc.find(root + "/outside/cp-target.jar") >= 0);
+    result("escape: the error does not name the file that the link points to", -1, h.desc.find(root + "/outside"));
+    result("escape: the error names the entry as it was given", True, h.desc.find("'" + root + "/s/cp-ref.jar'") >= 0);
     result("escape: nothing is added", (), jar_paths(p, root));
     result("escape: the class of the referring jar is not loaded", False, loads(p, "CpRef"));
     result("escape: the class of the jar outside is not loaded", False, loads(p, "CpTarget"));
@@ -278,7 +281,9 @@ sub relative_case(string root) {
     Program p = new_program(get_sandbox(root, ("w", "o"), ("w/lib",)));
     hash<auto> h = add_classpath(p, root + "/w/cp-upref.jar");
     result("relative: the jar that the class loader would open is checked", "JNI-CLASSPATH-ERROR", h.err);
-    result("relative: the error names it", True, h.desc.find(root + "/w/lib/cp-target.jar") >= 0);
+    result("relative: the error names no resolved path", -1, h.desc.find(root + "/w/lib/cp-target.jar"));
+    result("relative: the error names the entry as it was given", True,
+        h.desc.find("'" + root + "/w/cp-upref.jar'") >= 0);
     result("relative: nothing is added", (), jar_paths(p, root));
     result("relative: the class of the jar is not loaded", False, loads(p, "CpTarget"));
 

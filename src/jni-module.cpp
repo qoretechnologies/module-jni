@@ -1325,13 +1325,6 @@ LocalReference<jobject> jni_check_classpath_sandbox(const char* cmd, const QoreP
     return jni_check_classpath_policy(smh.get(), env, classpath);
 }
 
-//! Returns true if the exception raised is the denial of a filesystem policy
-static bool jni_is_filesystem_denial(ExceptionSink& xsink) {
-    QoreValue err = xsink.getExceptionErr();
-    return err.getType() == NT_STRING
-        && !strcmp(err.get<const QoreStringNode>()->c_str(), "FILESYSTEM-ACCESS-DENIED");
-}
-
 //! Returns a Java string in UTF-8, or an empty string for null
 static std::string jni_classpath_string(Env& env, jstring str) {
     if (!str) {
@@ -1366,13 +1359,6 @@ LocalReference<jobject> jni_check_classpath_policy(QoreSandboxManager* policy, E
     for (jint i = 0; i < env.callIntMethod(rc, Globals::methodResolvedClasspathSize, nullptr); ++i) {
         jvalue ji;
         ji.i = i;
-        // an element that cannot be checked refuses the classpath
-        LocalReference<jstring> refusal = env.callObjectMethod(rc, Globals::methodResolvedClasspathRefusal,
-            &ji).as<jstring>();
-        if (refusal) {
-            std::string msg = jni_classpath_string(env, refusal);
-            throw QoreJniException("JNI-CLASSPATH-ERROR", "cannot add the classpath: %s", msg.c_str());
-        }
         LocalReference<jbyteArray> bytes = env.callObjectMethod(rc, Globals::methodResolvedClasspathEncodedPath,
             &ji).as<jbyteArray>();
         jsize len = env.getArrayLength(bytes);
@@ -1386,30 +1372,41 @@ LocalReference<jobject> jni_check_classpath_policy(QoreSandboxManager* policy, E
         LocalReference<jstring> jreferrer = env.callObjectMethod(rc, Globals::methodResolvedClasspathManifestReferrer,
             &ji).as<jstring>();
         bool named = jreferrer;
-        std::string referrer = jni_classpath_string(env, jreferrer);
+        // the entry as the caller gave it: the only path that a denial names
+        LocalReference<jstring> jgiven = env.callObjectMethod(rc, Globals::methodResolvedClasspathGivenEntry,
+            &ji).as<jstring>();
+        std::string given = jni_classpath_string(env, jgiven);
         {
             ExceptionSink xsink;
             if (!policy->checkFilesystemAccess(entry.c_str(), QSEC_READ, &xsink)) {
                 // any denial refuses the whole classpath, and nothing is added; a file that a wildcard selected or
                 // that a manifest named is refused as a classpath error that names it, as a classpath that would add
                 // only some of its files would load another classpath than the one given (qore#6818, qore#6822)
-                if ((match || named) && jni_is_filesystem_denial(xsink)) {
-                    QoreValue desc = xsink.getExceptionDesc();
-                    std::string desc_str = desc.getType() == NT_STRING
-                        ? desc.get<const QoreStringNode>()->c_str()
-                        : "";
-                    xsink.clear();
+                // the path that was checked is a resolved one, which the code that gave the classpath may not be
+                // allowed to know, so an error names only the entry that it gave
+                // every failure of the check is the same denial: an error that resolving the path raised would tell
+                // what is at a path that the caller may not be allowed to know about
+                xsink.clear();
+                if (match || named) {
                     if (named) {
-                        throw QoreJniException("JNI-CLASSPATH-ERROR", "cannot add the classpath: the file '%s' that "
-                            "the manifest Class-Path attribute of '%s' names is not allowed by the sandbox "
-                            "filesystem policy: %s", entry.c_str(), referrer.c_str(), desc_str.c_str());
+                        throw QoreJniException("JNI-CLASSPATH-ERROR", "cannot add the classpath entry '%s': a file "
+                            "that its manifest Class-Path attribute names is not allowed by the sandbox filesystem "
+                            "policy", given.c_str());
                     }
-                    throw QoreJniException("JNI-CLASSPATH-ERROR", "cannot add a wildcard classpath entry: the file "
-                        "'%s' that it selects is not allowed by the sandbox filesystem policy: %s", entry.c_str(),
-                        desc_str.c_str());
+                    throw QoreJniException("JNI-CLASSPATH-ERROR", "cannot add the wildcard classpath entry '%s': a "
+                        "file that it selects is not allowed by the sandbox filesystem policy", given.c_str());
                 }
-                throw XsinkException(xsink);
+                throw QoreJniException("FILESYSTEM-ACCESS-DENIED", "the classpath entry '%s' is not allowed by the "
+                    "sandbox filesystem policy", given.c_str());
             }
+        }
+        // an element that cannot be checked refuses the classpath; only after the policy has allowed its path, as the
+        // reason tells what the file is
+        LocalReference<jstring> refusal = env.callObjectMethod(rc, Globals::methodResolvedClasspathRefusal,
+            &ji).as<jstring>();
+        if (refusal) {
+            std::string msg = jni_classpath_string(env, refusal);
+            throw QoreJniException("JNI-CLASSPATH-ERROR", "cannot add the classpath: %s", msg.c_str());
         }
         // the element is allowed: the entries of its manifest Class-Path, if any, are added to be checked
         jvalue args[2];

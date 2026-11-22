@@ -1,6 +1,7 @@
 // Copyright (C) 2026 Qore Technologies, s.r.o.
 package org.qore.jni;
 
+import java.io.File;
 import java.lang.ref.Reference;
 import java.net.Inet6Address;
 import java.net.InetAddress;
@@ -11,6 +12,7 @@ import java.nio.charset.CharacterCodingException;
 import java.nio.charset.Charset;
 import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
@@ -128,6 +130,22 @@ public final class QoreSandbox {
             }
         }
 
+        //! Returns true if a filesystem policy applies to a check made with the policy on the current thread
+        public boolean restrictsFilesystem() {
+            lock.readLock().lock();
+            try {
+                long p = enterPtr();
+                try {
+                    return restrictsFilesystem0(p);
+                } finally {
+                    ref.exit();
+                }
+            } finally {
+                lock.readLock().unlock();
+                Reference.reachabilityFence(this);
+            }
+        }
+
         //! Checks a TCP connection with the captured policy; see QoreSandbox.checkNetworkAccess(String, int, int)
         public InetAddress[] checkNetworkAccess(String host, int port) {
             return checkNetworkAccess(host, port, TCP);
@@ -164,6 +182,22 @@ public final class QoreSandbox {
                 long p = enterPtr();
                 try {
                     checkFileAccess0(p, pathBytes, mode);
+                } finally {
+                    ref.exit();
+                }
+            } finally {
+                lock.readLock().unlock();
+                Reference.reachabilityFence(this);
+            }
+        }
+
+        //! Checks a path with the captured policy; a denial names only \a given, the path as the caller gave it
+        void checkNamed(byte[] path, String given, int mode) {
+            lock.readLock().lock();
+            try {
+                long p = enterPtr();
+                try {
+                    checkNamedPath0(p, path, given, mode);
                 } finally {
                     ref.exit();
                 }
@@ -298,6 +332,100 @@ public final class QoreSandbox {
         return p != null ? p.isSandboxed() : isSandboxed0(0);
     }
 
+    //! Returns true if a sandbox filesystem policy restricts the code governing the current thread
+    /** Unlike isSandboxed(), a sandbox that allows all filesystem access does not count.  On a thread with no %Qore
+        caller and no captured policy, the caller is not known: once code that a sandbox governs has used Java in the
+        process, or with the strict policy of Java threads, the policy cannot be determined and \c JNI-SANDBOX-ERROR
+        is raised; before that, the thread is one of the trusted host and false is returned.
+
+        @throw JNI-SANDBOX-ERROR the policy of the thread's caller cannot be determined
+
+        @since jni 3.0
+    */
+    public static boolean restrictsFilesystem() {
+        Policy p = current.get();
+        return p != null ? p.restrictsFilesystem() : restrictsFilesystem0(0);
+    }
+
+    //! Checks a classpath for a compiler and returns the files to give it, with symbolic links resolved
+    /** The classpath is resolved as for the \c add-classpath module command: each entry, the files that a wildcard
+        selects, and the jars and directories that manifest \c Class-Path attributes name, and the policy is applied to
+        each.  For a directory, the policy is applied to the directory itself and not to the files below it; the Java
+        compiler checks those as it lists them for a restricted caller, but the class loader and the Kotlin compiler
+        do not (qore#7276).  A compiler that is
+        given the returned files resolves the manifest entries of a jar where they were checked.  It resolves them as
+        paths and not as URLs, so a jar whose manifest has an entry for which the two can differ is refused, as is a
+        regular file that is not named as an archive, whose manifest is not checked.
+
+        @param classpath the classpath
+
+        @return the files of the classpath, in order; those that do not exist are left out
+
+        @throw FILESYSTEM-ACCESS-DENIED the policy denies reading a file of the classpath
+        @throw JNI-SANDBOX-ERROR the classpath cannot be checked, or the policy is unknown
+
+        @since jni 3.0
+    */
+    public static List<File> checkCompilerClasspath(String classpath) {
+        QoreURLClassLoader.ResolvedClasspath rc = checkedClasspath(classpath);
+        if (rc.hasAmbiguousManifestEntry()) {
+            throw argumentError0("a jar of the classpath has a manifest Class-Path entry that a compiler could resolve "
+                + "differently from the sandbox filesystem policy check");
+        }
+        if (rc.hasUnexpandedFile()) {
+            throw argumentError0("a file of the classpath is not named as a .jar or .zip archive, so a compiler could "
+                + "open it as one without its manifest being checked against the sandbox filesystem policy");
+        }
+        return rc.addedFiles();
+    }
+
+    //! Checks that the sandbox filesystem policy allows the access \a mode to \a path; a denial names only \a given
+    /** For a path that was made from what the caller gave (ex: made absolute, or resolved), which the caller may not
+        be allowed to know
+
+        @param path the path that is used
+        @param given the path as the caller gave it
+        @param mode the access mode: a combination of READ, WRITE, EXECUTE, DELETE and CREATE
+
+        @throw FILESYSTEM-ACCESS-DENIED the policy denies the access
+        @throw JNI-SANDBOX-ERROR the path cannot be represented, or the policy is unknown
+
+        @since jni 3.0
+    */
+    public static void checkGivenPath(String path, String given, int mode) {
+        checkNamed(encode(path, "path"), given, mode);
+    }
+
+    //! Applies the policy that the static methods use on this thread; a denial names only \a given
+    private static void checkNamed(byte[] path, String given, int mode) {
+        Policy p = current.get();
+        if (p != null) {
+            p.checkNamed(path, given, mode);
+        } else {
+            checkNamedPath0(0, path, given, mode);
+        }
+    }
+
+    //! Resolves a classpath once and checks each of its elements; returns it to be added as it was checked
+    /** Each element is checked before its refusal is reported, so that a refusal says nothing about a denied path
+    */
+    static QoreURLClassLoader.ResolvedClasspath checkedClasspath(String classpath) {
+        if (classpath == null) {
+            throw argumentError0("classpath must not be null");
+        }
+        QoreURLClassLoader.ResolvedClasspath rc = resolveClasspath(classpath, 0);
+        // the elements grow as they are checked: a manifest is read only after its jar has been allowed
+        for (int i = 0; i < rc.size(); ++i) {
+            checkNamed(rc.encodedPath(i), rc.givenEntry(i), READ);
+            String refusal = rc.refusal(i);
+            if (refusal != null) {
+                throw argumentError0("cannot use the classpath: " + refusal);
+            }
+            expandClasspath(rc, i);
+        }
+        return rc;
+    }
+
     //! Checks a TCP connection to \a host and \a port; see checkNetworkAccess(String, int, int)
     public static InetAddress[] checkNetworkAccess(String host, int port) {
         return checkNetworkAccess(host, port, TCP);
@@ -416,9 +544,9 @@ public final class QoreSandbox {
         classpath is not resolved again between the check and the use.  The elements are those of
         QoreURLClassLoader.resolveClasspath(): each entry as the JVM resolves it (against its \c user.dir, not the
         current directory of the process, also for a wildcard with no directory part, such as \c "*.jar"), with
-        symbolic links resolved, and for a wildcard entry, its directory and each file that it selects.  Each checked
-        path is encoded as encode() does, which raises JNI-SANDBOX-ERROR for a path that the file name encoding cannot
-        represent exactly.
+        symbolic links resolved, and for a wildcard entry, its directory and each file that it selects.  Each path is
+        encoded when its check is reached, after the elements before it have been allowed, as encode() does, which
+        raises JNI-SANDBOX-ERROR for a path that the file name encoding cannot represent exactly.
 
         @param classpath the classpath
         @param jdkFeature a JDK feature version for the check of manifest Class-Path attributes to assume as well as
@@ -426,25 +554,46 @@ public final class QoreSandbox {
         passes one, for its tests; see QoreURLClassLoader.isVerifiedClassPathJdk())
     */
     static QoreURLClassLoader.ResolvedClasspath resolveClasspath(String classpath, int jdkFeature) {
-        QoreURLClassLoader.ResolvedClasspath rc = QoreURLClassLoader.resolveClasspath(classpath, jdkFeature);
-        encodeNew(rc);
-        return rc;
+        return QoreURLClassLoader.resolveClasspath(classpath, jdkFeature);
     }
 
     //! Called by the module after element \a i of a resolved classpath has been checked (qore#6822)
     /** Adds the jars and directories that the manifest Class-Path attribute of the element names, if it is a jar, as
-        further elements to check (see QoreURLClassLoader.ResolvedClasspath.expand()), and encodes their paths as
-        resolveClasspath() does.
+        further elements to check (see QoreURLClassLoader.ResolvedClasspath.expand()).  A path that the file name
+        encoding cannot represent exactly is refused here, after the policy has allowed its nearest parent directory
+        that it can represent (see encodeNearest()).
     */
     static void expandClasspath(QoreURLClassLoader.ResolvedClasspath rc, int i) {
+        encode(rc.path(i).getPath(), "classpath entry");
         rc.expand(i);
-        encodeNew(rc);
     }
 
-    //! Encodes the paths of the elements of a resolved classpath that have not been encoded yet
-    private static void encodeNew(QoreURLClassLoader.ResolvedClasspath rc) {
-        for (int i = rc.encodedSize(); i < rc.size(); ++i) {
-            rc.addEncoded(encode(rc.path(i).getPath(), "classpath entry"));
+    //! Encodes \a path, or else its nearest parent directory that the file name encoding can represent exactly
+    static byte[] encodeNearest(File path) {
+        for (File f = path; f != null; f = f.getParentFile()) {
+            byte[] rv = tryEncode(f.getPath());
+            if (rv != null) {
+                return rv;
+            }
+        }
+        return encode(File.separator, "classpath entry");
+    }
+
+    //! Returns the bytes of a path in the file name encoding, or null if it cannot represent the path exactly
+    private static byte[] tryEncode(String str) {
+        if (str.indexOf('\0') >= 0) {
+            return null;
+        }
+        try {
+            ByteBuffer buf = nameCharset().newEncoder()
+                .onMalformedInput(CodingErrorAction.REPORT)
+                .onUnmappableCharacter(CodingErrorAction.REPORT)
+                .encode(CharBuffer.wrap(str));
+            byte[] rv = new byte[buf.remaining()];
+            buf.get(rv);
+            return rv;
+        } catch (CharacterCodingException e) {
+            return null;
         }
     }
 
@@ -495,11 +644,17 @@ public final class QoreSandbox {
     //! Returns true if the policy \a ptr, or of the current thread if 0, is sandboxed
     private static native boolean isSandboxed0(long ptr);
 
+    //! Returns true if a filesystem policy applies to the policy \a ptr, or to the current thread if 0
+    private static native boolean restrictsFilesystem0(long ptr);
+
     //! Checks a network destination; returns the checked addresses (see makeAddresses())
     private static native byte[][] checkNetworkAccess0(long ptr, byte[] host, int port, int proto);
 
     //! Checks a path
     private static native void checkFileAccess0(long ptr, byte[] path, int mode);
+
+    //! Checks a path that was made from what the caller gave; a denial names only \a given
+    private static native void checkNamedPath0(long ptr, byte[] path, String given, int mode);
 
     //! Returns the JNI-SANDBOX-ERROR exception for invalid arguments
     private static native RuntimeException argumentError0(String msg);

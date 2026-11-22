@@ -1159,6 +1159,7 @@ add_java_compiler_source(org/qore/jni/compiler/QoreJavaCompiler.java JavaFileObj
 add_java_compiler_source(org/qore/jni/compiler/QoreJavaCompilerException.java $SafeDiagnostic)
 add_java_compiler_source(org/qore/jni/compiler/QoreJavaFileManager.java)
 add_java_compiler_source(org/qore/jni/compiler/CompilerOutput.java)
+add_java_compiler_source(org/qore/jni/compiler/QoreCompilerPolicy.java)
 if (HAVE_KOTLIN_COMPILER)
     add_java_compiler_source(org/qore/jni/compiler/QoreKotlinCompiler.java 1 2)
     add_java_compiler_source(org/qore/jni/compiler/QoreKotlinCompilerException.java)

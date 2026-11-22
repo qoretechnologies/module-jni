@@ -319,11 +319,37 @@ class Outer {
     - <tt>QoreSandbox.checkFileAccess(path, write)</tt> and <tt>QoreSandbox.checkFileAccess(path, mode)</tt> check
       a path with the filesystem policy of %Qore \c File and \c Dir operations, and raise
       \c FILESYSTEM-ACCESS-DENIED
-    - <tt>QoreSandbox.isSandboxed()</tt> tells whether a sandbox governs the caller
+    - <tt>QoreSandbox.isSandboxed()</tt> tells whether a sandbox governs the caller, and
+      <tt>QoreSandbox.restrictsFilesystem()</tt> whether a filesystem policy restricts it
+    - <tt>QoreSandbox.checkCompilerClasspath(classpath)</tt> checks each entry of a classpath, the files that a wildcard
+      selects and the entries that manifests name, as for the \c add-classpath module command, and returns the files
+      to give a compiler.  For a directory, the directory itself is checked and not the files below it: the Java
+      compiler checks those as it lists them for a restricted caller; the class loader and the Kotlin compiler do not
+      (qore#7276).  <b>Operator rule:</b> do not put a directory that contains content the policy denies on the
+      classpath of restricted code
+
+    <b>Compilers:</b> the Kotlin compiler validates the source and class names that it is given as Java binary names,
+    keeps the files that it makes for them in its private temporary directory, and validates the names of the classes
+    that it produces; the Java compiler keeps sources and classes in memory and makes no file for a name.  For a caller that a
+    filesystem policy restricts, Java compiler options that name no file are accepted, a classpath and an output
+    directory are checked against the policy and the compiler is given the files that were checked, annotation
+    processing and the Java compiler's extensions from the classpath are turned off, and any other option is refused;
+    use the \c add-classpath module command to add to the classpath.  The Kotlin compiler also uses the host's %Qore
+    and Kotlin jars and the entries of parent class loaders; this does not establish that it discovers no extensions
+    on the classpath of restricted code (qore#7276).  A compiler applies these rules to the caller that creates it: a
+    compiler that trusted code creates keeps the options and classpath that it was given and does not check the files
+    below its classpath directories, also when restricted code uses it, so do not hand one to restricted code.  A
+    path is checked before it is opened, so a file that changes between the check and its use is not covered.  A
+    classpath added with \c addClassPath() of a compiler or with \c addPath(), \c addWildcard() or
+    \c addParentPath() of a class loader is checked against the same policy.  On a Java thread whose %Qore caller is
+    not known, these operations follow the Java thread rule and its known limit, described above; a captured
+    \c QoreSandbox.Policy does not change this.  These checks cover the names and options given to the compilers: Java code that a Program
+    is allowed to run is not confined by them (see the rules below).
 
     The exceptions are thrown in Java as \c org.qore.jni.QoreExceptionWrapper (a \c RuntimeException), which becomes
-    the original %Qore exception when it reaches %Qore code.  Trusted callers pass every check; the host name is
-    resolved for them as well, so the code is the same in both cases.  In a system-policy capability
+    the original %Qore exception when it reaches %Qore code.  The policy allows callers that no sandbox restricts,
+    though a check still raises an error for invalid arguments and on a thread whose policy cannot be determined (see
+    below); the host name is resolved for them as well, so the code is the same in both cases.  In a system-policy capability
     (\c SandboxManager::createSystemPolicyCall()) the checks apply the system policy, as they do for %Qore sockets.
 
     <b>Java threads:</b> the static methods apply the policy of the %Qore caller of the current thread.  Work that

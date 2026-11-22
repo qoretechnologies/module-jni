@@ -236,6 +236,7 @@ jmethodID Globals::methodResolvedClasspathSize;
 jmethodID Globals::methodResolvedClasspathEncodedPath;
 jmethodID Globals::methodResolvedClasspathIsWildcardMatch;
 jmethodID Globals::methodResolvedClasspathManifestReferrer;
+jmethodID Globals::methodResolvedClasspathGivenEntry;
 jmethodID Globals::methodResolvedClasspathRefusal;
 jmethodID Globals::methodQoreURLClassLoaderAddParentPath;
 jmethodID Globals::methodQoreURLClassLoaderLoadClass;
@@ -3351,6 +3352,7 @@ static GlobalReference<jclass> getPrimitiveClass(Env& env, const char* wrapperNa
 #include "JavaClassJavaFileObjectImpl.inc"
 #include "JavaClassFileManagerImpl.inc"
 #include "JavaClassQoreJavaFileManager.inc"
+#include "JavaClassQoreCompilerPolicy.inc"
 
 #include "JavaJarByteBuddy.inc"
 
@@ -3426,6 +3428,7 @@ static ucmap_t ucmap = {
     {"org.qore.jni.compiler.JavaFileObjectImpl", {java_org_qore_jni_JavaFileObjectImpl_class_len, java_org_qore_jni_JavaFileObjectImpl_class}},
     {"org.qore.jni.compiler.FileManagerImpl", {java_org_qore_jni_FileManagerImpl_class_len, java_org_qore_jni_FileManagerImpl_class}},
     {"org.qore.jni.compiler.QoreJavaFileManager", {java_org_qore_jni_QoreJavaFileManager_class_len, java_org_qore_jni_QoreJavaFileManager_class}},
+    {"org.qore.jni.compiler.QoreCompilerPolicy", {java_org_qore_jni_QoreCompilerPolicy_class_len, java_org_qore_jni_QoreCompilerPolicy_class}},
 };
 
 // returns byte[] of class data if found
@@ -4263,6 +4266,8 @@ void Globals::defineQoreURLClassLoader(Env& env) {
         "isWildcardMatch", "(I)Z");
     methodResolvedClasspathManifestReferrer = env.getMethod(classQoreURLClassLoaderResolvedClasspath,
         "manifestReferrer", "(I)Ljava/lang/String;");
+    methodResolvedClasspathGivenEntry = env.getMethod(classQoreURLClassLoaderResolvedClasspath,
+        "givenEntry", "(I)Ljava/lang/String;");
     methodResolvedClasspathRefusal = env.getMethod(classQoreURLClassLoaderResolvedClasspath, "refusal",
         "(I)Ljava/lang/String;");
 
