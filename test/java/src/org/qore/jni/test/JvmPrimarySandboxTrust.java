@@ -236,6 +236,46 @@ public class JvmPrimarySandboxTrust {
         check(loader.getPtr() == ptr, "the Program pointer of the class loader after the shutdown", loader.getPtr());
     }
 
+    //! threads that close a class loader without pause do not keep the module's shutdown from starting
+    /** If they do, the shutdown does not return and the test ends with its ctest timeout */
+    private static void checkCloseDuringShutdown() throws Throwable {
+        QoreURLClassLoader loader = ClassLoaderAccessProbe.newDerived(
+            (QoreURLClassLoader)ClassLoader.getSystemClassLoader());
+        int count = Math.max(4, Runtime.getRuntime().availableProcessors());
+        java.util.concurrent.CountDownLatch started = new java.util.concurrent.CountDownLatch(count);
+        java.util.concurrent.atomic.AtomicBoolean stop = new java.util.concurrent.atomic.AtomicBoolean();
+        Thread[] threads = new Thread[count];
+        for (int i = 0; i < count; ++i) {
+            threads[i] = new Thread(() -> {
+                boolean first = true;
+                while (!stop.get()) {
+                    try {
+                        loader.close();
+                    } catch (Throwable e) {
+                        // only the calls matter here
+                    }
+                    if (first) {
+                        first = false;
+                        started.countDown();
+                    }
+                }
+            });
+            threads[i].setDaemon(true);
+            threads[i].start();
+        }
+        started.await();
+        java.lang.reflect.Method shutdown = QoreURLClassLoader.class.getDeclaredMethod("shutdownContext0");
+        shutdown.setAccessible(true);
+        try {
+            shutdown.invoke(null);
+        } finally {
+            stop.set(true);
+        }
+        for (Thread thread : threads) {
+            thread.join();
+        }
+    }
+
     //! the classes of a Kotlin script are attributed to the Program that evaluated it
     private static void checkKotlin(QoreObject pgm) throws Throwable {
         @SuppressWarnings("unchecked")
@@ -277,6 +317,10 @@ public class JvmPrimarySandboxTrust {
         }
         if (args.length == 1 && "close-after-shutdown".equals(args[0])) {
             checkCloseAfterShutdown();
+            return;
+        }
+        if (args.length == 1 && "close-during-shutdown".equals(args[0])) {
+            checkCloseDuringShutdown();
             return;
         }
         if (args.length == 1 && "kotlin".equals(args[0])) {

@@ -207,18 +207,38 @@ public class ClassLoaderAccessProbe {
         return loader.define(name, classBytes(name)).getDeclaredConstructor().newInstance();
     }
 
-    //! runs close() of \a object on a pool thread through a proxy made only of JDK classes
+    //! runs close() of \a object on a new thread through a proxy made only of JDK classes
+    /** The error is taken from the thread that ran the proxy, whose stack has no frame of this class
+    */
     public static String closeWithJdkProxy(Object object) {
         return run(() -> {
             java.lang.invoke.MethodHandle close = java.lang.invoke.MethodHandles.publicLookup().findVirtual(
                 object.getClass(), "close", java.lang.invoke.MethodType.methodType(void.class)).bindTo(object);
             Runnable proxy = java.lang.invoke.MethodHandleProxies.asInterfaceInstance(Runnable.class, close);
-            try {
-                java.util.concurrent.ForkJoinPool.commonPool().submit(proxy).get();
-            } catch (java.util.concurrent.ExecutionException e) {
-                throw (Exception)e.getCause();
+            java.util.concurrent.atomic.AtomicReference<Thread> failed_on =
+                new java.util.concurrent.atomic.AtomicReference<>();
+            java.util.concurrent.atomic.AtomicReference<Throwable> error =
+                new java.util.concurrent.atomic.AtomicReference<>();
+            Thread thread = new Thread(proxy);
+            thread.setUncaughtExceptionHandler((t, e) -> {
+                failed_on.set(t);
+                error.set(e);
+            });
+            thread.start();
+            thread.join();
+            Throwable e = error.get();
+            if (e == null) {
+                return "closed";
             }
-            return "closed";
+            if (failed_on.get() != thread) {
+                throw new AssertionError("the proxy did not run on its own thread");
+            }
+            for (StackTraceElement frame : e.getStackTrace()) {
+                if (frame.getClassName().startsWith(ClassLoaderAccessProbe.class.getName())) {
+                    throw new AssertionError("a frame of the caller is on the stack: " + frame);
+                }
+            }
+            throw (Exception)e;
         });
     }
 

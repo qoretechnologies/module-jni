@@ -683,9 +683,20 @@ public:
 
     //! Returns the lock that serializes the access checks of class loader cleanup with the start of the shutdown
     /** Held shared by a check, which uses Qore APIs, and exclusively while clearGlobalContext() sets the shutdown flag,
-        so that a check either ends first or sees the flag; never destroyed
+        so that a check either ends first or sees the flag; never destroyed.  Checks take it with enterShutdownGate(),
+        so that they cannot keep the shutdown waiting
     */
     DLLLOCAL static std::shared_mutex& getShutdownGate();
+
+    //! Takes the shutdown gate shared for a check, unless the module's shutdown has started
+    /** clearGlobalContext() announces the shutdown before it waits for the gate: a check that sees the announcement
+        does not take the gate, so that only the checks already running are waited for
+
+        @param lock set to hold the gate if the function returns true; it can also hold it if it returns false
+
+        @return true if the check can use Qore APIs while \a lock holds the gate
+    */
+    DLLLOCAL static bool enterShutdownGate(std::shared_lock<std::shared_mutex>& lock);
 
     //! Returns true if the JNI module is shutting down
     /** Java background threads (e.g. ActiveMQ/JMS listeners) must check
@@ -768,6 +779,8 @@ private:
     //! The global context Program in qph, or nullptr, for the lookup with no lock in getJavaContextProgram(); set and
     //! cleared under getContextLock()
     DLLLOCAL static std::atomic<QoreProgram*> context_pgm;
+    //! Set before clearGlobalContext() waits for the shutdown gate; see enterShutdownGate()
+    DLLLOCAL static std::atomic<bool> shutdown_gate_closing;
     //! Returns the lock that serializes the creation of the global context Program (qph) with the start of the
     //! module's shutdown
     /** Recursive, as the creation of the Program can look it up again on the same thread; never destroyed, as

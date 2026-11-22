@@ -2468,16 +2468,13 @@ public class QoreURLClassLoader extends URLClassLoader {
         @note This method requires a valid program pointer.
     */
     public void clearCompilationCache() {
+        // the access is checked and the native caches are cleared together; once the module's shutdown has started,
         // the native caches are gone with the module, and the access can no longer be checked
-        if (!checkAccessUnlessShutDown0(getOriginPtr())) {
+        if (!clearCompilationCache0(getOriginPtr(), pgm_ptr.get())) {
             return;
         }
         classCache.clear();
         classes.clear();
-        long ptr = pgm_ptr.get();
-        if (ptr != 0) {
-            clearCompilationCache0(ptr);
-        }
     }
 
     public byte[] generateByteCode(String bin_name) throws ClassNotFoundException {
@@ -2600,7 +2597,7 @@ public class QoreURLClassLoader extends URLClassLoader {
     private native void getInternalClassesForPackage0(long ptr, String packageName, ArrayList<String> result);
     static private native long getContextProgram0(QoreURLClassLoader syscl, BooleanWrapper created, boolean finalize_init);
     static private native void shutdownContext0();
-    private native void clearCompilationCache0(long ptr);
+    private native boolean clearCompilationCache0(long origin_ptr, long ptr);
     static private native void dummy0();
     static private native void debug0(long ptr);
     // the Program pointer is only compared with the Program of the calling code (qore#7015)

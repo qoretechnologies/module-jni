@@ -208,10 +208,25 @@ class Outer {
 
     The Java thread rule also applies to class loaders and compilers.  In a JVM started with %Qore as a library, the
     JVM's main thread can create a \c QoreURLClassLoader; once sandboxed code has used Java, a new thread that Java
-    started, with no %Qore caller, cannot.  Closing a class loader or a compiler is refused in the same way, as the
-    Java stack does not identify the code that supplied a \c Runnable: a compiler that is refused stays open, and code
-    that can reach its Program closes it.  Once the module's shutdown has started, class loaders and compilers are no
-    longer closed, and the process releases their resources when it exits.
+    started, with no %Qore caller, cannot.
+
+    @par Closing class loaders and compilers
+    Closing a \c QoreURLClassLoader or a compiler is refused with \c JNI-ERROR to code that cannot reach its Program:
+    code that a sandbox governs and that belongs to another Program, Java code of a class loader of another sandboxed
+    Program or of an unknown class loader, and, once sandboxed code has used Java in the process, a thread that Java
+    started and that no %Qore code calls (ex: an \c Executor, a \c Cleaner or a shutdown hook).  This also applies when
+    the object belongs to trusted code: such a thread is refused because the Java stack does not reliably identify the
+    code that supplied the work that it runs, so the module cannot tell a trusted owner from sandboxed code.
+
+    @par
+    A compiler whose close is refused stays open, with its class loader and JAR files, until code that can reach its
+    Program closes it or the process exits.  A host that uses compilers alongside sandboxed code therefore closes them
+    from the %Qore code that owns them, and not from a Java thread.
+
+    @par
+    Once the module's shutdown has started, the caller can no longer be checked: class loaders and compilers are then
+    not closed and their compilation caches are not cleared, for any caller, no exception is raised, and the process
+    releases their resources when it exits.
 
     @note Java objects have no Program of their own: when host code runs a Java object or closure that sandboxed code
     supplied or could have built (a listener, a \c Runnable, \c toString(), a closure that it passes on), its calls into

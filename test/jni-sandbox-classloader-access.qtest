@@ -195,7 +195,7 @@ string sub compile_error(object compiler) {
         assertRegex("^refused: .*" + NotGoverned, rv, rv);
         assertFalse(compiler.isClosed());
 
-        # also on a pool thread, with no class of the sandboxed Program on the stack
+        # also on a thread of its own, with no class of the sandboxed Program on the stack
         rv = getTenant().callFunction("close_with_proxy", compiler);
         assertRegex("^refused: .*" + NotGoverned, rv, rv);
         assertFalse(compiler.isClosed());

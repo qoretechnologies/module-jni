@@ -608,8 +608,8 @@ public class QoreKotlinCompiler implements AutoCloseable {
      * Close the compiler and release resources.
      * <p>
      * Code that cannot reach the class loader's Program is refused, and the
-     * compiler then stays open for its owner, with its temporary directory.
-     * Once the module's shutdown has started, nothing is closed.
+     * compiler then stays open until code that can reach its Program closes
+     * it. Once the module's shutdown has started, nothing is closed.
      */
     @Override
     public void close() {
