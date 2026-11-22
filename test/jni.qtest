@@ -398,7 +398,7 @@ System::gc();
         # stderr is captured to catch -Xcheck:jni warnings, so the JVM launcher must not write its
         # "Picked up ..." banner there; that requires removing the variables from the child's
         # environment entirely, as the banner is printed for empty values as well
-        string cmd = sprintf("env -u JAVA_TOOL_OPTIONS -u _JAVA_OPTIONS -u JDK_JAVA_OPTIONS "
+        string cmd = sprintf("unset JAVA_TOOL_OPTIONS _JAVA_OPTIONS JDK_JAVA_OPTIONS && "
             "QORE_JNI_JVM_ARGS=-Xcheck:jni %s -b --enable-debug %s 2>&1; "
             "echo QORE_JNI_EXIT=$?", shellQuote(qoreBin()), shellQuote(tmp.path));
         string output = trim(backquote(cmd));
@@ -418,7 +418,7 @@ System::gc();
             "ArrayList list();\nlist.add(\"blank-jvm-args\");\n@assert(list.get(0) == \"blank-jvm-args\");\n");
         tmp.file.close();
         foreach string args in ("", " ", "  -Dqore.jni.test=1   -Dqore.jni.test2=2 ") {
-            string cmd = sprintf("env -u JAVA_TOOL_OPTIONS -u _JAVA_OPTIONS -u JDK_JAVA_OPTIONS "
+            string cmd = sprintf("unset JAVA_TOOL_OPTIONS _JAVA_OPTIONS JDK_JAVA_OPTIONS && "
                 "QORE_JNI_JVM_ARGS=%s %s -b --enable-debug %s 2>&1; echo QORE_JNI_EXIT=$?", shellQuote(args),
                 shellQuote(qoreBin()), shellQuote(tmp.path));
             assertEq("QORE_JNI_EXIT=0", trim(backquote(cmd)), sprintf("QORE_JNI_JVM_ARGS=%y", args));
@@ -455,7 +455,7 @@ printf(\"%s\\n\", load());
         TmpFile tmp(NOTHING, ".qr");
         tmp.file.write(jniModulePath() + src);
         tmp.file.close();
-        string cmd = sprintf("env -u JAVA_TOOL_OPTIONS -u _JAVA_OPTIONS -u JDK_JAVA_OPTIONS "
+        string cmd = sprintf("unset JAVA_TOOL_OPTIONS _JAVA_OPTIONS JDK_JAVA_OPTIONS && "
             "QORE_JNI_JVM_ARGS=--limit-modules=java.base %s -b --enable-debug %s 2>&1; echo QORE_JNI_EXIT=$?",
             shellQuote(qoreBin()), shellQuote(tmp.path));
         assertEq("MODULE-INIT-ERROR\nMODULE-INIT-ERROR\nQORE_JNI_EXIT=0", trim(backquote(cmd)),
@@ -490,7 +490,7 @@ foreach string what in (\"load_class\", \"new_array\") {
         TmpFile tmp(NOTHING, ".qr");
         tmp.file.write(jniModulePath() + src);
         tmp.file.close();
-        string cmd = sprintf("env -u JAVA_TOOL_OPTIONS -u _JAVA_OPTIONS -u JDK_JAVA_OPTIONS %s -b --enable-debug %s "
+        string cmd = sprintf("unset JAVA_TOOL_OPTIONS _JAVA_OPTIONS JDK_JAVA_OPTIONS && %s -b --enable-debug %s "
             "2>&1; echo QORE_JNI_EXIT=$?", shellQuote(qoreBin()), shellQuote(tmp.path));
         assertEq("load_class: java.lang.String\nnew_array: 2\nQORE_JNI_EXIT=0", trim(backquote(cmd)));
     }

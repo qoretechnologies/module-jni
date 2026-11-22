@@ -9,10 +9,13 @@
 
 package org.qore.jni;
 
+import javax.script.ScriptContext;
 import javax.script.ScriptEngine;
 import javax.script.ScriptEngineManager;
 import javax.script.ScriptException;
 import javax.script.Bindings;
+import javax.script.Compilable;
+import javax.script.CompiledScript;
 import javax.script.SimpleBindings;
 import java.util.HashMap;
 import java.util.Map;
@@ -71,12 +74,7 @@ public class KotlinScriptEngine {
             throw new RuntimeException("Kotlin scripting not available: " +
                 (initError != null ? initError : "unknown error"));
         }
-        try {
-            ScriptEngine engine = createEngine();
-            return engine.eval(script);
-        } catch (ScriptException e) {
-            throw new RuntimeException("Kotlin script error: " + e.getMessage(), e);
-        }
+        return evalAttributed(script, null);
     }
 
     /**
@@ -93,16 +91,81 @@ public class KotlinScriptEngine {
             throw new RuntimeException("Kotlin scripting not available: " +
                 (initError != null ? initError : "unknown error"));
         }
+        Bindings b = new SimpleBindings();
+        if (bindings != null) {
+            b.putAll(bindings);
+        }
+        return evalAttributed(script, b);
+    }
+
+    //! Evaluates a script whose classes are defined by a class loader of the Program of the calling code (qore#7131)
+    /** Kotlin defines the classes of a script in a class loader of its own, which belongs to no Program and whose
+        parent is the thread's context class loader, which it asks first.  The compiled classes are given to a class
+        loader derived for the Program of the thread's context, which is that parent, so that it defines them: they
+        are then attributed to that Program like any other class of the Program.  One class loader and one engine
+        are made for each evaluation, and nothing is shared between evaluations.
+
+        If the classes cannot be given to it (no context that the calling code can reach, or a Kotlin version with
+        another compiler API), the script runs with the classes in Kotlin's class loader, which is an unknown class
+        loader: its calls into Qore are refused once sandboxed code has used Java.
+    */
+    private static Object evalAttributed(String script, Bindings bindings) throws Exception {
+        Object[] context = QoreURLClassLoader.saveContext();
         try {
+            QoreURLClassLoader scope = QoreURLClassLoader.createDerivedForContext();
             ScriptEngine engine = createEngine();
-            Bindings b = new SimpleBindings();
             if (bindings != null) {
-                b.putAll(bindings);
+                // set before the script is compiled, as the compiler reads the engine's context
+                engine.setBindings(bindings, ScriptContext.ENGINE_SCOPE);
             }
-            return engine.eval(script, b);
+            if (scope != null && engine instanceof Compilable) {
+                CompiledScript compiled = ((Compilable)engine).compile(script);
+                addCompiledClasses(scope, compiled);
+                return compiled.eval();
+            }
+            return engine.eval(script);
         } catch (ScriptException e) {
             throw new RuntimeException("Kotlin script error: " + e.getMessage(), e);
+        } finally {
+            QoreURLClassLoader.restoreContext(context);
         }
+    }
+
+    //! Gives the classes of a compiled script to \a scope; gives none if the compiler's API is not the expected one
+    private static void addCompiledClasses(QoreURLClassLoader scope, CompiledScript compiled) {
+        Map<String, byte[]> files;
+        try {
+            Object data = compiled.getClass().getMethod("getCompiledData").invoke(compiled);
+            Object script = data.getClass().getMethod("getData").invoke(data);
+            Object module = findCompiledModule(script);
+            Class<?> in_memory = Class.forName("kotlin.script.experimental.jvm.impl.KJvmCompiledModuleInMemory", false,
+                module.getClass().getClassLoader());
+            @SuppressWarnings("unchecked")
+            Map<String, byte[]> output = (Map<String, byte[]>)in_memory.getMethod("getCompilerOutputFiles")
+                .invoke(module);
+            files = output;
+        } catch (ReflectiveOperationException | IllegalArgumentException | NullPointerException
+                | ClassCastException e) {
+            // the classes stay in Kotlin's class loader, which is unknown (fail closed)
+            return;
+        }
+        for (Map.Entry<String, byte[]> entry : files.entrySet()) {
+            String path = entry.getKey();
+            if (path.endsWith(".class")) {
+                scope.addPendingClass(path.substring(0, path.length() - 6).replace('/', '.'), entry.getValue());
+            }
+        }
+    }
+
+    //! Returns the compiled module of the script data, which a REPL snippet list holds in its last element
+    private static Object findCompiledModule(Object script) throws ReflectiveOperationException {
+        Object current = script;
+        try {
+            current = current.getClass().getMethod("get").invoke(current);
+        } catch (NoSuchMethodException e) {
+            // not a snippet: the data is the compiled script
+        }
+        return current.getClass().getMethod("getCompiledModule").invoke(current);
     }
 
     /**

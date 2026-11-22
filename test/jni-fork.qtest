@@ -57,6 +57,7 @@ class JniForkTest inherits QUnit::Test {
         addTestCase("a child ends while another thread holds the context Program", \contextProgramTest());
         addTestCase("a child ends while another thread holds the Program registry", \programRegistryTest());
         addTestCase("a child ends while another thread holds a save object lock", \saveObjectLockTest());
+        addTestCase("a child ends while another thread holds the shutdown gate", \shutdownGateTest());
         addTestCase("a child ends while its own thread holds the context Program", \ownContextProgramTest());
         addTestCase("a child ends with no hold on the context", \contextNoHoldTest());
         addTestCase("threads of a child change the save object callback", \saveObjectSwapTest());
@@ -169,6 +170,10 @@ class JniForkTest inherits QUnit::Test {
 
     saveObjectLockTest() {
         checkContextHold("save-object");
+    }
+
+    shutdownGateTest() {
+        checkContextHold("shutdown-gate");
     }
 
     ownContextProgramTest() {

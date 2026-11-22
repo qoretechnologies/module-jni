@@ -359,11 +359,26 @@ public class QoreJavaCompiler<T> implements AutoCloseable {
         }
         // Use a StringWriter to capture any compiler output that would otherwise go to stderr
         StringWriter compilerOutput = new StringWriter();
+        Throwable failure = null;
         try {
             // Get a CompliationTask from the compiler and compile the sources
             final CompilationTask task = compiler.getTask(compilerOutput, javaFileManager, localDiagnostics,
                     options, null, sources);
-            final Boolean result = task.call();
+            final Boolean result;
+            try {
+                result = task.call();
+            } catch (RuntimeException e) {
+                // the compiler closes the class loader when it ends, which can be refused: errors of the compilation
+                // that it has reported are not replaced by the refusal
+                if (localDiagnostics.getDiagnostics().stream()
+                        .noneMatch(d -> d.getKind() == javax.tools.Diagnostic.Kind.ERROR)) {
+                    throw e;
+                }
+                QoreJavaCompilerException error = new QoreJavaCompilerException("Compilation failed.",
+                    classes.keySet(), localDiagnostics);
+                error.addSuppressed(e);
+                throw error;
+            }
             if (result == null || !result) {
                 String outputStr = compilerOutput.toString();
                 String message = "Compilation failed.";
@@ -391,8 +406,23 @@ public class QoreJavaCompiler<T> implements AutoCloseable {
             } catch (SecurityException e) {
                 throw new QoreJavaCompilerException(classes.keySet(), e, localDiagnostics);
             }
+        } catch (Throwable e) {
+            failure = e;
+            throw e;
         } finally {
+            clearCacheAfterCompile(failure);
+        }
+    }
+
+    //! Clears the compilation cache; a refusal does not replace the error of the compilation, \a failure
+    private void clearCacheAfterCompile(Throwable failure) {
+        try {
             classLoader.clearCompilationCache();
+        } catch (RuntimeException e) {
+            if (failure == null) {
+                throw e;
+            }
+            failure.addSuppressed(e);
         }
     }
 
@@ -473,11 +503,15 @@ public class QoreJavaCompiler<T> implements AutoCloseable {
     /**
      * Closes the compiler and releases resources.
      * <p>
-     * This method attempts to close the underlying {@link QoreURLClassLoader}
-     * and then clears its caches and program pointer. Any <tt>IOException</tt>
-     * thrown during {@code classLoader.close()} is intentionally ignored,
-     * because at this point the compiler is being disposed and the class loader
-     * is not expected to be used again.
+     * This method closes the underlying {@link QoreURLClassLoader} and clears
+     * its caches and program pointer. Any <tt>IOException</tt> from closing it
+     * is intentionally ignored, because at this point the compiler is being
+     * disposed and the class loader is not expected to be used again.
+     * <p>
+     * Code that cannot reach the class loader's Program is refused, and the
+     * compiler then stays open until code that can reach its Program closes
+     * it. Once the module's shutdown has started, nothing is closed, and the
+     * process releases the resources.
      * <p>
      * This method is idempotent: calling it multiple times is safe. After
      * calling this method, the compiler must not be used.
@@ -487,24 +521,11 @@ public class QoreJavaCompiler<T> implements AutoCloseable {
         if (closed) {
             return;
         }
-        try {
-            if (classLoader != null) {
-                try {
-                    // Attempt to close the class loader first
-                    classLoader.close();
-                } catch (IOException e) {
-                    // Intentionally ignore close errors: the compiler is being
-                    // discarded, and there is no recovery action to take here.
-                } finally {
-                    // Ensure internal loader state is cleared even if close()
-                    // throws, so the compiler ends in a consistent state.
-                    classLoader.clearAllCaches();
-                    classLoader.clearProgramPtr();
-                }
-            }
-        } finally {
-            closed = true;
+        // a refusal, or the module's shutdown, leaves the compiler open, with all of its resources
+        if (classLoader != null && !classLoader.closeAndClear()) {
+            return;
         }
+        closed = true;
     }
 
     /**

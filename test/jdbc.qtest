@@ -494,7 +494,7 @@ printf(\"imported\\n\");
         tmp.file.close();
         string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? ENV.QORE_EXECUTABLE ?? QORE_ARGV[0] ?? ARGV[0];
         # the JVM launcher must not write its "Picked up ..." banner into the output
-        string output = trim(backquote(sprintf("env -u JAVA_TOOL_OPTIONS -u _JAVA_OPTIONS -u JDK_JAVA_OPTIONS "
+        string output = trim(backquote(sprintf("unset JAVA_TOOL_OPTIONS _JAVA_OPTIONS JDK_JAVA_OPTIONS && "
             "'%s' '%s' 2>&1; echo exit=$?", qore_bin, tmp.path)));
         assertEq("error: object<SQLServerException>\nimported\nexit=0", output);
     }

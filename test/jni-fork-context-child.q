@@ -5,8 +5,8 @@
 # run by test/jni-fork.qtest: another thread of the process holds state of the jni module when fork() is called, and the
 # child ends, which runs the module's cleanup in the child
 #
-# arguments: the hold ("lock", "program", "registry", "save-object", "own-program" or "none"; "own-program" is a hold of
-# the thread that calls fork()) and how the child ends ("end": the end of its script, which deletes the module; "exit":
+# arguments: the hold ("lock", "program", "registry", "save-object", "shutdown-gate", "own-program" or "none";
+# "own-program" is a hold of the thread that calls fork()) and how the child ends ("end": the end of its script, which deletes the module; "exit":
 # exit(), which runs the module's exit handler; "swap": the end of its script, after two threads of the child have
 # changed the save object callback)
 #
@@ -26,6 +26,7 @@ const Holds = {
     "program": "Jni::org::qore::jni::dbg_jni_hold_context_program",
     "registry": "Jni::org::qore::jni::dbg_jni_hold_program_registry",
     "save-object": "Jni::org::qore::jni::dbg_jni_hold_save_object_lock",
+    "shutdown-gate": "Jni::org::qore::jni::dbg_jni_hold_shutdown_gate",
 };
 const ReleaseHold = "Jni::org::qore::jni::dbg_jni_release_context_hold";
 const OwnHold = "Jni::org::qore::jni::dbg_jni_hold_own_context_program";

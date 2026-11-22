@@ -765,6 +765,10 @@ static QoreValue f_dbg_jni_hold_save_object_lock(const QoreListNode* args, Runti
     return dbg_hold_context(jni::Globals::DbgContextHoldKind::SaveObject, xsink);
 }
 
+static QoreValue f_dbg_jni_hold_shutdown_gate(const QoreListNode* args, RuntimeConfig& rtcfg, ExceptionSink* xsink) {
+    return dbg_hold_context(jni::Globals::DbgContextHoldKind::ShutdownGate, xsink);
+}
+
 //! Collects a child process that has ended; returns "exited <status>" or "signal <number>"
 static QoreValue f_dbg_jni_wait_child_status(const QoreListNode* args, RuntimeConfig& rtcfg, ExceptionSink* xsink) {
     pid_t pid = static_cast<pid_t>(get_param_value(args, 0).getAsBigInt());
@@ -881,6 +885,8 @@ void init_jni_debug_functions(QoreNamespace& ns) {
     ns.addBuiltinVariant("dbg_jni_hold_context_program", f_dbg_jni_hold_context_program, QCF_NO_FLAGS, QDOM_DEFAULT,
         nothingTypeInfo);
     ns.addBuiltinVariant("dbg_jni_hold_program_registry", f_dbg_jni_hold_program_registry, QCF_NO_FLAGS, QDOM_DEFAULT,
+        nothingTypeInfo);
+    ns.addBuiltinVariant("dbg_jni_hold_shutdown_gate", f_dbg_jni_hold_shutdown_gate, QCF_NO_FLAGS, QDOM_DEFAULT,
         nothingTypeInfo);
     ns.addBuiltinVariant("dbg_jni_hold_save_object_lock", f_dbg_jni_hold_save_object_lock, QCF_NO_FLAGS, QDOM_DEFAULT,
         nothingTypeInfo);

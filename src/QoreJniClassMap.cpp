@@ -5310,7 +5310,7 @@ void JniJavaProgramRef::acquire(Env& env, jlong ptr, jobject loader, bool callba
         JniProgramDataRegistry& reg = jni_pgm_data();
         std::lock_guard<std::mutex> guard(reg.lock);
         if (reg.pgms.find(p) == reg.pgms.end()) {
-            throw BasicException(JAVA_PROGRAM_DELETED);
+            throw JavaProgramDeletedException(JAVA_PROGRAM_DELETED);
         }
         p->depRef();
     }
@@ -5325,7 +5325,7 @@ void JniJavaProgramRef::acquire(Env& env, jlong ptr, jobject loader, bool callba
             loader = current;
         }
         if (!loader || env.callLongMethod(loader, Globals::methodQoreURLClassLoaderGetPtr, nullptr) != ptr) {
-            throw BasicException(JAVA_PROGRAM_DELETED);
+            throw JavaProgramDeletedException(JAVA_PROGRAM_DELETED);
         }
         // Java code is not governed by a sandbox: for code that a sandbox governs, the Program must be the Program of
         // the calling code, which the sandbox governs; Java code then cannot run Qore code in another Program, such as
