@@ -215,8 +215,10 @@ class Outer {
     affected.  The limit is process-wide, so one sandboxed Program can cause it for all trusted Java-started threads;
     it refuses the operation and grants nothing.  The module does not decide per thread origin because that cannot be
     proven safe: work that sandboxed code submits to a shared thread (ex: a common pool or a host's executor) looks
-    the same as trusted work there.  A host that needs these operations performs them from %Qore code.  An explicit
-    grant for trusted worker threads is tracked in qoretechnologies/qore#7229.
+    the same as trusted work there.  A host that needs these operations performs them from %Qore code.  This also
+    applies to threads started by a host's interface code or by third-party JARs that it loads, which must not rely
+    on these operations once sandboxed code can run in the process.  An explicit grant for trusted worker threads is
+    tracked in qoretechnologies/qore#7229.
 
     @par Closing class loaders and compilers
     Closing a \c QoreURLClassLoader or a compiler is refused with \c JNI-ERROR to code that cannot reach its Program:

@@ -18,7 +18,8 @@
       only is unchanged, unless it issues \c set-java-thread-policy \c strict, which applies this rule from the start
     - <b>Known limit</b> (qore#7131): after any call of Java by code that a sandbox governs, trusted Java-started
       threads can no longer add classpaths or build compilers, for the rest of the process; threads that %Qore code
-      calls are not affected.  One sandboxed Program can cause this for all such threads.  It fails closed, because
+      calls are not affected.  This includes threads started by a host's interface code or by third-party JARs.  One
+      sandboxed Program can cause this for all such threads.  It fails closed, because
       work that sandboxed code submits to a shared thread cannot be told from trusted work there, so deciding per
       thread origin cannot be proven safe.  An explicit grant for trusted worker threads is tracked in qore#7229
     - A refused \c QoreURLClassLoader constructor no longer leaves an object or changes the thread's context, and a
