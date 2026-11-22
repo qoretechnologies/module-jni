@@ -250,18 +250,8 @@ string sub own() {
             ? (ENV.KOTLIN_HOME,)
             : ("/opt/kotlin", "/opt/kotlinc", "/usr/share/qore/java/kotlin");
         foreach string home in (homes) {
-            if (!is_file(home + "/lib/kotlin-stdlib.jar")) {
-                continue;
-            }
-            if (is_file(home + "/lib/kotlin-compiler.jar")) {
+            if (is_file(home + "/lib/kotlin-stdlib.jar") && is_file(home + "/lib/kotlin-compiler.jar")) {
                 return home;
-            }
-            if (is_dir(home + "/lib/scripting")) {
-                Dir d();
-                d.chdir(home + "/lib/scripting");
-                if (d.listFiles("^kotlin-compiler-embeddable.*\\.jar$")) {
-                    return home;
-                }
             }
         }
     }
