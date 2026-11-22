@@ -361,8 +361,9 @@ class Outer {
     \c JNI-SANDBOX-ERROR instead of allowing the operation, so that a missing capture is an error and never a silent
     bypass.  <tt>QoreSandbox.restrictsFilesystem()</tt> differs on such a thread: it returns false until code that a
     sandbox governs has used Java in the process or the strict policy of Java threads is set, and raises
-    \c JNI-SANDBOX-ERROR from then on.  %Qore code that Java calls back on a Java thread already runs under the sandbox of the code that handed
-    it to Java (see @ref jni_callback_sandbox), so the checks it makes through Java use that sandbox.
+    \c JNI-SANDBOX-ERROR from then on.  %Qore code that Java calls back on a Java thread already runs under the sandbox
+    of the code that handed it to Java (see @ref jni_callback_sandbox), so the checks it makes through Java use that
+    sandbox.
 
     A captured \c QoreSandbox.Policy applies to every check made through it on any thread, also on a %Qore thread that
     runs other sandboxed code and inside a system-policy capability (\c SandboxManager::createSystemPolicyCall());

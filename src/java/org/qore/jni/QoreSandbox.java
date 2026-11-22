@@ -355,8 +355,9 @@ public final class QoreSandbox {
         compiler checks those as it lists them for a restricted caller, but the class loader and the Kotlin compiler
         do not (qore#7276).  A compiler that is
         given the returned files resolves the manifest entries of a jar where they were checked.  It resolves them as
-        paths and not as URLs, so a jar whose manifest has an entry for which the two can differ is refused, as is a
-        regular file that is not named as an archive, whose manifest is not checked.
+        paths and not as URLs, so a jar whose manifest has an entry for which the two can differ is refused.  A file
+        whose real name, after symbolic links are resolved, is not an archive name is refused as well, as its manifest
+        is not checked, and so is a special file, whatever its name.
 
         @param classpath the classpath
 
@@ -415,7 +416,7 @@ public final class QoreSandbox {
         if (classpath == null) {
             throw argumentError0("classpath must not be null");
         }
-        QoreURLClassLoader.ResolvedClasspath rc = resolveClasspath(classpath, 0);
+        QoreURLClassLoader.ResolvedClasspath rc = resolveClasspath(classpath, 0, true);
         // the elements grow as they are checked: a manifest is read only after its jar has been allowed
         for (int i = 0; i < rc.size(); ++i) {
             checkNamed(rc.encodedPath(i), rc.givenEntry(i), READ);
@@ -555,8 +556,9 @@ public final class QoreSandbox {
         the running JDK's, which can only make the check stricter, or 0 for none (only a debug build of the module
         passes one, for its tests; see QoreURLClassLoader.isVerifiedClassPathJdk())
     */
-    static QoreURLClassLoader.ResolvedClasspath resolveClasspath(String classpath, int jdkFeature) {
-        return QoreURLClassLoader.resolveClasspath(classpath, jdkFeature);
+    static QoreURLClassLoader.ResolvedClasspath resolveClasspath(String classpath, int jdkFeature,
+            boolean restricted) {
+        return QoreURLClassLoader.resolveClasspath(classpath, jdkFeature, restricted);
     }
 
     //! Called by the module after element \a i of a resolved classpath has been checked (qore#6822)

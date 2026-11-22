@@ -57,6 +57,27 @@ string sub add_url(object loader, string path) {
     return ClassLoaderAccessProbe::addUrlTo(loader, path);
 }
 
+bool sub can_load(string name) {
+    try {
+        get_class_loader().loadClass(name);
+        return True;
+    } catch (hash<ExceptionInfo> ex) {
+        return False;
+    }
+}
+
+# opens a datasource with a driver that does not exist, so that no database is contacted
+hash<auto> sub jdbc_open(string classpath) {
+    try {
+        Datasource ds({\"type\": \"jdbc\", \"user\": \"u\", \"pass\": \"p\", \"db\": \"jdbc:qore-none://x\",
+            \"options\": {\"classpath\": classpath}});
+        ds.open();
+        return {\"ok\": True};
+    } catch (hash<ExceptionInfo> ex) {
+        return {\"ok\": False, \"err\": ex.err, \"desc\": ex.desc};
+    }
+}
+
 hash<auto> sub module_add_classpath(string path) {
     try {
         Program::issueModuleCmd(\"jni\", \"add-classpath \" + path);
@@ -223,6 +244,7 @@ hash<auto> sub kotlin_compile(hash<auto> sources, *hash<auto> injected, *softlis
         addTestCase("a wildcard link to an archive with another name", \wildcardLinkedArchiveTest());
         addTestCase("a special file on a classpath, whatever its name", \specialFileTest());
         addTestCase("an allowed output directory gets no file", \outputDirectoryTest());
+        addTestCase("a special file with no filesystem restriction", \unrestrictedSpecialFileTest());
 
         start_dir = getcwd();
         # absolute, as the current directory changes
@@ -678,15 +700,42 @@ public class %s extends AbstractProcessor {
         string dir = root + "/allowed";
         mkdir(root, 0700);
         mkdir(dir, 0700);
-        # classes stay in memory: a directory that the policy allows gets no file, and nothing appears beside it
+        # the compiler's file manager has no location for native headers, and annotation processing is off for this
+        # caller, so neither option makes a file, in the directory or beside it
         foreach string opt in ("-h", "-s") {
             hash<auto> rv = compileJava(getProgram(False, dir, NOTHING, True, NOTHING,
                 QSEC_READ | QSEC_WRITE | QSEC_CREATE), (opt, dir));
             assertTrue(rv.ok, opt + ": " + rv.desc);
             assertEq("", trim(backquote(sprintf("find %s -mindepth 1 ! -path %s", shellQuote(root), shellQuote(dir)))),
                 opt);
-            assertEq((), glob(dir + "/*") ?? (), opt);
         }
+    }
+
+    unrestrictedSpecialFileTest() {
+        string dir = realpath(scratch) + "/unrestricted-special";
+        mkdir(dir, 0700);
+        string dep = getName("UnrestrictedDep");
+        ClassLoaderAccessProbe::writeJar(dir + "/plain.jar", NOTHING, dep, compileClass(dep));
+        # never opened: it is left out, and the rest of the classpath is used
+        mkfifo(dir + "/entry.data");
+        string classpath = dir + "/plain.jar:" + dir + "/entry.data";
+
+        # a sandbox that does not restrict the filesystem, as for trusted code with interrupts or limits only
+        Program p = getProgram(False, NOTHING, True);
+        hash<auto> rv = p.callFunction("module_add_classpath", classpath);
+        assertTrue(rv.ok, rv.desc);
+        assertTrue(p.callFunction("can_load", dep), "the rest of the classpath is added");
+
+        # the classpath option of a datasource: the driver that does not exist is the only error
+        rv = getProgram(False, NOTHING, True).callFunction("jdbc_open", classpath);
+        assertEq("JNI-ERROR", rv.err, rv.desc);
+        assertNRegex("not a regular file", rv.desc);
+
+        # the control: a sandbox that restricts the filesystem refuses the same classpath
+        rv = getProgram(False, dir).callFunction("module_add_classpath", classpath);
+        assertFalse(rv.ok);
+        assertEq("JNI-CLASSPATH-ERROR", rv.err, rv.desc);
+        assertRegex("not a regular file", rv.desc);
     }
 
     unresolvedWildcardTest() {
@@ -1103,6 +1152,10 @@ public class %s extends AbstractProcessor {
             SandboxManager sm();
             sm.setUncontrolledApiPolicy(True);
             sm.setFilesystemDefaultPolicy(open ?? False);
+            if (open) {
+                # restricts nothing, as a sandbox for interrupts or limits only
+                sm.setNetworkDefaultPolicy(True);
+            }
             if (allowed_path) {
                 sm.addFilesystemAllowedPath(allowed_path, allowed_mode);
             }

@@ -1985,8 +1985,9 @@ public class QoreURLClassLoader extends URLClassLoader {
         }
 
         //! Refuses the classpath for a file that is neither a regular file nor a directory, which is not opened
-        /** The class loader would open such a file (ex: a device) as a jar, so its manifest would have to be read
-            to check it, but reading it is not safe (ex: a FIFO blocks).
+        /** The class loader opens such a file (ex: a device) as a jar if it has an archive name, and a compiler can
+            open one with any name, so its manifest would have to be read to check it, but reading it is not safe (ex:
+            a FIFO blocks).
         */
         private void refuseSpecial(File real, String referrer) {
             refuse(real, referrer, "the classpath jar '" + real + "' is not a regular file, so the jars that its "
@@ -2360,8 +2361,10 @@ public class QoreURLClassLoader extends URLClassLoader {
         @param classpath the classpath
         @param jdkFeature a JDK feature version for the check of manifest Class-Path attributes to assume as well as
         the running JDK's, which can only make the check stricter, or 0 for none
+        @param restricted true if a filesystem policy restricts the caller: a special file is then refused whatever
+        its name; otherwise one without an archive name is kept as an element, which the class loader does not open
     */
-    static ResolvedClasspath resolveClasspath(String classpath, int jdkFeature) {
+    static ResolvedClasspath resolveClasspath(String classpath, int jdkFeature, boolean restricted) {
         if (classpath == null) {
             throw new IllegalArgumentException("the classpath must not be null");
         }
@@ -2376,8 +2379,8 @@ public class QoreURLClassLoader extends URLClassLoader {
                     rc.add(fileentry, null, false, null);
                 } else if (Files.isRegularFile(real.toPath()) && isLoadable(real.getName())) {
                     rc.addJar(real, false);
-                } else if (isSpecialFile(real)) {
-                    // whatever its name or the name of a link to it: it is not opened
+                } else if ((restricted || isLoadable(real.getName())) && isSpecialFile(real)) {
+                    // for a restricted caller, whatever its name or the name of a link to it: it is not opened
                     rc.refuseSpecial(real, null);
                 } else {
                     rc.add(real, real, false, null);
