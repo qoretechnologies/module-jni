@@ -39,6 +39,13 @@ static constexpr int jdbc_caps = DBI_CAP_TRANSACTION_MANAGEMENT
    | DBI_CAP_HAS_NUMBER_SUPPORT
    | DBI_CAP_SERVER_TIME_ZONE
    | DBI_CAP_AUTORECONNECT
+   // without the url option, the database name is the JDBC URL, which can hold credentials, so it is masked where
+   // Qore shows the connection values of a datasource (qore#7275)
+#ifdef QORE_HAVE_DBI_SENSITIVE_DBNAME
+   | DBI_CAP_SENSITIVE_DBNAME
+#else
+   // an older Qore library has no such capability and shows the database name
+#endif
 ;
 
 DBIDriver* DBID_JDBC = nullptr;
