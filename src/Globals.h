@@ -666,9 +666,24 @@ public:
     //! The number of global context Programs deleted by clearGlobalContext() in the process (debug builds only)
     DLLLOCAL static std::atomic<int> dbg_context_programs_deleted;
 
-    //! Makes a new thread hold the context lock (\a lock true) or the global context Program (false) until
-    //! dbgReleaseContextHold() (debug builds only); returns once it holds it, or false if a hold is active
-    DLLLOCAL static bool dbgHoldContext(bool lock);
+    //! What a thread holds for dbgHoldContext() (debug builds only)
+    enum class DbgContextHoldKind {
+        //! the context lock
+        Lock,
+        //! the global context Program
+        Program,
+        //! the lock of the registry of the Programs' jni data
+        Registry,
+        //! the save object callback lock of the jni data of the calling Program
+        SaveObject,
+    };
+
+    //! Makes a new thread hold \a kind until dbgReleaseContextHold() (debug builds only); returns once it holds it, or
+    //! false if a hold is active or the calling Program has no jni data
+    DLLLOCAL static bool dbgHoldContext(DbgContextHoldKind kind);
+
+    //! Writes a marker of the module's cleanup to stderr, if QORE_JNI_DBG_FORK_MARKERS is set (debug builds only)
+    DLLLOCAL static void dbgContextMarker(const char* marker);
 
     //! Ends the hold of dbgHoldContext(), if any, and joins its thread (debug builds only)
     DLLLOCAL static void dbgReleaseContextHold();
@@ -799,9 +814,10 @@ private:
 
     //! clearGlobalContext() in a child process created with fork()
     /** Only the forking thread exists in the child: a lock or a hold of the global context Program that another thread
-        of the parent had at the fork is never released.  The function waits for neither.  The Program is deleted only
-        if no such state exists, as in any other process; otherwise it can be in use or partly built, and it is left
-        allocated, as abandonGlobalContext() leaves it, and released with the process
+        of the parent had at the fork is never released, so the function waits for neither.  The Program is deleted
+        here, while the module's data exists: a Program left allocated would be cleared by qore_cleanup() after the
+        module has been deleted.  The library has made the Program's own locks and thread counts consistent in the
+        child.  Only a hold of the forking thread itself keeps the Program, as in any other process
     */
     DLLLOCAL static void clearGlobalContextInForkedChild();
 

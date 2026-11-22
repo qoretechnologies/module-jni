@@ -172,6 +172,31 @@ public:
     marks \c m as held, so if any path ever holds \c m across a module load again, libqore asserts on
     the lock-order inversion in debug builds instead of deadlocking in the field.
 */
+//! Holds the save object callback lock of a Program's jni data
+/** Takes no lock in a child process created with fork(): only the forking thread exists there, and a thread of the
+    parent can have held the lock, which is then never released
+*/
+class SaveObjectCallbackLocker {
+public:
+    DLLLOCAL explicit SaveObjectCallbackLocker(QoreThreadLock& lock) : lock(Jvm::isForkedChild() ? nullptr : &lock) {
+        if (this->lock) {
+            this->lock->lock();
+        }
+    }
+
+    DLLLOCAL ~SaveObjectCallbackLocker() {
+        if (lock) {
+            lock->unlock();
+        }
+    }
+
+    SaveObjectCallbackLocker(const SaveObjectCallbackLocker&) = delete;
+    SaveObjectCallbackLocker& operator=(const SaveObjectCallbackLocker&) = delete;
+
+private:
+    QoreThreadLock* lock;
+};
+
 class JniClassMapLocker {
 public:
     DLLLOCAL JniClassMapLocker();
@@ -631,7 +656,7 @@ public:
         // the member is swapped under the lock (qore#6790); the old callback is released after the lock is released,
         // as its release can run Qore code, which could set the callback again
         {
-            AutoLocker al(save_object_callback_lock);
+            SaveObjectCallbackLocker al(save_object_callback_lock);
             old = this->save_object_callback;
             this->save_object_callback = new_callback;
         }
@@ -647,7 +672,7 @@ public:
         itself (qore#6790)
     */
     DLLLOCAL ResolvedCallReferenceNode* getSaveObjectCallbackRef() const {
-        AutoLocker al(save_object_callback_lock);
+        SaveObjectCallbackLocker al(save_object_callback_lock);
         return save_object_callback ? save_object_callback->refRefSelf() : nullptr;
     }
 
@@ -673,6 +698,11 @@ public:
 #ifdef DEBUG
     //! Returns the number of entries in the compilation cache (DEBUG builds only, for tests)
     DLLLOCAL size_t getCompilationCacheSizeForTest();
+
+    //! Returns the save object callback lock, for a debug hold (see Globals::dbgHoldContext())
+    DLLLOCAL QoreThreadLock& dbgSaveObjectLock() {
+        return save_object_callback_lock;
+    }
 #endif
 
     DLLLOCAL void saveClass(const QoreClass& qc, LocalReference<jclass> jcls);
@@ -977,6 +1007,11 @@ private:
 
 DLLLOCAL QoreProgram* jni_get_program_context();
 DLLLOCAL JniExternalProgramData* jni_get_context();
+
+#ifdef DEBUG
+//! Returns the lock of the registry of the Programs' jni data, for a debug hold (see Globals::dbgHoldContext())
+DLLLOCAL std::mutex& jni_dbg_program_registry_lock();
+#endif
 DLLLOCAL JniExternalProgramData* jni_get_context(QoreProgram*& pgm);
 
 //! Returns the jni data of the Program context as jni_get_context(), or of the global Java context Program

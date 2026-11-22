@@ -34,6 +34,10 @@
 #include "Env.h"
 #include "QoreToJava.h"
 
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <cerrno>
+
 #include <atomic>
 #include <map>
 #include <mutex>
@@ -732,21 +736,54 @@ void dbg_jni_run_java_program_ptr_hook() noexcept {
     run_supplier_hook(java_program_ptr_hook);
 }
 
-//! Makes a new thread hold the context lock until dbg_jni_release_context_hold()
-static QoreValue f_dbg_jni_hold_context_lock(const QoreListNode* args, RuntimeConfig& rtcfg, ExceptionSink* xsink) {
-    if (!jni::Globals::dbgHoldContext(true)) {
-        xsink->raiseException("DBG-JNI-HOOK-ERROR", "a context hold is already active");
+//! Makes a new thread hold \a kind until dbg_jni_release_context_hold()
+static QoreValue dbg_hold_context(jni::Globals::DbgContextHoldKind kind, ExceptionSink* xsink) {
+    if (!jni::Globals::dbgHoldContext(kind)) {
+        xsink->raiseException("DBG-JNI-HOOK-ERROR", "a context hold is already active, or the Program has no jni data");
     }
     return QoreValue();
 }
 
-//! Makes a new thread hold the global context Program until dbg_jni_release_context_hold()
+static QoreValue f_dbg_jni_hold_context_lock(const QoreListNode* args, RuntimeConfig& rtcfg, ExceptionSink* xsink) {
+    return dbg_hold_context(jni::Globals::DbgContextHoldKind::Lock, xsink);
+}
+
 static QoreValue f_dbg_jni_hold_context_program(const QoreListNode* args, RuntimeConfig& rtcfg,
         ExceptionSink* xsink) {
-    if (!jni::Globals::dbgHoldContext(false)) {
-        xsink->raiseException("DBG-JNI-HOOK-ERROR", "a context hold is already active");
+    return dbg_hold_context(jni::Globals::DbgContextHoldKind::Program, xsink);
+}
+
+static QoreValue f_dbg_jni_hold_program_registry(const QoreListNode* args, RuntimeConfig& rtcfg,
+        ExceptionSink* xsink) {
+    return dbg_hold_context(jni::Globals::DbgContextHoldKind::Registry, xsink);
+}
+
+static QoreValue f_dbg_jni_hold_save_object_lock(const QoreListNode* args, RuntimeConfig& rtcfg,
+        ExceptionSink* xsink) {
+    return dbg_hold_context(jni::Globals::DbgContextHoldKind::SaveObject, xsink);
+}
+
+//! Collects a child process that has ended; returns "exited <status>" or "signal <number>"
+static QoreValue f_dbg_jni_wait_child_status(const QoreListNode* args, RuntimeConfig& rtcfg, ExceptionSink* xsink) {
+    pid_t pid = static_cast<pid_t>(get_param_value(args, 0).getAsBigInt());
+    int status = 0;
+    pid_t rc;
+    do {
+        rc = waitpid(pid, &status, 0);
+    } while (rc < 0 && errno == EINTR);
+    if (rc < 0) {
+        xsink->raiseErrnoException("DBG-JNI-HOOK-ERROR", errno, "waitpid() failed");
+        return QoreValue();
     }
-    return QoreValue();
+    QoreStringNode* rv = new QoreStringNode;
+    if (WIFEXITED(status)) {
+        rv->sprintf("exited %d", WEXITSTATUS(status));
+    } else if (WIFSIGNALED(status)) {
+        rv->sprintf("signal %d", WTERMSIG(status));
+    } else {
+        rv->sprintf("status %d", status);
+    }
+    return rv;
 }
 
 //! Ends the hold of dbg_jni_hold_context_lock() or dbg_jni_hold_context_program()
@@ -761,8 +798,14 @@ void init_jni_debug_functions(QoreNamespace& ns) {
         nothingTypeInfo);
     ns.addBuiltinVariant("dbg_jni_hold_context_program", f_dbg_jni_hold_context_program, QCF_NO_FLAGS, QDOM_DEFAULT,
         nothingTypeInfo);
+    ns.addBuiltinVariant("dbg_jni_hold_program_registry", f_dbg_jni_hold_program_registry, QCF_NO_FLAGS, QDOM_DEFAULT,
+        nothingTypeInfo);
+    ns.addBuiltinVariant("dbg_jni_hold_save_object_lock", f_dbg_jni_hold_save_object_lock, QCF_NO_FLAGS, QDOM_DEFAULT,
+        nothingTypeInfo);
     ns.addBuiltinVariant("dbg_jni_release_context_hold", f_dbg_jni_release_context_hold, QCF_NO_FLAGS, QDOM_DEFAULT,
         nothingTypeInfo);
+    ns.addBuiltinVariant("dbg_jni_wait_child_status", f_dbg_jni_wait_child_status, QCF_NO_FLAGS, QDOM_DEFAULT,
+        stringTypeInfo, 1, bigIntTypeInfo, QoreValue(), "pid");
     ns.addBuiltinVariant("dbg_jni_describe_throwable", f_dbg_jni_describe_throwable, QCF_NO_FLAGS, QDOM_DEFAULT,
         stringTypeInfo, 1, objectTypeInfo, QoreValue(), "throwable");
     ns.addBuiltinVariant("dbg_jni_set_classpath_jdk_feature", f_dbg_jni_set_classpath_jdk_feature, QCF_NO_FLAGS,
