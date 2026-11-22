@@ -371,16 +371,27 @@ void setup_jdbc_driver() {
     methods.add(QDBI_METHOD_OPT_SET, jdbc_opt_set);
     methods.add(QDBI_METHOD_OPT_GET, jdbc_opt_get);
 
-    methods.registerOption(DBI_OPT_NUMBER_OPT, "when set, numeric/decimal values are returned as integers if "
+    // the options that are not sensitive are registered with option flags, so that their values can be shown where
+    // Qore shows the options of a datasource; an option registered without flags counts as undeclared, and its value
+    // is masked (qore#7070)
+    auto register_plain_option = [&methods](const char* name, const char* desc, const QoreTypeInfo* type = nullptr) {
+#ifdef QORE_HAVE_DBI_SENSITIVE_OPTIONS
+        methods.registerOption(name, desc, type, 0);
+#else
+        methods.registerOption(name, desc, type);
+#endif
+    };
+
+    register_plain_option(DBI_OPT_NUMBER_OPT, "when set, numeric/decimal values are returned as integers if "
         "possible, otherwise as arbitrary-precision number values; the argument is ignored; setting this option "
         "turns it on and turns off 'string-numbers' and 'numeric-numbers'");
-    methods.registerOption(DBI_OPT_NUMBER_STRING, "when set, numeric/decimal values are returned as strings for "
+    register_plain_option(DBI_OPT_NUMBER_STRING, "when set, numeric/decimal values are returned as strings for "
         "backwards-compatibility; the argument is ignored; setting this option turns it on and turns off "
         "'optimal-numbers' and 'numeric-numbers'");
-    methods.registerOption(DBI_OPT_NUMBER_NUMERIC, "when set, numeric/decimal values are returned as "
+    register_plain_option(DBI_OPT_NUMBER_NUMERIC, "when set, numeric/decimal values are returned as "
         "arbitrary-precision number values; the argument is ignored; setting this option turns it on and turns off "
         "'string-numbers' and 'optimal-numbers'");
-    methods.registerOption(JDBC_OPT_CLASSPATH, "set the classpath before loading the driver", stringTypeInfo);
+    register_plain_option(JDBC_OPT_CLASSPATH, "set the classpath before loading the driver", stringTypeInfo);
     // a JDBC URL can hold credentials (ex: user and password properties, keystore and truststore passwords, or
     // tokens, as for Firebird's Jaybird driver), so its value is masked where Qore shows the options of a datasource
     // (qore#7070)
@@ -391,7 +402,7 @@ void setup_jdbc_driver() {
     methods.registerOption(JDBC_OPT_URL, "override the database string with the jdbc driver URL; it can hold "
         "credentials and is sensitive", stringTypeInfo);
 #endif
-    methods.registerOption(JDBC_OPT_LOB_MAX_SIZE, "the most bytes or characters read from a large object whose "
+    register_plain_option(JDBC_OPT_LOB_MAX_SIZE, "the most bytes or characters read from a large object whose "
         "length the driver does not give (default: 2 GiB); a larger one raises JDBC-LOB-SIZE-ERROR", bigIntTypeInfo);
 
     DBID_JDBC = DBI.registerDriver("jdbc", methods, jdbc_caps);
