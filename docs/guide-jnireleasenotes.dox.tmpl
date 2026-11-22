@@ -8,7 +8,7 @@
 
     - A child process created with \c fork() could wait forever when it ended, if another thread of the parent held
       one of the module's locks on the child's exit path or the global context Program at the time of the fork, as that
-      thread does not exist in the child.  The module's cleanup in a child no longer waits for that state
+      thread does not exist in the child.  The module's cleanup in a child no longer waits for that state (qore#7192)
     - <b>Security</b>: class loader operations are now checked against the class loader that they change, and the
       process-wide registry of shared dynamic classes can no longer be changed by code that a sandbox governs, nor can
       that code define a class in a registered owner that it cannot reach.  Operations that change the state of a class

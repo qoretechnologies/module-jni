@@ -5877,8 +5877,8 @@ void Globals::clearGlobalContext() {
     {
         // announced before the wait, so that new checks do not take the gate and only those running are waited for
         shutdown_gate_closing.store(true, std::memory_order_seq_cst);
-        // taken first and released before the Program is deleted: an access check that runs ends before the flag is
-        // set, and takes neither of the other locks while this thread waits for it
+        // taken first and released before the Program is deleted: an access check that runs ends before
+        // jni_shutting_down is set, and takes neither of the other locks while this thread waits for it
         std::unique_lock<std::shared_mutex> gate(getShutdownGate());
         dbg_context_marker("jni-dbg: clearGlobalContext: taking the context lock\n");
         std::lock_guard<std::recursive_mutex> guard(getContextLock());

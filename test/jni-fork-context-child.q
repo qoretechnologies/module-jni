@@ -6,8 +6,8 @@
 # child ends, which runs the module's cleanup in the child
 #
 # arguments: the hold ("lock", "program", "registry", "save-object", "shutdown-gate", "own-program" or "none";
-# "own-program" is a hold of the thread that calls fork()) and how the child ends ("end": the end of its script, which deletes the module; "exit":
-# exit(), which runs the module's exit handler; "swap": the end of its script, after two threads of the child have
+# "own-program" is a hold of the thread that calls fork()) and how the child ends ("end": the end of its script, which
+# deletes the module; "exit": exit(), which runs the module's exit handler; "swap": the end of its script, after two threads of the child have
 # changed the save object callback)
 #
 # The child's stderr is the write end of a pipe, which stays open until the child has ended: the parent reads the
