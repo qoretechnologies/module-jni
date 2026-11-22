@@ -1351,8 +1351,8 @@ LocalReference<jobject> jni_check_classpath_policy(QoreSandboxManager* policy, E
 #ifdef DEBUG
     jargs[1].i = dbg_jni_classpath_jdk_feature.load(std::memory_order_acquire);
 #endif
-    // a sandbox that does not restrict the filesystem (ex: one for interrupts or limits only) refuses no more than
-    // trusted code does
+    // a sandbox that does not restrict the filesystem (ex: one for interrupts or limits only) still refuses a special
+    // file with an archive name, which the class loader would open, but not one with another name, which it does not
     jargs[2].z = policy->filesystemRestricts() ? JNI_TRUE : JNI_FALSE;
     LocalReference<jobject> rc = env.callStaticObjectMethod(Globals::classQoreSandbox,
         Globals::methodQoreSandboxResolveClasspath, jargs);

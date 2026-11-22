@@ -555,6 +555,8 @@ public final class QoreSandbox {
         @param jdkFeature a JDK feature version for the check of manifest Class-Path attributes to assume as well as
         the running JDK's, which can only make the check stricter, or 0 for none (only a debug build of the module
         passes one, for its tests; see QoreURLClassLoader.isVerifiedClassPathJdk())
+        @param restricted true if a filesystem policy restricts the caller: a special file is then refused whatever its
+        name; otherwise only one with an archive name is refused
     */
     static QoreURLClassLoader.ResolvedClasspath resolveClasspath(String classpath, int jdkFeature,
             boolean restricted) {

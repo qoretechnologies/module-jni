@@ -722,6 +722,7 @@ public class %s extends AbstractProcessor {
 
         # a sandbox that does not restrict the filesystem, as for trusted code with interrupts or limits only
         Program p = getProgram(False, NOTHING, True);
+        assertFalse(p.callFunction("can_load", dep), "the class is not available before the classpath is added");
         hash<auto> rv = p.callFunction("module_add_classpath", classpath);
         assertTrue(rv.ok, rv.desc);
         assertTrue(p.callFunction("can_load", dep), "the rest of the classpath is added");
@@ -729,6 +730,7 @@ public class %s extends AbstractProcessor {
         # the classpath option of a datasource: the driver that does not exist is the only error
         rv = getProgram(False, NOTHING, True).callFunction("jdbc_open", classpath);
         assertEq("JNI-ERROR", rv.err, rv.desc);
+        assertRegex("No suitable driver", rv.desc);
         assertNRegex("not a regular file", rv.desc);
 
         # the control: a sandbox that restricts the filesystem refuses the same classpath
@@ -1096,6 +1098,18 @@ public class %s extends AbstractProcessor {
             hash<auto> rv = compileJava(p, ("-Xlint:unchecked", "-cp", dir, "-d", dir));
             assertTrue(rv.ok, rv.desc);
         }
+
+        # a sandbox that restricts the network and not the filesystem: the compiler options and classpaths are not
+        # restricted
+        Program p = getProgram(False, NOTHING, True, True, NOTHING, QSEC_READ, False);
+        hash<auto> rv = compileJava(p, ("-Xlint:unchecked", "-cp", dir, "-d", dir));
+        assertTrue(rv.ok, rv.desc);
+        string user = getName("NetworkRestrictedUser");
+        rv = p.callFunction("java_add_classpath", "loader", dir, user, sprintf("public class %s { }", user));
+        assertTrue(rv.ok, rv.desc);
+        # the control: this sandbox does restrict the network
+        rv = p.callFunction("jdbc_open", dir);
+        assertEq("NETWORK-ACCESS-DENIED", rv.err, rv.desc);
     }
 
     #! returns names that must be refused; none of them can leave the scratch directory
@@ -1135,9 +1149,10 @@ public class %s extends AbstractProcessor {
         @param sandboxed if the Program has a sandbox
         @param denied_path a path that the filesystem policy denies
         @param allowed_mode the access that the policy allows to \a allowed_path
+        @param open_network if a sandbox that allows all filesystem access (\a open) also allows the network
     */
     private Program getProgram(bool kotlin, *string allowed_path, *bool open, bool sandboxed = True,
-            *string denied_path, int allowed_mode = QSEC_READ) {
+            *string denied_path, int allowed_mode = QSEC_READ, bool open_network = True) {
         Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
         p.loadModule("jni");
         string src = ProgramSource;
@@ -1152,7 +1167,7 @@ public class %s extends AbstractProcessor {
             SandboxManager sm();
             sm.setUncontrolledApiPolicy(True);
             sm.setFilesystemDefaultPolicy(open ?? False);
-            if (open) {
+            if (open && open_network) {
                 # restricts nothing, as a sandbox for interrupts or limits only
                 sm.setNetworkDefaultPolicy(True);
             }
