@@ -4,6 +4,7 @@
 
 %modern
 %no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../build"
 %requires QUnit
 %requires jni
 %module-cmd(jni) add-relative-classpath qore-jni-test.jar
@@ -11,10 +12,9 @@
 
 %exec-class JniSandboxTrustedHostCallback
 
-#! A trusted host with a permissive sandbox manager on every Program, as in Qorus (qorus#1088)
-/** The trusted manager is the one QorusProgram::setSandboxPolicy(mgr, False) builds, and it is attached before the jni
-    module is loaded, as in the QorusProgram constructor.  The test cases run in order: the first ones run before any
-    restricting sandbox has used Java in the process, the later ones after.
+#! A trusted host with a permissive sandbox manager on every Program (qorus#1088)
+/** The trusted manager restricts nothing and is attached before the jni module is loaded.  The test cases run in
+    order: the first ones run before any restricting sandbox has used Java in the process, the later ones after.
 */
 class JniSandboxTrustedHostCallback inherits QUnit::Test {
     public {
@@ -63,7 +63,7 @@ auto sub call_args(object o, string m, softlist<auto> a) {
 }
 ";
 
-        #! as in kx2.q and kx.q
+        #! a Kotlin compile with the compiler, its class loader and the calling code in one Program
         const KSource = "
 auto sub kx_compile(hash<auto> src) {
     object comp = new QoreKotlinCompiler();
@@ -119,7 +119,7 @@ string sub own() {
         addTestCase("after: A compiler object via callFunction", \caseA4());
         addTestCase("negative: restricted cannot reach the host", \negHost());
         addTestCase("negative: restricted cannot reach another tenant", \negTenant());
-        addTestCase("negative: exact Qorus sandboxed policy refuses jni", \negExactPolicy());
+        addTestCase("negative: a sandbox that refuses uncontrolled APIs cannot use jni", \negExactPolicy());
         set_return_value(main());
     }
 
@@ -201,8 +201,7 @@ string sub own() {
             p.parse("string sub f() { return get_class_loader().getClass().getName(); }", "exact");
             return p.callFunction("f");
         });
-        printf("exact sandboxed policy result: %s\n", rv);
-        assertTrue(rv.find("ERR:") == 0, rv);
+        assertRegex("^ERR: INVALID-FUNCTION-ACCESS: ", rv, rv);
     }
 
     private string className() {
@@ -218,7 +217,7 @@ string sub own() {
         }
     }
 
-    #! as QorusProgram::setSandboxPolicy(mgr, False)
+    #! a manager that restricts nothing
     private static SandboxManager getTrustedManager() {
         SandboxManager sm();
         sm.setFilesystemDefaultPolicy(True);
@@ -227,7 +226,7 @@ string sub own() {
         return sm;
     }
 
-    #! a Program in the order of the QorusProgram constructor and initJava()
+    #! a trusted Program: its manager is attached before the jni module is loaded
     private static Program getTrusted(string src) {
         Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
         p.setSandboxManager(getTrustedManager());
@@ -245,10 +244,35 @@ string sub own() {
         p.issueModuleCmd("jni", "import org.qore.jni.compiler.CompilerOutput");
     }
 
-    #! a Program after QorusProgram::initJava() and initKotlin()
+    #! returns the Kotlin home with a usable compiler, as the build finds it
+    private static *string getKotlinHome() {
+        list<string> homes = ENV.KOTLIN_HOME
+            ? (ENV.KOTLIN_HOME,)
+            : ("/opt/kotlin", "/opt/kotlinc", "/usr/share/qore/java/kotlin");
+        foreach string home in (homes) {
+            if (!is_file(home + "/lib/kotlin-stdlib.jar")) {
+                continue;
+            }
+            if (is_file(home + "/lib/kotlin-compiler.jar")) {
+                return home;
+            }
+            if (is_dir(home + "/lib/scripting")) {
+                Dir d();
+                d.chdir(home + "/lib/scripting");
+                if (d.listFiles("^kotlin-compiler-embeddable.*\\.jar$")) {
+                    return home;
+                }
+            }
+        }
+    }
+
+    #! a Program with Java and Kotlin set up; in CI a missing compiler is an error, so this coverage cannot silently go
     private Program getKotlin() {
-        string home = ENV.KOTLIN_HOME ?? "/opt/kotlin";
-        if (!is_file(home + "/lib/kotlin-stdlib.jar")) {
+        *string home = getKotlinHome();
+        if (!home) {
+            if (ENV.CI) {
+                throw "KOTLIN-ERROR", "the Kotlin compiler is required in CI";
+            }
             testSkip("Kotlin not available");
         }
         Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
@@ -288,7 +312,7 @@ string sub own() {
     private static Program getTenant() {
         Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
         p.loadModule("jni");
-        p.issueModuleCmd("jni", "add-classpath " + getBuildDir() + "/qore-jni-test.jar");
+        p.issueModuleCmd("jni", "add-classpath " + get_script_dir() + "/qore-jni-test.jar");
         p.issueModuleCmd("jni", "import org.qore.jni.test.GovernedProgramProbe");
         p.parse(TenantSource + "object sub tenant_loader() { return get_class_loader(); }\n", "tenant");
         SandboxManager sm();
@@ -302,7 +326,7 @@ string sub own() {
     }
 
     private static string getBuildDir() {
-        return get_script_dir() + "/../build-debug";
+        return get_script_dir() + "/../build";
     }
 }
 
