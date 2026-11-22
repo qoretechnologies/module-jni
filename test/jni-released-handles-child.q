@@ -13,6 +13,9 @@
 # two operations release the object while a call uses it, and print "live: <result>" (mode "live"):
 # - "release-in-use": the object is released while a call of its method on another thread is in progress
 #   (ReleasedHandleCalls.releaseWhileInUse())
+# - "release-throwing-hook": the same, with a release wait hook that throws
+# - "release-forced-hook": the same, with the hook stored directly in NativeCleanup's private field
+# - "hook-enabled": prints whether the module runs the release wait hook (a debug build only)
 # - "release-self": the object's method releases the object, on the thread of the call that uses it
 #   (ReleasedHandleCalls.callReleaseSelf())
 # - "convert-released": Java returns a QoreObject whose handle it has released, which Qore converts
@@ -84,6 +87,12 @@ switch (op) {
 
 if (op == "release-in-use") {
     printf("live: %s\n", ReleasedHandleCalls::releaseWhileInUse());
+} else if (op == "release-throwing-hook") {
+    printf("live: %s\n", ReleasedHandleCalls::releaseWhileInUse(True));
+} else if (op == "release-forced-hook") {
+    printf("live: %s\n", ReleasedHandleCalls::releaseWhileInUse(False, True));
+} else if (op == "hook-enabled") {
+    printf("live: %y\n", ReleasedHandleCalls::releaseWaitHookEnabled());
 } else if (op == "release-self") {
     printf("live: %s\n", ReleasedHandleCalls::callReleaseSelf());
 } else if (op == "convert-released") {

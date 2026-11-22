@@ -34,6 +34,7 @@
 #include "Env.h"
 #include "QoreToJava.h"
 #include "QoreJniClassMap.h"
+#include "JniHandleRegistry.h"
 
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -565,6 +566,24 @@ void dbg_jni_run_context_program_wait_hook() noexcept {
     run_runnable_hook(context_program_wait_hook_lock, context_program_wait_hook, "context Program wait");
 }
 
+//! Runs the callback with the locks of the shared class records and of the handle registry held
+/** A test calls fork() while another thread is in the callback: the locks are then held forever in the child, whose
+    exit path must not take them.
+*/
+static QoreValue f_dbg_jni_hold_fork_locks(const QoreListNode* args, RuntimeConfig& rtcfg, ExceptionSink* xsink) {
+    const ResolvedCallReferenceNode* callback = get_param_value(args, 0).get<const ResolvedCallReferenceNode>();
+    try {
+        jni::dbg_jni_with_shared_class_lock([&] () {
+            jni::jni_handle_with_all_locks([&] () {
+                ValueHolder rv(callback->execValue(nullptr, xsink), xsink);
+            });
+        });
+    } catch (const std::exception& e) {
+        xsink->raiseException("DBG-JNI-HOOK-ERROR", "%s", e.what());
+    }
+    return QoreValue();
+}
+
 namespace {
 //! A java.util.function.BooleanSupplier hook that a native runs at one point of a call, on any thread: the hook decides
 //! from the thread whether it runs, and returns true if it ran, which clears it
@@ -947,6 +966,8 @@ void init_jni_debug_functions(QoreNamespace& ns) {
         QDOM_DEFAULT, nothingTypeInfo, 1, objectOrNothingTypeInfo, QoreValue(), "hook");
     ns.addBuiltinVariant("dbg_jni_set_context_program_wait_hook", f_dbg_jni_set_context_program_wait_hook,
         QCF_NO_FLAGS, QDOM_DEFAULT, nothingTypeInfo, 1, objectOrNothingTypeInfo, QoreValue(), "hook");
+    ns.addBuiltinVariant("dbg_jni_hold_fork_locks", f_dbg_jni_hold_fork_locks, QCF_NO_FLAGS, QDOM_DEFAULT,
+        nothingTypeInfo, 1, codeTypeInfo, QoreValue(), "callback");
 }
 
 #endif // DEBUG

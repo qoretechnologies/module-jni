@@ -53,6 +53,7 @@ class JniForkTest inherits QUnit::Test {
         addTestCase("a child raises JNI-FORK-ERROR when it uses Java", \javaInChildTest());
         addTestCase("a child deletes a Program whose binding a Java thread is calling", \bindingLeaseTest());
         addTestCase("a child ends its script, and the module is deleted", \moduleCleanupTest());
+        addTestCase("a child exits while a thread of the parent held the module's locks", \heldLocksTest());
         addTestCase("a child ends while another thread holds the context lock", \contextLockTest());
         addTestCase("a child ends while another thread holds the context Program", \contextProgramTest());
         addTestCase("a child ends while another thread holds the Program registry", \programRegistryTest());
@@ -62,6 +63,31 @@ class JniForkTest inherits QUnit::Test {
         addTestCase("a child ends with no hold on the context", \contextNoHoldTest());
         addTestCase("threads of a child change the save object callback", \saveObjectSwapTest());
         set_return_value(main());
+    }
+
+    # a Java thread of the parent holds the locks of the shared class records and of the handle registry at fork():
+    # they are locked forever in the child, which deletes a Program and exits by both routes
+    heldLocksTest() {
+        checkFork();
+        # a status other than 0 shows that the status of a child is read
+        string control = runLocksChild("exit", 7);
+        if (control =~ /^skip:/) {
+            testSkip(trim(control));
+        }
+        assertEq("status: exited 7", control);
+        assertEq("status: exited 0", runLocksChild("exit", 0));
+        assertEq("status: exited 0", runLocksChild("end", 0));
+    }
+
+    #! runs the child script of heldLocksTest() and returns the line with its result
+    /** The script limits the time with no report from the child, and not the start of the JVM in the parent
+    */
+    private string runLocksChild(string route, int status) {
+        string script = get_script_dir() + "/jni-fork-locks-child.q";
+        string output = backquote(sprintf("%s -b --enable-debug %s %s %d 2>&1",
+            shellQuote(QORE_ARGV[0]), shellQuote(script), route, status));
+        *list<*string> m = (output =~ x/^((?:status|skip): .*)$/m);
+        return exists m ? m[0] : "no result: " + output;
     }
 
     # the child exits with exit(), which runs the module's exit handler; it waited forever for the NativeCleanup
@@ -197,7 +223,7 @@ class JniForkTest inherits QUnit::Test {
         }
     }
 
-    #! skips the test if the module's debug hooks or the bound of the child script are not available
+    #! skips the test if the module's debug hooks are not available
     private checkContextHooks() {
         checkFork();
         try {
@@ -205,18 +231,14 @@ class JniForkTest inherits QUnit::Test {
         } catch (hash<ExceptionInfo> ex) {
             testSkip("the jni module's debug hooks require a debug build");
         }
-        # the script limits its wait for the child; this limit is for the script itself
-        if (system("command -v timeout > /dev/null 2>&1")) {
-            if (ENV.CI) {
-                throw "TIMEOUT-MISSING", "the timeout command is required in CI for this test";
-            }
-            testSkip("the timeout command is not available");
-        }
     }
 
-    #! runs the child script, with a limit, and returns its output
+    #! runs the child script and returns its output
+    /** The script limits the time with no report from the child; a limit on the whole script would measure the start of
+        the JVM in the parent, which depends on the load
+    */
     private string runContextChild(string hold, string ending) {
-        return backquote(sprintf("timeout -s KILL 150 %s -b --enable-debug %s %s %s 2>&1", shellQuote(QORE_ARGV[0]),
+        return backquote(sprintf("%s -b --enable-debug %s %s %s 2>&1", shellQuote(QORE_ARGV[0]),
             shellQuote(get_script_dir() + "/jni-fork-context-child.q"), hold, ending));
     }
 

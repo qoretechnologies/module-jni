@@ -72,7 +72,10 @@ address (qore#7068):
   (`Program::importClass()` with injection) relates to the method's class, and the same class of another Program when
   both Programs registered its Java name with the `register-shared-class` module command.  The module records those
   registrations natively; a registration made only through the Java class loader method grants neither.  A class of
-  the same name and signature is otherwise another class.  An object is constructed only with the constructor
+  the same name and signature is otherwise another class.  In these two cases, the Java varargs array of a variadic
+  bound method is passed as separate arguments if the object's method of that name has any variadic variant, and
+  otherwise as one list; the choice is made by method name before Qore selects the variant, so a class that overloads
+  that name with both variadic and list variants can get separate arguments where its list variant was meant.  An object is constructed only with the constructor
   of the Java class's own binding, or for a Java subclass, of its nearest generated superclass, as the private data of
   an object is typed by class.  Each Qore class of a Java class records its superclass when it is made, and these links
   are followed to the generated class when an object is constructed.

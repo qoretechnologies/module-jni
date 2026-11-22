@@ -133,7 +133,7 @@ public final class NativeCleanup {
                 Runnable hook = releaseWaitHook;
                 if (hook != null) {
                     releaseWaitHook = null;
-                    hook.run();
+                    runReleaseWaitHook(hook);
                 }
             }
             boolean interrupted = false;
@@ -214,10 +214,29 @@ public final class NativeCleanup {
         seen the use and before it waits for it to end, with the monitor of the Ref held (for tests: a
         hook that lets the use end makes the release wait deterministically; qore#6864)
         @param hook the hook, or null to clear it
+        @return true if the hook was set; false in a module that is not a debug build, which runs no hook
     */
-    public static void setReleaseWaitHook(Runnable hook) {
+    public static boolean setReleaseWaitHook(Runnable hook) {
+        if (!releaseWaitHookEnabled0()) {
+            return false;
+        }
         releaseWaitHook = hook;
+        return true;
     }
+
+    //! Runs the hook in a debug build of the module; nothing that the hook does can prevent the release
+    private static void runReleaseWaitHook(Runnable hook) {
+        try {
+            if (releaseWaitHookEnabled0()) {
+                hook.run();
+            }
+        } catch (Throwable t) {
+            // the release that runs the hook continues
+        }
+    }
+
+    //! Returns true if the module is a debug build
+    private static native boolean releaseWaitHookEnabled0();
 
     /** Sentinel kind used at shutdown to wake the C++ thread blocked on
         queue.remove().  See {@link #shutdown}. */

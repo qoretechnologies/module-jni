@@ -8,6 +8,7 @@
 #include <jni.h>
 
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <stdexcept>
 #include <utility>
@@ -53,6 +54,11 @@ DLLLOCAL std::shared_ptr<void> jni_handle_take(jlong handle, JniHandleKind kind)
 
 //! Returns the number of live handles
 DLLLOCAL size_t jni_handle_count();
+
+#ifdef DEBUG
+//! Runs the function with every lock of the registry held, for tests of what a child process created with fork() uses
+DLLLOCAL void jni_handle_with_all_locks(const std::function<void()>& f);
+#endif
 
 //! The permutation that makes handles from a counter (Speck64/128); exposed for its known-answer test
 /** @param value the value to encrypt

@@ -1652,7 +1652,7 @@ static jobject qore_object_closure_call_internal(JNIEnv* jenv, jclass, QoreProgr
 
         if (len) {
             Array::getArgList(qore_args, env, args, pgm,
-                (v && v->getCodeFlags() & QCF_USES_EXTRA_ARGS) ? true : false);
+                (flatten || (v && (v->getCodeFlags() & QCF_USES_EXTRA_ARGS))) ? true : false);
         }
 
         QoreObject* obj;
@@ -1971,6 +1971,21 @@ static bool jni_is_injected_receiver(const QoreClass& receiver, const QoreClass&
     return jni_class_injected_as(receiver, method_class.getID());
 }
 
+//! Returns true if the method of the class with the given name has a variant that takes variable arguments
+static bool jni_method_takes_extra_args(const QoreClass& cls, const char* name) {
+    const QoreMethod* method = cls.findMethod(name);
+    if (!method) {
+        return false;
+    }
+    QoreExternalFunctionIterator i(*method->getFunction());
+    while (i.next()) {
+        if (i.getVariant()->getCodeFlags() & QCF_USES_EXTRA_ARGS) {
+            return true;
+        }
+    }
+    return false;
+}
+
 static jobject JNICALL java_class_builder_do_normal_call(JNIEnv* jenv, jclass jcls, jstring mname, jlong qobj,
         jlong method_handle, jlong reserved, jobjectArray args) try {
     return generated_native_call<jobject>(jenv, [&](Env& env, ExceptionSink& xsink) -> jobject {
@@ -1985,6 +2000,7 @@ static jobject JNICALL java_class_builder_do_normal_call(JNIEnv* jenv, jclass jc
         const QoreMethod* method = binding->method;
         const QoreExternalMethodVariant* variant = static_cast<const QoreExternalMethodVariant*>(binding->variant);
         bool call_bound_name = false;
+        bool flatten = false;
         // by class ID: libqore's instance checks also accept a class of the same name and signature in another
         // namespace or Program; copies of a class imported into another Program have the same ID
         if (!obj->getClass()->getClass(method->getClass()->getID())) {
@@ -1995,7 +2011,10 @@ static jobject JNICALL java_class_builder_do_normal_call(JNIEnv* jenv, jclass jc
             }
             // a class injected for the method's class, or the same registered shared class of another Program: the
             // object's own method of the bound name is called, never the body of the method of the other class, and
-            // never a name that the caller gives
+            // never a name that the caller gives; the Java varargs array of the bound variant is passed as separate
+            // arguments if the object's own method takes them, and otherwise as the list that it declares
+            flatten = variant && (variant->getCodeFlags() & QCF_USES_EXTRA_ARGS)
+                && jni_method_takes_extra_args(*obj->getClass(), method->getName());
             call_bound_name = true;
             variant = nullptr;
         }
@@ -2006,7 +2025,7 @@ static jobject JNICALL java_class_builder_do_normal_call(JNIEnv* jenv, jclass jc
             pgm = binding->pgm;
         }
         return qore_object_closure_call_internal(jenv, jcls, pgm, handle.get(), nullptr, true, mname, args,
-            method, variant, false, call_bound_name);
+            method, variant, flatten, call_bound_name);
     });
 } JNI_NATIVE_CATCH(jenv, nullptr)
 
@@ -3723,6 +3742,23 @@ static jobject JNICALL qore_url_classloader_get_internal_classes_for_package(JNI
     return nullptr;
 } JNI_NATIVE_CATCH(jenv, nullptr)
 
+// the test hook of a release that waits for a use of a handle exists only in a debug build
+static jboolean JNICALL native_cleanup_release_wait_hook_enabled(JNIEnv* jenv, jclass) try {
+#ifdef DEBUG
+    return JNI_TRUE;
+#else
+    return JNI_FALSE;
+#endif
+} JNI_NATIVE_CATCH(jenv, JNI_FALSE)
+
+static JNINativeMethod nativeCleanupNativeMethods[1] = {
+    {
+        const_cast<char*>("releaseWaitHookEnabled0"),
+        const_cast<char*>("()Z"),
+        reinterpret_cast<void*>(native_cleanup_release_wait_hook_enabled)
+    },
+};
+
 static JNINativeMethod invocationHandlerNativeMethods[2] = {
     {
         const_cast<char*>("release0"),
@@ -4454,8 +4490,12 @@ void Globals::defineQoreURLClassLoader(Env& env) {
     // their constructors call NativeCleanup.register(); the inner Ref class also needs
     // to be available because we read its `ptr` and `kind` fields from the C++ cleanup
     // thread.  See native_cleanup_thread_main in Jvm.cpp.
-    findDefineClass(env, "org.qore.jni.NativeCleanup", nullptr,
-        java_org_qore_jni_NativeCleanup_class, java_org_qore_jni_NativeCleanup_class_len).makeGlobal();
+    {
+        LocalReference<jclass> native_cleanup = findDefineClass(env, "org.qore.jni.NativeCleanup", nullptr,
+            java_org_qore_jni_NativeCleanup_class, java_org_qore_jni_NativeCleanup_class_len);
+        env.registerNatives(native_cleanup, nativeCleanupNativeMethods,
+            sizeof(nativeCleanupNativeMethods) / sizeof(JNINativeMethod));
+    }
     findDefineClass(env, "org.qore.jni.NativeCleanup$Ref", nullptr,
         java_org_qore_jni_NativeCleanup_Ref_class, java_org_qore_jni_NativeCleanup_Ref_class_len).makeGlobal();
     findDefineClass(env, "org.qore.jni.ClassModInfo", nullptr,

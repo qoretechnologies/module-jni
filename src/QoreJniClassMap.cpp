@@ -1591,6 +1591,12 @@ void jni_record_shared_class(const char* bin_name, const QoreProgram& pgm) {
 }
 
 void jni_purge_shared_classes(const QoreProgram& pgm) {
+    if (Jvm::isForkedChild()) {
+        // a child process created with fork() after the JVM was started: the records are used only for calls from
+        // Java, which cannot be used here, and a thread of the parent can have held their lock when the process was
+        // created
+        return;
+    }
     qore_program_id_t id = pgm.getProgramId();
     JniSharedClassMap& map = jni_shared_classes();
     std::lock_guard<std::mutex> guard(map.lock);
@@ -1603,6 +1609,14 @@ void jni_purge_shared_classes(const QoreProgram& pgm) {
         }
     }
 }
+
+#ifdef DEBUG
+void dbg_jni_with_shared_class_lock(const std::function<void()>& f) {
+    JniSharedClassMap& map = jni_shared_classes();
+    std::lock_guard<std::mutex> guard(map.lock);
+    f();
+}
+#endif
 
 bool jni_classes_are_shared(Env& env, const QoreClass& receiver, const QoreClass& method_class,
         QoreProgram* method_pgm) {

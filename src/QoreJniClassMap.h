@@ -202,8 +202,13 @@ DLLLOCAL bool jni_get_java_subclass_ctor_class(qore_classid_t cid, qore_classid_
 */
 DLLLOCAL void jni_record_shared_class(const char* bin_name, const QoreProgram& pgm);
 
-//! Removes the shared class records of a Program that is being torn down
+//! Removes the shared class records of a Program that is being torn down; does nothing in a forked child
 DLLLOCAL void jni_purge_shared_classes(const QoreProgram& pgm);
+
+#ifdef DEBUG
+//! Runs the function with the lock of the shared class records held, for tests of a child process created with fork()
+DLLLOCAL void dbg_jni_with_shared_class_lock(const std::function<void()>& f);
+#endif
 
 //! Returns true if a class of the receiver is the same registered shared class as the class of a generated method
 /** The receiver's class or one of its parents must have the same path, module and signature as the method's class, and

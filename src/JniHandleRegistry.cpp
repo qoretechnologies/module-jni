@@ -8,6 +8,7 @@
 #include <mutex>
 #include <random>
 #include <unordered_map>
+#include <vector>
 
 namespace jni {
 namespace {
@@ -147,5 +148,17 @@ size_t jni_handle_count() {
     }
     return count;
 }
+
+#ifdef DEBUG
+void jni_handle_with_all_locks(const std::function<void()>& f) {
+    Registry& r = registry();
+    std::vector<std::unique_lock<std::mutex>> locks;
+    locks.reserve(ShardCount);
+    for (Shard& shard : r.shards) {
+        locks.emplace_back(shard.lock);
+    }
+    f();
+}
+#endif
 
 }
