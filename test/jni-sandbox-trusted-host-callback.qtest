@@ -1,0 +1,311 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%requires QUnit
+%requires jni
+%module-cmd(jni) add-relative-classpath qore-jni-test.jar
+%module-cmd(jni) import org.qore.jni.test.GovernedProgramProbe
+
+%exec-class JniSandboxTrustedHostCallback
+
+#! A trusted host with a permissive sandbox manager on every Program, as in Qorus (qorus#1088)
+/** The trusted manager is the one QorusProgram::setSandboxPolicy(mgr, False) builds, and it is attached before the jni
+    module is loaded, as in the QorusProgram constructor.  The test cases run in order: the first ones run before any
+    restricting sandbox has used Java in the process, the later ones after.
+*/
+class JniSandboxTrustedHostCallback inherits QUnit::Test {
+    public {
+        const NotGoverned = "cannot call into a Qore Program other than the one of the calling code";
+
+        const SvcSource = "package q1088;
+import org.qore.jni.QoreJavaApi;
+public class Svc {
+    public Svc() {
+    }
+    public String viaSave(String v) throws Throwable {
+        return (String)QoreJavaApi.callStaticMethodSave(\"JApi\", \"ping\", v);
+    }
+}
+";
+
+        #! the interface Program that defines the Java class and the Qore API that it calls back
+        const JSource = "
+public class JApi {
+    static string ping(string v) {
+        return \"J:\" + v;
+    }
+}
+
+object sub make_svc(string src) {
+    QoreJavaCompiler compiler(get_class_loader(), NOTHING);
+    on_exit compiler.close();
+    object out = compiler.compile(\"q1088.Svc\", src);
+    Class cls = out.cls;
+    return cls.getDeclaredConstructor().newInstance();
+}
+
+string sub own_call(object o, string v) {
+    return o.viaSave(v);
+}
+";
+
+        #! the server code, which calls the Java service object directly
+        const SSource = "
+string sub call_direct(object o, string v) {
+    return o.viaSave(v);
+}
+
+auto sub call_args(object o, string m, softlist<auto> a) {
+    return call_object_method_args(o, m, a);
+}
+";
+
+        #! as in kx2.q and kx.q
+        const KSource = "
+auto sub kx_compile(hash<auto> src) {
+    object comp = new QoreKotlinCompiler();
+    return comp.compile(src, NOTHING);
+}
+
+auto sub kx_compile_loader(hash<auto> src) {
+    object comp = new QoreKotlinCompiler(jni::get_class_loader(), NOTHING);
+    return comp.compile(src, NOTHING);
+}
+
+object sub kx_get_compiler() {
+    return new QoreKotlinCompiler(jni::get_class_loader(), NOTHING);
+}
+
+auto sub kx_call_object(object o, string m, softlist<auto> a) {
+    return call_object_method_args(o, m, a);
+}
+";
+
+        const TenantSource = "
+string sub tenant_fn() {
+    return \"tenant\";
+}
+
+string sub reach(object loader, string fn) {
+    return GovernedProgramProbe::callIn(loader, fn);
+}
+
+string sub own() {
+    return GovernedProgramProbe::callIn(get_class_loader(), \"tenant_fn\");
+}
+";
+    }
+
+    private {
+        int seq = 0;
+    }
+
+    constructor() : QUnit::Test("trusted host callback under a sandbox manager", "1.0") {
+        addTestCase("before: B direct call into Java service", \caseB());
+        addTestCase("before: B via call_object_method_args", \caseBArgs());
+        addTestCase("before: A no-arg compiler in Program", \caseA1());
+        addTestCase("before: A get_class_loader compiler in Program", \caseA2());
+        addTestCase("before: A compiler object called directly", \caseA3());
+        addTestCase("before: A compiler object via callFunction", \caseA4());
+        addTestCase("restricting sandbox uses Java", \poison());
+        addTestCase("after: B direct call into Java service", \caseB());
+        addTestCase("after: B via call_object_method_args", \caseBArgs());
+        addTestCase("after: A no-arg compiler in Program", \caseA1());
+        addTestCase("after: A get_class_loader compiler in Program", \caseA2());
+        addTestCase("after: A compiler object called directly", \caseA3());
+        addTestCase("after: A compiler object via callFunction", \caseA4());
+        addTestCase("negative: restricted cannot reach the host", \negHost());
+        addTestCase("negative: restricted cannot reach another tenant", \negTenant());
+        addTestCase("negative: exact Qorus sandboxed policy refuses jni", \negExactPolicy());
+        set_return_value(main());
+    }
+
+    caseB() {
+        Program j = getTrusted(JSource);
+        Program s = getTrusted(SSource);
+        object svc = j.callFunction("make_svc", SvcSource);
+        assertEq("J:own", attempt(string sub () { return j.callFunction("own_call", svc, "own"); }));
+        assertEq("J:direct", attempt(string sub () { return s.callFunction("call_direct", svc, "direct"); }));
+    }
+
+    caseBArgs() {
+        Program j = getTrusted(JSource);
+        Program s = getTrusted(SSource);
+        object svc = j.callFunction("make_svc", SvcSource);
+        assertEq("J:args", attempt(string sub () { return s.callFunction("call_args", svc, "viaSave", "args"); }));
+    }
+
+    caseA1() {
+        Program k = getKotlin();
+        string n = className();
+        assertEq(n, attempt(string sub () { return k.callFunction("kx_compile", {n: "class " + n + " {}"}).firstKey(); }));
+    }
+
+    caseA2() {
+        Program k = getKotlin();
+        string n = className();
+        assertEq(n, attempt(string sub () {
+            return k.callFunction("kx_compile_loader", {n: "class " + n + " {}"}).firstKey();
+        }));
+    }
+
+    caseA3() {
+        Program k = getKotlin();
+        string n = className();
+        object comp = k.callFunction("kx_get_compiler");
+        assertEq(n, attempt(string sub () { return comp.compile({n: "class " + n + " {}"}, NOTHING).firstKey(); }));
+    }
+
+    caseA4() {
+        Program k = getKotlin();
+        string n = className();
+        object comp = k.callFunction("kx_get_compiler");
+        assertEq(n, attempt(string sub () {
+            return k.callFunction("kx_call_object", comp, "compile", ({n: "class " + n + " {}"}, NOTHING)).firstKey();
+        }));
+    }
+
+    poison() {
+        Program t = getTenant();
+        # a restricting sandbox's own Java call: this marks governed Java as used in the process
+        assertEq("ok: tenant", attempt(string sub () { return t.callFunction("own"); }));
+    }
+
+    negHost() {
+        Program t = getTenant();
+        string rv = attempt(string sub () { return t.callFunction("reach", get_class_loader(), "host_fn"); });
+        assertRegex(NotGoverned, rv, rv);
+        assertEq("ok: tenant", attempt(string sub () { return t.callFunction("own"); }));
+    }
+
+    negTenant() {
+        Program t = getTenant();
+        Program other = getTenant();
+        object loader = other.callFunction("tenant_loader");
+        string rv = attempt(string sub () { return t.callFunction("reach", loader, "tenant_fn"); });
+        assertRegex(NotGoverned, rv, rv);
+    }
+
+    negExactPolicy() {
+        SandboxManager sm();
+        sm.setFilesystemDefaultPolicy(False);
+        sm.setNetworkDefaultPolicy(True);
+        sm.blockPrivateNetworks();
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setSandboxManager(sm);
+        string rv = attempt(string sub () {
+            p.loadModule("jni");
+            p.parse("string sub f() { return get_class_loader().getClass().getName(); }", "exact");
+            return p.callFunction("f");
+        });
+        printf("exact sandboxed policy result: %s\n", rv);
+        assertTrue(rv.find("ERR:") == 0, rv);
+    }
+
+    private string className() {
+        return sprintf("B%d", ++seq);
+    }
+
+    #! returns the value as a string or the error, so that each failure records its exact text
+    private static string attempt(code c) {
+        try {
+            return c();
+        } catch (hash<ExceptionInfo> ex) {
+            return sprintf("ERR: %s: %s", ex.err, ex.desc);
+        }
+    }
+
+    #! as QorusProgram::setSandboxPolicy(mgr, False)
+    private static SandboxManager getTrustedManager() {
+        SandboxManager sm();
+        sm.setFilesystemDefaultPolicy(True);
+        sm.setNetworkDefaultPolicy(True);
+        sm.setUncontrolledApiPolicy(True);
+        return sm;
+    }
+
+    #! a Program in the order of the QorusProgram constructor and initJava()
+    private static Program getTrusted(string src) {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setSandboxManager(getTrustedManager());
+        JniSandboxTrustedHostCallback::initJava(p);
+        p.parse(src, "trusted");
+        return p;
+    }
+
+    private static initJava(Program p) {
+        p.loadModule("jni");
+        p.issueModuleCmd("jni", "add-classpath " + getBuildDir() + "/qore-jni-compiler.jar");
+        p.issueModuleCmd("jni", "import org.qore.jni.*");
+        p.issueModuleCmd("jni", "import java.lang.Class");
+        p.issueModuleCmd("jni", "import org.qore.jni.compiler.QoreJavaCompiler");
+        p.issueModuleCmd("jni", "import org.qore.jni.compiler.CompilerOutput");
+    }
+
+    #! a Program after QorusProgram::initJava() and initKotlin()
+    private Program getKotlin() {
+        string home = ENV.KOTLIN_HOME ?? "/opt/kotlin";
+        if (!is_file(home + "/lib/kotlin-stdlib.jar")) {
+            testSkip("Kotlin not available");
+        }
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setSandboxManager(getTrustedManager());
+        JniSandboxTrustedHostCallback::initJava(p);
+        bool have_embeddable = False;
+        string sdir = home + "/lib/scripting";
+        if (is_dir(sdir)) {
+            Dir kd();
+            kd.chdir(sdir);
+            list<string> jars = sort(kd.listFiles("\\.jar$") ?? ());
+            have_embeddable = boolean(select jars, $1 =~ /^kotlin-compiler-embeddable.*\.jar$/);
+            if (have_embeddable) {
+                map p.issueModuleCmd("jni", "global-add-classpath " + sdir + "/" + $1), jars;
+                Dir ld();
+                ld.chdir(home + "/lib");
+                *list<string> annotations = ld.listFiles("^annotations-.*\\.jar$");
+                if (annotations) {
+                    p.issueModuleCmd("jni", "global-add-classpath " + home + "/lib/" + (sort(annotations))[0]);
+                }
+                if (is_file(home + "/lib/kotlin-reflect.jar")) {
+                    p.issueModuleCmd("jni", "global-add-classpath " + home + "/lib/kotlin-reflect.jar");
+                }
+            }
+        }
+        if (!have_embeddable) {
+            p.issueModuleCmd("jni", "global-add-classpath " + home + "/lib/kotlin-compiler.jar");
+        }
+        p.issueModuleCmd("jni", "global-add-classpath " + home + "/lib/kotlin-stdlib.jar");
+        p.issueModuleCmd("jni", "import org.qore.jni.compiler.QoreKotlinCompiler");
+        p.issueModuleCmd("jni", "import org.qore.jni.compiler.QoreKotlinCompilerException");
+        p.parse(KSource, "kotlin");
+        return p;
+    }
+
+    #! a Program that a restricting sandbox governs; attached after the setup, which reads the jars
+    private static Program getTenant() {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.loadModule("jni");
+        p.issueModuleCmd("jni", "add-classpath " + getBuildDir() + "/qore-jni-test.jar");
+        p.issueModuleCmd("jni", "import org.qore.jni.test.GovernedProgramProbe");
+        p.parse(TenantSource + "object sub tenant_loader() { return get_class_loader(); }\n", "tenant");
+        SandboxManager sm();
+        sm.setFilesystemDefaultPolicy(False);
+        sm.setNetworkDefaultPolicy(True);
+        sm.blockPrivateNetworks();
+        # a tenant that can call Java at all: without this, the jni module refuses it
+        sm.setUncontrolledApiPolicy(True);
+        p.setSandboxManager(sm);
+        return p;
+    }
+
+    private static string getBuildDir() {
+        return get_script_dir() + "/../build-debug";
+    }
+}
+
+string sub host_fn() {
+    return "host";
+}
