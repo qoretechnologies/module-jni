@@ -1561,6 +1561,93 @@ bool jni_get_java_subclass_ctor_class(qore_classid_t cid, qore_classid_t& ctor_c
     return false;
 }
 
+namespace {
+//! The Programs that registered each shared class name with the module command, by Program ID, which is never reused
+struct JniSharedClassMap {
+    std::mutex lock;
+    std::map<std::string, std::set<qore_program_id_t>> names;
+};
+
+// never destroyed, like the other maps used by Java threads that can run while the process exits
+JniSharedClassMap& jni_shared_classes() {
+    static JniSharedClassMap* map = new JniSharedClassMap;
+    return *map;
+}
+
+//! Returns true if the class has the path, the module and the signature given
+bool jni_same_shared_class(const QoreClass& cls, const std::string& class_hash, const char* mod) {
+    const char* cls_mod = cls.getModuleName();
+    if (!cls_mod != !mod || (mod && strcmp(cls_mod, mod))) {
+        return false;
+    }
+    return get_class_hash(cls) == class_hash;
+}
+}
+
+void jni_record_shared_class(const char* bin_name, const QoreProgram& pgm) {
+    JniSharedClassMap& map = jni_shared_classes();
+    std::lock_guard<std::mutex> guard(map.lock);
+    map.names[bin_name].insert(pgm.getProgramId());
+}
+
+void jni_purge_shared_classes(const QoreProgram& pgm) {
+    qore_program_id_t id = pgm.getProgramId();
+    JniSharedClassMap& map = jni_shared_classes();
+    std::lock_guard<std::mutex> guard(map.lock);
+    for (auto i = map.names.begin(); i != map.names.end();) {
+        i->second.erase(id);
+        if (i->second.empty()) {
+            i = map.names.erase(i);
+        } else {
+            ++i;
+        }
+    }
+}
+
+bool jni_classes_are_shared(Env& env, const QoreClass& receiver, const QoreClass& method_class,
+        QoreProgram* method_pgm) {
+    // the Program whose namespace holds the method's class; for an imported class, the importing Program, whose host
+    // declares with the module command that the class it holds under this name is the shared class
+    const QoreProgram* method_source = method_class.getProgram();
+    if (!method_source || !method_pgm) {
+        return false;
+    }
+    JniExternalProgramData* jpc = static_cast<JniExternalProgramData*>(method_pgm->getExternalData("jni"));
+    if (!jpc) {
+        return false;
+    }
+    LocalReference<jstring> jname = jpc->getJavaNameForClass(env, method_class);
+    Env::GetStringUtfChars name(env, jname);
+    std::set<qore_program_id_t> registered;
+    {
+        JniSharedClassMap& map = jni_shared_classes();
+        std::lock_guard<std::mutex> guard(map.lock);
+        auto i = map.names.find(name.c_str());
+        if (i == map.names.end() || !i->second.count(method_source->getProgramId())) {
+            return false;
+        }
+        registered = i->second;
+    }
+    std::string class_hash = get_class_hash(method_class);
+    const char* mod = method_class.getModuleName();
+    // the class that matches must itself be held by a Program that registered the name
+    auto matches = [&] (const QoreClass& cls) -> bool {
+        const QoreProgram* source = cls.getProgram();
+        return source && source != method_source && registered.count(source->getProgramId())
+            && jni_same_shared_class(cls, class_hash, mod);
+    };
+    if (matches(receiver)) {
+        return true;
+    }
+    QoreClassHierarchyIterator ci(receiver);
+    while (ci.next()) {
+        if (matches(ci.get())) {
+            return true;
+        }
+    }
+    return false;
+}
+
 void QoreJniClassMap::addSuperClass(Env& env, JniQoreClass& qc, jni::Class* parent, bool interface, QoreProgram* pgm,
         JniExternalProgramData* jpc) {
     QoreClassUserDataHolder udh(parent);

@@ -223,19 +223,19 @@ public final class NativeCleanup {
         queue.remove().  See {@link #shutdown}. */
     public static final int KIND_SENTINEL = -1;
 
-    /** invocation_handler_finalize: delete (Dispatcher*)ptr. */
+    /** Removes the opaque handle of an invocation handler's dispatcher. */
     public static final int KIND_INVOCATION_HANDLER = 0;
 
-    /** delete (JniClosureHandle*)ptr: releases the closure under the sandbox of the code that handed it to Java. */
+    /** Removes the opaque handle of a closure: releases it under the sandbox of the code that handed it to Java. */
     public static final int KIND_CLOSURE = 1;
 
-    /** qore_exception_wrapper_finalize: xsink->clear(); delete xsink. */
+    /** Removes the opaque handle of a wrapped Qore exception and clears the exception. */
     public static final int KIND_EXCEPTION_WRAPPER = 2;
 
-    /** delete (JniObjectHandle*)ptr: releases the weak reference to the Qore object. */
+    /** Removes the opaque handle of an object: releases the weak reference to the Qore object. */
     public static final int KIND_OBJECT_BASE_WEAK = 3;
 
-    /** delete (QoreSandboxCapture*)ptr: releases a QoreSandbox.Policy that was not closed. */
+    /** Removes the opaque handle of a QoreSandbox.Policy that was not closed. */
     public static final int KIND_SANDBOX_POLICY = 4;
 
     /** QoreSandboxManager::deref(): releases a policy bound to classpath entries of a class loader. */

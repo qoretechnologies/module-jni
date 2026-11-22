@@ -1604,9 +1604,9 @@ static jboolean JNICALL qore_object_instance_of(JNIEnv* jenv, jclass, jlong ptr,
 static jobject qore_object_closure_call_internal(JNIEnv* jenv, jclass, QoreProgram* pgm,
         const JniObjectHandle* object_handle, const JniClosureHandle* closure_handle, jboolean save,
         jstring mname, jobjectArray args, const QoreMethod* m = nullptr,
-        const QoreExternalMethodVariant* v = nullptr, bool flatten = false, bool injected_receiver = false) {
+        const QoreExternalMethodVariant* v = nullptr, bool flatten = false, bool call_bound_name = false) {
     assert(!object_handle != !closure_handle);
-    assert(!injected_receiver || (m && !v));
+    assert(!call_bound_name || (m && !v));
     // must ensure that the thread is attached before executing Qore code, and before the Program context of the
     // thread is looked up: with no Program, or a Program with no jni data, the lookup uses the Qore thread state of
     // the thread, which a Java thread that Java started does not have until it is attached (qore#6828)
@@ -1671,7 +1671,7 @@ static jobject qore_object_closure_call_internal(JNIEnv* jenv, jclass, QoreProgr
             } else {
                 printd(5, "qore_object_closure_call_internal() %s::%s() (v: %p id: %d) %d arg(s) obj: %p\n",
                     m->getClassName(), m->getName(), v, m->getClass()->getID(), (int)len, obj);
-                if (injected_receiver) {
+                if (call_bound_name) {
                     // the object's class stands in for the method's class: its own method of the bound name is called
                     val = obj->evalMethod(m->getName(), *qore_args, &xsink);
                 } else {
@@ -1984,17 +1984,19 @@ static jobject JNICALL java_class_builder_do_normal_call(JNIEnv* jenv, jclass jc
         // own error in the call
         const QoreMethod* method = binding->method;
         const QoreExternalMethodVariant* variant = static_cast<const QoreExternalMethodVariant*>(binding->variant);
-        bool injected_receiver = false;
+        bool call_bound_name = false;
         // by class ID: libqore's instance checks also accept a class of the same name and signature in another
         // namespace or Program; copies of a class imported into another Program have the same ID
         if (!obj->getClass()->getClass(method->getClass()->getID())) {
-            if (!jni_is_injected_receiver(*obj->getClass(), *method->getClass())) {
+            if (!jni_is_injected_receiver(*obj->getClass(), *method->getClass())
+                && !jni_classes_are_shared(env, *obj->getClass(), *method->getClass(), binding->pgm)) {
                 throw std::runtime_error("Invalid object in generated Qore method call: the object is not an "
                     "instance of the class of the method");
             }
-            // a class injected for the method's class: the object's own method of the bound name is called, never
-            // the body of the method of the other class, and never a name that the caller gives
-            injected_receiver = true;
+            // a class injected for the method's class, or the same registered shared class of another Program: the
+            // object's own method of the bound name is called, never the body of the method of the other class, and
+            // never a name that the caller gives
+            call_bound_name = true;
             variant = nullptr;
         }
         QoreProgram* pgm = obj->getProgram();
@@ -2004,7 +2006,7 @@ static jobject JNICALL java_class_builder_do_normal_call(JNIEnv* jenv, jclass jc
             pgm = binding->pgm;
         }
         return qore_object_closure_call_internal(jenv, jcls, pgm, handle.get(), nullptr, true, mname, args,
-            method, variant, false, injected_receiver);
+            method, variant, false, call_bound_name);
     });
 } JNI_NATIVE_CATCH(jenv, nullptr)
 
@@ -2125,8 +2127,11 @@ int load_python_module(Env& env, QoreProgram* pgm) {
 
 static jbyteArray JNICALL qore_url_classloader_generate_byte_code(JNIEnv* jenv, jobject class_loader, jlong ptr,
         jstring nspath, jstring jname, jstring module, jboolean python, jboolean kotlin, jlong class_ptr) try {
-    assert(ptr);
     Env env(jenv);
+    if (!ptr) {
+        jni_throw_runtime_exception(*env, "the class loader has no Qore Program");
+        return nullptr;
+    }
     // a class pointer is accepted only if the module's own code gave it for the innermost call that runs on this
     // thread: Java code must never supply a native class pointer, which would be used as a class of any Program, or
     // freed memory (qore#6854); this only compares pointers, it dereferences none; the Program that it was given for
@@ -2615,7 +2620,10 @@ static jobject JNICALL qore_url_classloader_get_classes_in_namespace(JNIEnv* jen
         return nullptr;
     }
 
-    assert(ptr);
+    if (!ptr) {
+        jni_throw_runtime_exception(*env, "the class loader has no Qore Program");
+        return nullptr;
+    }
     // the Program pointer is the class loader's, which Java passed: the Program can have been deleted, and is
     // validated, held and entered (see JniJavaProgramRef); declared before the other entries, so that it is left last
     ExceptionSink java_pgm_xsink;
@@ -3327,6 +3335,10 @@ static jlong JNICALL qore_object_create(JNIEnv* jenv, jclass ignore, jlong class
         // the constructor's Qore code records its own Program when it calls Java (see QoreJniStackLocationHelper)
         JniJavaCallerScope caller_clear(JniJavaCallerScope::Clear);
         const QoreClass* qc = binding->cls;
+        // the native method is reachable by reflection, with any value
+        if (!java_this) {
+            throw std::runtime_error("Invalid construction of a Qore object: the Java object is null");
+        }
         // see if "this" (in Java) is being instantiated for the Qore class directly or a child class; if it's a child
         // class, then create a new Qore class for the Java class
         LocalReference<jclass> jcls = env.callObjectMethod(java_this, Globals::methodObjectGetClass, nullptr).as<jclass>();
@@ -3660,7 +3672,10 @@ static jobject JNICALL qore_url_classloader_get_internal_classes_for_package(JNI
         return nullptr;
     }
 
-    assert(ptr);
+    if (!ptr) {
+        jni_throw_runtime_exception(*env, "the class loader has no Qore Program");
+        return nullptr;
+    }
     // the Program pointer is the class loader's, which Java passed: the Program can have been deleted, and is
     // validated, which also checks that it has jni data; the Program is not entered, as the classes listed are the
     // module's own, and a Java compiler can list them on its own threads while the Program is parsed (see

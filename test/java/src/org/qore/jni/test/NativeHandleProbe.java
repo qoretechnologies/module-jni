@@ -795,6 +795,137 @@ public final class NativeHandleProbe {
         return attempt(() -> JavaClassBuilder.doNormalCall(name, (QoreObjectBase)obj, binding, 0L, args));
     }
 
+    //! Calls the public method of the generated Java class of the wrapper, as Java code does
+    public static String callGenerated(Object obj, String method, Object... args) {
+        return attempt(() -> {
+            for (Method m : obj.getClass().getMethods()) {
+                if (m.getName().equals(method) && m.getParameterCount() == args.length) {
+                    return m.invoke(obj, args);
+                }
+            }
+            throw new AssertionError("no method " + method + " in " + obj.getClass().getName());
+        });
+    }
+
+    //! Returns the name and the class loader's identity of the wrapper's Java class
+    public static String javaClassOf(Object obj) {
+        Class<?> cls = obj.getClass();
+        return cls.getName() + "@" + System.identityHashCode(cls);
+    }
+
+    //! Registers the class as shared only through the public Java method of the class loader
+    public static String registerSharedFromJava(Object loader, String name) {
+        return attempt(() -> {
+            ((QoreURLClassLoader)loader).registerSharedDynamicClass(name);
+            return "registered";
+        });
+    }
+
+    //! Calls the native constructor with a valid class binding and a null Java object
+    public static String createWithNullSelf(QoreObject receiver, long classBinding) {
+        return attempt(() -> invoke(receiver, QoreObjectBase.class, "create0",
+            new Class<?>[] {long.class, long.class, long.class, Object.class, Object[].class}, classBinding, 0L, 0L,
+            null, new Object[0]));
+    }
+
+    //! Calls the class loader's native methods that take a Program pointer with 0
+    public static List<String> zeroProgramPointer() {
+        QoreURLClassLoader loader = QoreURLClassLoader.getCurrent();
+        List<String> rv = new ArrayList<>();
+        rv.add(attempt(() -> invoke(loader, QoreURLClassLoader.class, "generateByteCode0",
+            new Class<?>[] {long.class, String.class, String.class, String.class, boolean.class, boolean.class,
+                long.class}, 0L, "::X", "qore.X", null, false, false, 0L)));
+        rv.add(attempt(() -> invoke(loader, QoreURLClassLoader.class, "getClassesInNamespace0",
+            new Class<?>[] {long.class, String.class, String.class, boolean.class, boolean.class, ArrayList.class},
+            0L, "qore", null, false, false, new ArrayList<String>())));
+        rv.add(attempt(() -> invoke(loader, QoreURLClassLoader.class, "getInternalClassesForPackage0",
+            new Class<?>[] {long.class, String.class, ArrayList.class}, 0L, "org.qore.jni",
+            new ArrayList<String>())));
+        return rv;
+    }
+
+    //! Returns the class name of the object from a thread that Java started, which is not attached to Qore
+    public static String classNameOnJavaThread(QoreObject obj) throws Throwable {
+        String[] rv = new String[1];
+        Thread thread = new Thread(() -> rv[0] = attempt(obj::className));
+        thread.start();
+        thread.join();
+        return rv[0];
+    }
+
+    //! A class loader of its own, which defines one class
+    private static final class SeparateLoader extends ClassLoader {
+        SeparateLoader(ClassLoader parent) {
+            super(parent);
+        }
+
+        Class<?> define(String name, byte[] bytes) {
+            return defineClass(name, bytes, 0, bytes.length);
+        }
+    }
+
+    //! Returns a wrapper class with the given name that only passes the module's handle to QoreObject
+    private static byte[] separateWrapperBytes(String name) {
+        String internal = name.replace('.', '/');
+        String parent = "org/qore/jni/QoreObject";
+        String descriptor = "(Lorg/qore/jni/QoreJavaObjectPtr;)V";
+        ClassWriter w = new ClassWriter(ClassWriter.COMPUTE_MAXS);
+        w.visit(Opcodes.V21, Opcodes.ACC_PUBLIC, internal, null, parent, null);
+        MethodVisitor m = w.visitMethod(Opcodes.ACC_PUBLIC, "<init>", descriptor, null, null);
+        m.visitCode();
+        m.visitVarInsn(Opcodes.ALOAD, 0);
+        m.visitVarInsn(Opcodes.ALOAD, 1);
+        m.visitMethodInsn(Opcodes.INVOKESPECIAL, parent, "<init>", descriptor, false);
+        m.visitInsn(Opcodes.RETURN);
+        m.visitMaxs(0, 0);
+        m.visitEnd();
+        w.visitEnd();
+        return w.toByteArray();
+    }
+
+    //! Calls a method binding on a receiver whose Java class has the given name and comes from a separate class loader
+    /** The wrapper holds the handle of \a obj for the call and releases it afterwards.
+    */
+    public static String callFromSeparateLoader(String className, Object obj, long binding, String method,
+            Object... args) {
+        return attempt(() -> {
+            ClassLoader parent = NativeHandleProbe.class.getClassLoader();
+            SeparateLoader loader = new SeparateLoader(parent);
+            Class<?> cls = loader.define(className, separateWrapperBytes(className));
+            if (cls.getClassLoader() != loader || !cls.getName().equals(className)) {
+                throw new AssertionError("the receiver's class is not from the separate class loader");
+            }
+            Object ptr = construct(org.qore.jni.QoreJavaObjectPtr.class, long.class,
+                objectHandle((QoreObjectBase)obj));
+            QoreObjectBase receiver = (QoreObjectBase)cls.getConstructor(org.qore.jni.QoreJavaObjectPtr.class)
+                .newInstance(ptr);
+            try {
+                return JavaClassBuilder.doNormalCall(method, receiver, binding, 0L, args);
+            } finally {
+                receiver.release();
+            }
+        });
+    }
+
+    //! Releases the handler of a proxy on a thread that Java started, which has no Qore caller, and waits for it
+    /** @return the result of the release, and of a second release of its handle with the native method
+    */
+    public static String releaseHandlerOnJavaThread(Object proxy) throws Throwable {
+        InvocationHandler handler = Proxy.getInvocationHandler(proxy);
+        long h = handleOf(handler);
+        String[] rv = new String[2];
+        Thread thread = new Thread(() -> {
+            rv[0] = attempt(() -> {
+                invoke(handler, QoreInvocationHandler.class, "destroy", new Class<?>[0]);
+                return "released";
+            });
+            rv[1] = attempt(() -> invoke(null, QoreInvocationHandler.class, "release0", J, h));
+        });
+        thread.start();
+        thread.join();
+        return rv[0] + "; " + rv[1];
+    }
+
     //! Calls a method binding with a value as the object through the public entry point that takes a handle
     public static String callBindingHandle(String name, long value, long binding, Object... args) {
         return attempt(() -> JavaClassBuilder.doNormalCall(name, value, binding, 0L, args));

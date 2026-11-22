@@ -651,7 +651,7 @@ public class JavaClassBuilder {
      *  which pass the handle instead of the object
      *
      * @param methodName the name of the method
-     * @param qobjptr the pointer to the Qore object
+     * @param qobjptr the opaque handle of the Qore object
      * @param mptr the registered method binding handle
      * @param vptr reserved; must be zero
      * @param args the arguments to the call, if any, can be null

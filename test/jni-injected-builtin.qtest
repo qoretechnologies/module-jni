@@ -1,0 +1,139 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+%modern
+%no-child-restrictions
+%allow-injection
+%prepend-module-path "${SCRIPT_DIR}/../build"
+%requires QUnit
+%requires jni
+
+%exec-class JniInjectedBuiltinTest
+
+#! A drop-in replacement for a builtin class: it has none of the builtin class's private data
+class InjectedPool inherits Qore::SQL::AbstractDatasource {
+    constructor(string desc) {
+    }
+
+    string getUserName() { return "injected-user"; }
+    bool currentThreadInTransaction() { return False; }
+    auto execRaw(string sql) {}
+    auto exec(string sql, ...) {}
+    auto getClientVersion() {}
+    auto getServerVersion() {}
+    auto selectRows(string sql, ...) {}
+    auto selectRow(string sql, ...) {}
+    auto selectRowsTyped(string sql, ...) {}
+    auto select(string sql, ...) {}
+    auto selectTyped(string sql, ...) {}
+    auto vexec(string sql, *softlist<auto> arguments) {}
+    auto vselectRows(string sql, *softlist<auto> arguments) {}
+    auto vselectRow(string sql, *softlist<auto> arguments) {}
+    auto vselectRowsTyped(string sql, *softlist<auto> arguments) {}
+    auto vselect(string sql, *softlist<auto> arguments) {}
+    auto vselectTyped(string sql, *softlist<auto> arguments) {}
+    bool inTransaction() { return False; }
+    hash<auto> getConfigHash() { return {}; }
+    *int getPort() {}
+    nothing beginTransaction() {}
+    nothing commit() {}
+    nothing rollback() {}
+    string getConfigString() { return "injected"; }
+    *string getDBEncoding() {}
+    *string getDBName() {}
+    string getDriverName() { return "injected-driver"; }
+    *string getHostName() {}
+    *string getOSEncoding() {}
+    *string getPassword() {}
+}
+
+#! Java code calls a class injected in place of a builtin class through the builtin class's generated wrapper
+class JniInjectedBuiltinTest inherits QUnit::Test {
+    public {
+        const Target = "qore.Qore.SQL.DatasourcePool";
+
+        #! Java code compiled against the builtin class
+        const JavaSource = "public class InjectedPoolUser {
+    public static Object typed(Object pool) throws Throwable {
+        return ((qore.Qore.SQL.DatasourcePool)pool).getUserName();
+    }
+    public static Object reflective(Object pool, String method) throws Throwable {
+        return pool.getClass().getMethod(method).invoke(pool);
+    }
+}
+";
+
+        const InjectedSource = "%modern
+%requires jni
+%module-cmd(jni) import org.qore.jni.QoreURLClassLoader
+%module-cmd(jni) import org.qore.jni.compiler.QoreJavaCompiler
+object sub make() {
+    return new Qore::SQL::DatasourcePool(\"injected\");
+}
+hash<auto> sub compile(string source, *binary target) {
+    QoreJavaCompiler compiler(QoreURLClassLoader::getCurrent(), NOTHING);
+    if (target) {
+        compiler.injectClass(\"qore.Qore.SQL.DatasourcePool\", target);
+    }
+    auto out = compiler.compile(\"InjectedPoolUser\", source);
+    return {\"compiler\": compiler, \"cls\": out.cls};
+}
+string sub typed(object cls, object pool) {
+    return cls.getMethod(\"typed\", load_class(\"java.lang.Object\")).invoke(NOTHING, pool);
+}
+string sub reflective(object cls, object pool, string method) {
+    return cls.getMethod(\"reflective\", (load_class(\"java.lang.Object\"), load_class(\"java.lang.String\")))
+        .invoke(NOTHING, pool, method);
+}
+";
+
+        const HostSource = "%modern
+%requires jni
+%module-cmd(jni) import org.qore.jni.QoreURLClassLoader
+binary sub target() {
+    return QoreURLClassLoader::getCurrent().generateByteCode(\"qore.Qore.SQL.DatasourcePool\");
+}
+";
+    }
+
+    constructor() : QUnit::Test("jni injected builtin class", "1.0", \ARGV) {
+        addTestCase("Java compiled against the injected view of the class", \injectedViewTest());
+        addTestCase("Java compiled with the builtin class's byte code injected", \injectedByteCodeTest());
+        set_return_value(main());
+    }
+
+    private Program injectedProgram() {
+        Program p(PO_NEW_STYLE | PO_ALLOW_INJECTION | PO_NO_CHILD_PO_RESTRICTIONS | PO_NO_SYSTEM_API);
+        p.importClass("InjectedPool", "Qore::SQL::DatasourcePool", True);
+        p.importSystemApi();
+        p.loadModule("jni");
+        p.issueModuleCmd("jni", "add-classpath " + get_script_dir() + "/../build/qore-jni-compiler.jar");
+        p.parse(InjectedSource, "jni-injected-builtin");
+        return p;
+    }
+
+    private check(Program p, hash<auto> compiled) {
+        object pool = p.callFunction("make");
+        # the imported copy takes the name of the class that it replaces; its method shows that it is the injected one
+        assertEq("DatasourcePool", pool.className());
+        assertEq("injected-user", pool.getUserName());
+        assertEq("injected-user", p.callFunction("typed", compiled.cls, pool));
+        assertEq("injected-user", p.callFunction("reflective", compiled.cls, pool, "getUserName"));
+        assertEq("injected-driver", p.callFunction("reflective", compiled.cls, pool, "getDriverName"));
+    }
+
+    injectedViewTest() {
+        Program p = injectedProgram();
+        check(p, p.callFunction("compile", JavaSource));
+    }
+
+    injectedByteCodeTest() {
+        Program host(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        host.parse(HostSource, "jni-injected-builtin-host");
+        binary target = host.callFunction("target");
+        Program p = injectedProgram();
+        check(p, p.callFunction("compile", JavaSource, target));
+    }
+}

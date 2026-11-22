@@ -67,13 +67,19 @@ address (qore#7068):
 - The constructors that take a handle are not public.  `JavaClassBuilder` can be defined by another class loader than
   the wrapper classes, so it cannot use their package-private methods: the native method of a generated call holds
   the handle of the wrapper itself.
-- A generated method runs only on an object whose class hierarchy has the method's class ID; an object of a compatible
-  class (ex: an injected class) gets its own method of that name.  An object is constructed only with the constructor
+- A generated method runs only on an object whose class hierarchy has the method's class ID, with two exceptions, in
+  which the object's own method of the bound name runs, never a name from Java: a class that a declared injection
+  (`Program::importClass()` with injection) relates to the method's class, and the same class of another Program when
+  both Programs registered its Java name with the `register-shared-class` module command.  The module records those
+  registrations natively; a registration made only through the Java class loader method grants neither.  A class of
+  the same name and signature is otherwise another class.  An object is constructed only with the constructor
   of the Java class's own binding, or for a Java subclass, of its nearest generated superclass, as the private data of
   an object is typed by class.  Each Qore class of a Java class records its superclass when it is made, and these links
   are followed to the generated class when an object is constructed.
 - The handles do not make Java code an isolation boundary: code that a host allows to use Java can use reflection.
-  The registry ensures that such code cannot make the module dereference an invalid reference.
+  The registry ensures that a value from Java is used as a native handle only if it is a live handle of the expected
+  kind.  It does not cover the lifetime of what libqore's class metadata refers to, such as the target of an injected
+  class.
 
 Every Java wrapper with a native handle holds it in a `NativeCleanup.Ref`: `QoreObjectBase` (and `QoreObject`, and
 the generated classes), `QoreClosure`, `QoreInvocationHandler`, `QoreExceptionWrapper` and `QoreSandbox.Policy`.  The

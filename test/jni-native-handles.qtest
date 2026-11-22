@@ -52,6 +52,41 @@ class InjectMock {
     }
 }
 
+#! a second class that is injected in place of InjectTarget, in another Program
+class InjectMockTwo {
+    string value() {
+        return "mock-two-value";
+    }
+
+    string other() {
+        return "mock-two-other";
+    }
+}
+
+#! captured by a callback: counts its destruction, which can raise an error
+class HandlerState {
+    private {
+        Counter destroyed;
+        bool fail;
+    }
+
+    constructor(Counter destroyed, bool fail) {
+        self.destroyed = destroyed;
+        self.fail = fail;
+    }
+
+    destructor() {
+        destroyed.inc();
+        if (fail) {
+            throw "HANDLER-RELEASE-ERROR", "the release failed";
+        }
+    }
+
+    string use() {
+        return "called";
+    }
+}
+
 #! counts its destruction, so that a test can wait for a closure that captures it to be released
 class ReleaseSignal {
     private {
@@ -204,6 +239,14 @@ object sub make() {
         addTestCase("a method call on a same-named class from sandboxed code", \sandboxedNamesakeTest());
         addTestCase("a method call on an injected class", \injectedReceiverTest());
         addTestCase("a method call on a receiver with a large hierarchy", \largeHierarchyReceiverTest());
+        addTestCase("a method call on a receiver from a separate class loader", \separateLoaderReceiverTest());
+        addTestCase("an invocation handler released on a Java thread", \javaThreadHandlerReleaseTest());
+        addTestCase("a method call on a registered shared class", \sharedClassReceiverTest());
+        addTestCase("a shared class that is not registered by both Programs", \sharedClassRefusedTest());
+        addTestCase("two classes injected for one class", \twoInjectedClassesTest());
+        addTestCase("a native constructor with no Java object", \nullSelfTest());
+        addTestCase("class loader calls with no Program", \zeroProgramTest());
+        addTestCase("a class name on a Java thread", \classNameJavaThreadTest());
         addTestCase("a null method name", \nullNameTest());
         addTestCase("a Java class that claims a Qore class", \claimedClassTest());
         addTestCase("a Java subclass with an ancestor's constructor", \ancestorConstructorTest());
@@ -489,6 +532,220 @@ object sub make() {
         assertNotInstance(NativeHandleProbe::callBinding("value", namesake, target), "namesake of the injected class");
         assertNotInstance(NativeHandleProbe::callBinding("value", namesake, injected_method),
             "namesake of the class replaced");
+    }
+
+    #! a Java class of the bound class's name from another class loader says nothing about the receiver's Qore class
+    separateLoaderReceiverTest() {
+        Program p(PO_NEW_STYLE);
+        hash<auto> f = bindingFixture(p);
+        string name = "qore.NativeHandleTest.A.Same";
+        # the receiver really is an object of the bound class
+        assertEq("ok: 10", NativeHandleProbe::callFromSeparateLoader(name, p.callFunction("make", "A.Same"),
+            f.same_a_binding, "value", 7));
+        # a class of the same name and signature in the same Program
+        foreach string method in ("value", "other") {
+            assertNotInstance(NativeHandleProbe::callFromSeparateLoader(name, p.callFunction("make", "B.Same"),
+                f.same_a_binding, method, 7), "separate loader, namesake, " + method);
+        }
+        assertNotInstance(NativeHandleProbe::callFromSeparateLoader(name, p.callFunction("make", "Unrelated"),
+            f.same_a_binding, "value", 7), "separate loader, unrelated class");
+
+        # a declared injection relates the classes, whichever class loader the wrapper comes from
+        Program injected(PO_NEW_STYLE | PO_ALLOW_INJECTION | PO_NO_CHILD_PO_RESTRICTIONS);
+        injected.importClass("InjectMock", "InjectTarget", True);
+        injected.parse(InjectSource, "native-handle-loader-injected");
+        Program host(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        host.importClass("InjectTarget");
+        host.parse(InjectHostSource, "native-handle-loader-host");
+        int target = NativeHandleProbe::methodBinding(host.callFunction("bytes"), "value");
+        assertEq("ok: mock-value", NativeHandleProbe::callFromSeparateLoader("qore.InjectTarget",
+            injected.callFunction("make"), target, "value"));
+    }
+
+    #! the release runs once on a thread with no Qore caller, and its error reaches the caller of the release
+    javaThreadHandlerReleaseTest() {
+        foreach bool fail in ((False, True)) {
+            Counter destroyed();
+            QoreInvocationHandler h;
+            {
+                HandlerState state(destroyed, fail);
+                h = new QoreInvocationHandler(auto sub (object method, *list<auto> args) { return state.use(); });
+            }
+            object proxy = implement_interface(h, load_class("java.util.function.Supplier"));
+            assertEq("called", NativeHandleProbe::callProxy(proxy));
+            assertEq(0, destroyed.getCount());
+
+            string result = NativeHandleProbe::releaseHandlerOnJavaThread(proxy);
+            string released = fail ? "exception: .*HANDLER-RELEASE-ERROR.*the release failed" : "ok: released";
+            assertRegex("^" + released + "; exception: .*invalid or released", result);
+            assertEq(1, destroyed.getCount(), "the state is released once");
+
+            # the handler has nothing left to release
+            h.destroy();
+            assertEq(1, destroyed.getCount(), "the state is not released again");
+        }
+    }
+
+    #! returns a Program with its own copy of a class that can be registered as shared
+    private Program sharedProgram(string ns, string body, *string extra) {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse(sprintf("%%modern
+%%requires jni
+%%module-cmd(jni) import org.qore.jni.QoreURLClassLoader
+public namespace %s {
+    public class Api {
+        string value() { return %y; }
+        string other() { return \"other of \" + %y; }
+        %s
+    }
+    public class Derived inherits Api {
+    }
+}
+object sub make() { return new %s::Api(); }
+object sub make_derived() { return new %s::Derived(); }
+object sub loader() { return QoreURLClassLoader::getCurrent(); }
+binary sub bytes() { return QoreURLClassLoader::getCurrent().generateByteCode(\"qore.%s.Api\"); }
+sub give(Program target) { target.importClass(%y); }
+", ns, body, body, extra ?? "", ns, ns, ns, ns + "::Api"), "native-handle-shared-" + body);
+        return p;
+    }
+
+    #! returns a Program that uses the class imported from the Program given, and defines no class of its own
+    private Program importingProgram(Program source, string ns) {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        source.callFunction("give", p);
+        p.parse(sprintf("%%modern\n%%requires jni\nobject sub make() { return new %s::Api(); }\n", ns),
+            "native-handle-shared-importer");
+        return p;
+    }
+
+    #! a generated class that both Programs registered runs on the object of the Program that does not own it
+    sharedClassReceiverTest() {
+        string name = "qore.NativeHandleShared.Api";
+        Program owner = sharedProgram("NativeHandleShared", "owner");
+        Program sibling = sharedProgram("NativeHandleShared", "sibling");
+        owner.issueModuleCmd("jni", "register-shared-class " + name);
+        sibling.issueModuleCmd("jni", "register-shared-class " + name);
+
+        object from_owner = owner.callFunction("make");
+        object from_sibling = sibling.callFunction("make");
+        assertEq(NativeHandleProbe::javaClassOf(from_owner), NativeHandleProbe::javaClassOf(from_sibling));
+        assertEq("ok: owner", NativeHandleProbe::callGenerated(from_owner, "value"));
+        # the object's own method runs, not the body of the owner's class
+        assertEq("ok: sibling", NativeHandleProbe::callGenerated(from_sibling, "value"));
+
+        # the method is the bound one, whatever name the caller gives
+        int binding = NativeHandleProbe::methodBinding(owner.callFunction("bytes"), "value");
+        assertEq("ok: sibling", NativeHandleProbe::callBinding("other", from_sibling, binding));
+
+        # a class that derives from the shared class in the Program that does not own it
+        assertEq("ok: sibling", NativeHandleProbe::callBinding("value", sibling.callFunction("make_derived"), binding));
+
+        # a Program that holds an imported copy of the class and registered the name itself
+        Program importer = importingProgram(sibling, "NativeHandleShared");
+        importer.issueModuleCmd("jni", "register-shared-class " + name);
+        assertEq("ok: sibling", NativeHandleProbe::callBinding("value", importer.callFunction("make"), binding));
+    }
+
+    #! only the module command of both Programs, for the same class, relates two classes
+    sharedClassRefusedTest() {
+        string ns = "NativeHandleSharedRefused";
+        string name = "qore." + ns + ".Api";
+        Program owner = sharedProgram(ns, "owner");
+        owner.issueModuleCmd("jni", "register-shared-class " + name);
+        int binding = NativeHandleProbe::methodBinding(owner.callFunction("bytes"), "value");
+
+        # a class of the same name that is not registered
+        Program unregistered = sharedProgram(ns, "unregistered");
+        assertNotInstance(NativeHandleProbe::callBinding("value", unregistered.callFunction("make"), binding),
+            "not registered");
+
+        # registered only through the Java method of its class loader, which Java code can reach
+        Program java_only = sharedProgram(ns, "java-only");
+        assertEq("ok: registered", NativeHandleProbe::registerSharedFromJava(java_only.callFunction("loader"), name));
+        assertNotInstance(NativeHandleProbe::callBinding("value", java_only.callFunction("make"), binding),
+            "registered only from Java");
+
+        # a sandboxed Program cannot register the name
+        SandboxManager mgr();
+        mgr.setUncontrolledApiPolicy(False);
+        Program tenant = sharedProgram(ns, "tenant");
+        tenant.setSandboxManager(mgr);
+        assertThrows("JNI-SANDBOX-ERROR", sub () { tenant.issueModuleCmd("jni", "register-shared-class " + name); });
+        object tenant_object = tenant.callFunction("make");
+        assertNotInstance(NativeHandleProbe::callBinding("value", tenant_object, binding), "sandboxed Program");
+
+        # registered by both, with another signature
+        Program different = sharedProgram(ns, "different", "int extra() { return 1; }");
+        different.issueModuleCmd("jni", "register-shared-class " + name);
+        assertNotInstance(NativeHandleProbe::callBinding("value", different.callFunction("make"), binding),
+            "another signature");
+
+        # the registered name of another class
+        string other_ns = "NativeHandleSharedOther";
+        Program other = sharedProgram(other_ns, "other");
+        other.issueModuleCmd("jni", "register-shared-class " + name);
+        assertNotInstance(NativeHandleProbe::callBinding("value", other.callFunction("make"), binding),
+            "the name of another class");
+
+        # a Program that imports the class of a registered Program, and did not register the name itself
+        Program registered = sharedProgram(ns, "registered-source");
+        registered.issueModuleCmd("jni", "register-shared-class " + name);
+        Program importer = importingProgram(registered, ns);
+        assertNotInstance(NativeHandleProbe::callBinding("value", importer.callFunction("make"), binding),
+            "imported by a Program that did not register");
+
+        # Java code that takes the name first gains nothing: its Program has no native registration
+        string first_ns = "NativeHandleSharedJavaFirst";
+        string first_name = "qore." + first_ns + ".Api";
+        Program java_first = sharedProgram(first_ns, "java-first");
+        assertEq("ok: registered", NativeHandleProbe::registerSharedFromJava(java_first.callFunction("loader"),
+            first_name));
+        Program host = sharedProgram(first_ns, "host");
+        host.issueModuleCmd("jni", "register-shared-class " + first_name);
+        int java_first_binding = NativeHandleProbe::methodBinding(java_first.callFunction("bytes"), "value");
+        assertNotInstance(NativeHandleProbe::callBinding("value", host.callFunction("make"), java_first_binding),
+            "the Java registrant's method on the host's object");
+    }
+
+    #! two classes injected for one class are not related to each other
+    twoInjectedClassesTest() {
+        Program first(PO_NEW_STYLE | PO_ALLOW_INJECTION | PO_NO_CHILD_PO_RESTRICTIONS);
+        first.importClass("InjectMock", "InjectTarget", True);
+        first.parse(InjectSource, "native-handle-injected-first");
+        Program second(PO_NEW_STYLE | PO_ALLOW_INJECTION | PO_NO_CHILD_PO_RESTRICTIONS);
+        second.importClass("InjectMockTwo", "InjectTarget", True);
+        second.parse(InjectSource, "native-handle-injected-second");
+
+        int first_method = NativeHandleProbe::methodBinding(first.callFunction("bytes"), "value");
+        int second_method = NativeHandleProbe::methodBinding(second.callFunction("bytes"), "value");
+        object first_object = first.callFunction("make");
+        object second_object = second.callFunction("make");
+        assertEq("ok: mock-value", NativeHandleProbe::callBinding("value", first_object, first_method));
+        assertEq("ok: mock-two-value", NativeHandleProbe::callBinding("value", second_object, second_method));
+        assertNotInstance(NativeHandleProbe::callBinding("value", second_object, first_method), "first's method");
+        assertNotInstance(NativeHandleProbe::callBinding("value", first_object, second_method), "second's method");
+    }
+
+    nullSelfTest() {
+        Program p(PO_NEW_STYLE);
+        p.parse(BindingSource, "native-handle-fixture");
+        int binding = NativeHandleProbe::classBinding(p.callFunction("bytes", "Calls"));
+        HandleTarget receiver();
+        string result = NativeHandleProbe::createWithNullSelf(receiver, binding);
+        assertTrue(result =~ /^exception: .*the Java object is null/, result);
+        assertEq(1, receiver.m());
+    }
+
+    zeroProgramTest() {
+        foreach string result in (NativeHandleProbe::zeroProgramPointer()) {
+            assertTrue(result =~ /^exception: .*has no Qore Program/, result);
+        }
+    }
+
+    classNameJavaThreadTest() {
+        HandleTarget t();
+        assertEq("ok: HandleTarget", NativeHandleProbe::classNameOnJavaThread(t));
     }
 
     #! returns source for a chain of classes, or of diamonds, that ends in class Leaf

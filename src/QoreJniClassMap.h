@@ -196,6 +196,28 @@ private:
 */
 DLLLOCAL bool jni_get_java_subclass_ctor_class(qore_classid_t cid, qore_classid_t& ctor_cid);
 
+//! Records that the Program registered the Java class name as shared with the \c register-shared-class module command
+/** This native record, and not the class loader's registry, which Java code can reach, decides whether an object of
+    one Program can receive a generated method of the same class of another Program
+*/
+DLLLOCAL void jni_record_shared_class(const char* bin_name, const QoreProgram& pgm);
+
+//! Removes the shared class records of a Program that is being torn down
+DLLLOCAL void jni_purge_shared_classes(const QoreProgram& pgm);
+
+//! Returns true if a class of the receiver is the same registered shared class as the class of a generated method
+/** The receiver's class or one of its parents must have the same path, module and signature as the method's class, and
+    the Programs whose namespaces hold the two classes (QoreClass::getProgram(), which for an imported class is the
+    importing Program) must both have registered the Java name of the method's class with the module command
+
+    @param env the JNI environment of the thread
+    @param receiver the class of the receiver
+    @param method_class the class of the method
+    @param method_pgm the Program of the method's binding, which the calling thread has entered
+*/
+DLLLOCAL bool jni_classes_are_shared(Env& env, const QoreClass& receiver, const QoreClass& method_class,
+    QoreProgram* method_pgm);
+
 class QoreJniClassMap : public QoreJniClassMapBase {
 public:
     // the global class-map lock; see JniClassMapLocker for the lock hierarchy it participates in
