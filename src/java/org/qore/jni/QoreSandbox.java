@@ -292,7 +292,8 @@ public final class QoreSandbox {
     //! A filesystem policy that is bound to classpath entries of a class loader
     /** Applied to every class and resource lookup below the entries, on any thread, also one with no %Qore caller;
         only this policy applies, so that the result of a lookup does not depend on the thread that makes it.  The
-        policy is read for each check, so a change to it applies to the next lookup.  A check that fails for any
+        policy is read for each check, so a change to a bound policy applies to the next lookup; an entry that was added
+        when no filesystem policy restricted its code has no bound policy and stays unchecked.  A check that fails for any
         reason is a denial.  Released when it is garbage-collected, or when the module shuts down, after which every
         check is a denial.
     */

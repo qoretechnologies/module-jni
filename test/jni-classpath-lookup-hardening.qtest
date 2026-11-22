@@ -1,0 +1,341 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../build"
+%requires QUnit
+%requires Util
+%requires jni
+%module-cmd(jni) add-relative-classpath qore-jni-test.jar
+%module-cmd(jni) add-relative-classpath ../build/qore-jni-compiler.jar
+%module-cmd(jni) import org.qore.jni.test.ClasspathLookupProbe
+
+%exec-class JniClasspathLookupHardeningTest
+
+#! The limits of the classpath policy: compiler locations, nested entries, file names and policy changes
+class JniClasspathLookupHardeningTest inherits QUnit::Test {
+    public {
+        #! the code of a Program that uses its class loader
+        const TenantSource = "%modern
+%requires jni
+%module-cmd(jni) import org.qore.jni.test.ClasspathLookupProbe
+object sub own_loader() {
+    return get_class_loader();
+}
+object sub capture_policy() {
+    return ClasspathLookupProbe::capturePolicy();
+}
+string sub lookup(string op, string name) {
+    return ClasspathLookupProbe::lookup(get_class_loader(), op, name);
+}
+string sub lookup_with(object loader, string op, string name) {
+    return ClasspathLookupProbe::lookup(loader, op, name);
+}
+string sub locations_hold(object loader, string dir, string rel) {
+    return ClasspathLookupProbe::locationsHold(loader, dir, rel);
+}
+string sub add_parent(object loader, string path) {
+    return ClasspathLookupProbe::addParentPath(loader, path);
+}
+object sub derived() {
+    return ClasspathLookupProbe::derived(get_class_loader());
+}
+";
+        #! the property that lowers the limit of the entries visited for a compiler
+        const EntriesProp = "qore.jni.compiler.maxEntries";
+        #! the levels of the tree of directory links
+        const LinkLevels = 12;
+    }
+
+    private {
+        string root;
+    }
+
+    constructor() : QUnit::Test("jni classpath lookup limits", "1.0") {
+        addTestCase("compiler copies go only to a private directory", \copyTargetTest());
+        addTestCase("compiler copies are not made for another Program", \copyOtherProgramTest());
+        addTestCase("compiler copies are removed when released", \copyReleaseTest());
+        addTestCase("the entries visited for a compiler are limited", \copyBudgetTest());
+        addTestCase("a real path that the file name encoding cannot represent", \lossyNameTest());
+        addTestCase("every policy of nested entries applies", \nestedPolicyTest());
+        addTestCase("a resource name with parent elements gives no signal", \parentElementTest());
+        addTestCase("a class with a non-ASCII name from a later entry", \nonAsciiTest());
+        addTestCase("a class from a later jar leaves the jar closed", \laterJarTest());
+        addTestCase("lookups through a parent classpath entry", \parentPathTest());
+        addTestCase("documented limit: an entry added before a policy applied", \policyLimitTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        string base = sprintf("%s%sjni-classpath-hardening-%d-%d", tmp_location(), DirSep, getpid(),
+            now_us().durationMicroseconds());
+        mkdir(base, 0700);
+        root = realpath(base);
+        foreach string d in (("allowed/pkg", "allowed/denied/sub", "second/denied", "outside", "jars/src/denied",
+                "laterjar", "links", "bytes")) {
+            makeDirs(d);
+        }
+        writeClass("allowed", "pkg.Ok");
+        writeClass("allowed", "denied.Hidden");
+        writeClassAs("allowed/denied/Inner.class", "Inner");
+        writeClass("allowed", "denied.Bóth");
+        writeClass("second", "denied.Bóth");
+        writeClass("allowed", "denied.JB");
+        writeClass("jars/src", "denied.JB");
+        writeFile("allowed/denied/g.txt", "denied");
+        writeFile("allowed/g.txt", "allowed");
+        writeFile("allowed/h.txt", "allowed");
+        symlink(root + "/allowed/denied/sub", root + "/allowed/up");
+        ClasspathLookupProbe::writeJar(root + "/jars/src", root + "/laterjar/later.jar", "");
+
+        # a tree of directory links with no class files, whose paths double at each level
+        for (int i = 0; i <= LinkLevels; ++i) {
+            mkdir(sprintf("%s/links/l%d", root, i), 0700);
+        }
+        for (int i = 0; i < LinkLevels; ++i) {
+            foreach string n in ("a", "b") {
+                symlink(sprintf("%s/links/l%d", root, i + 1), sprintf("%s/links/l%d/%s", root, i, n));
+            }
+        }
+    }
+
+    globalTearDown() {
+        if (root) {
+            removeTree(root);
+        }
+    }
+
+    private makeDirs(string d) {
+        string path = root;
+        foreach string e in (d.split("/")) {
+            path += "/" + e;
+            if (!is_dir(path)) {
+                mkdir(path, 0700);
+            }
+        }
+    }
+
+    private writeFile(string path, string data) {
+        File f();
+        f.open2(root + "/" + path, O_CREAT | O_WRONLY | O_TRUNC, 0600);
+        f.write(data);
+        f.close();
+    }
+
+    private writeClass(string dir, string name) {
+        string internal = replace(name, ".", "/");
+        writeClassAs(dir + "/" + internal + ".class", internal);
+    }
+
+    #! writes a minimal class file with the given internal name to a path of the tree
+    private writeClassAs(string path, string internal) {
+        binary b = <cafebabe00000034> + u2(5) + utf8(internal) + <07> + u2(1) + utf8("java/lang/Object") + <07> + u2(3);
+        b += u2(0x21) + u2(2) + u2(4) + u2(0) + u2(0) + u2(0) + u2(0);
+        File f();
+        f.open2(root + "/" + path, O_CREAT | O_WRONLY | O_TRUNC, 0600);
+        f.write(b);
+        f.close();
+    }
+
+    private static binary u2(int v) {
+        return parse_hex_string(sprintf("%04x", v));
+    }
+
+    private static binary utf8(string s) {
+        binary b = binary(s);
+        return <01> + u2(b.size()) + b;
+    }
+
+    private removeTree(string path) {
+        hash<StatInfo> info = hlstat(path);
+        if (info.type == "DIRECTORY") {
+            foreach string e in (glob(path + "/*") ?? ()) {
+                removeTree(e);
+            }
+            rmdir(path);
+        } else {
+            unlink(path);
+        }
+    }
+
+    #! returns a read-only policy for the directories, which denies the nested denied directory
+    private SandboxManager getPolicy(list<string> dirs = ("allowed", "second")) {
+        SandboxManager sm();
+        sm.setUncontrolledApiPolicy(True);
+        sm.setFilesystemDefaultPolicy(False);
+        foreach string d in (dirs) {
+            sm.addFilesystemAllowedPath(root + "/" + d, QSEC_READ);
+        }
+        foreach string d in (module_dirs()) {
+            sm.addFilesystemAllowedPath(d, QSEC_READ);
+        }
+        sm.addFilesystemDeniedPath(root + "/allowed/denied");
+        return sm;
+    }
+
+    private list<string> module_dirs() {
+        list<string> rv = (get_script_dir() + "/../build", get_script_dir() + "/../qlib");
+        rv += map $1, (ENV.QORE_MODULE_DIR ?? "").split(PathSep), $1.val();
+        *string fn = get_module_hash().jni.filename;
+        if (fn) {
+            rv += dirname(fn);
+        }
+        return rv;
+    }
+
+    private Program newProgram(*SandboxManager sm) {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse(TenantSource, "tenant");
+        if (sm) {
+            p.setSandboxManager(sm);
+        }
+        return p;
+    }
+
+    private Program restricted(string classpath = "allowed") {
+        Program p = newProgram(getPolicy());
+        p.issueModuleCmd("jni", "add-classpath " + (map root + "/" + $1, classpath.split(":")).join(":"));
+        return p;
+    }
+
+    copyTargetTest() {
+        Program p = restricted();
+        string target = root + "/outside/chosen";
+        p.callFunction("locations_hold", p.callFunction("own_loader"), target, "pkg/Ok.class");
+        assertFalse(is_dir(target), "nothing is created at a path that the caller chooses");
+        assertFalse(ClasspathLookupProbe::hasCallerPathCopy());
+    }
+
+    copyOtherProgramTest() {
+        Program owner = restricted();
+        Program other = newProgram(getPolicy());
+        string rv = other.callFunction("locations_hold", owner.callFunction("own_loader"),
+            root + "/outside/other", "pkg/Ok.class");
+        assertTrue(rv != "yes", rv);
+        assertEq("yes", owner.callFunction("locations_hold", owner.callFunction("own_loader"),
+            root + "/outside/own", "pkg/Ok.class"));
+    }
+
+    copyReleaseTest() {
+        Program p = restricted();
+        assertTrue(ClasspathLookupProbe::copiesReleased(p.callFunction("own_loader"), root + "/allowed"));
+    }
+
+    copyBudgetTest() {
+        SandboxManager sm = getPolicy(("links",));
+        Program p = newProgram(sm);
+        p.issueModuleCmd("jni", "add-classpath " + root + "/links/l0");
+        ClasspathLookupProbe::setProperty(EntriesProp, "1000");
+        on_exit ClasspathLookupProbe::setProperty(EntriesProp, NOTHING);
+        string rv = p.callFunction("locations_hold", p.callFunction("own_loader"), root + "/outside/budget",
+            "x.class");
+        assertEq("refused: IOException", rv);
+    }
+
+    lossyNameTest() {
+        if (ClasspathLookupProbe::fileNameEncoding() != "UTF-8") {
+            testSkip("the file names of the JVM are not in UTF-8");
+        }
+        string lossy = root + "/bytes/" + binary_to_string(<64656eff>, "UTF-8");
+        mkdir(lossy, 0700);
+        File f();
+        f.open2(lossy + "/s.txt", O_CREAT | O_WRONLY | O_TRUNC, 0600);
+        f.write("denied");
+        f.close();
+        symlink(lossy + "/s.txt", root + "/allowed/bytes-link.txt");
+        on_exit unlink(root + "/allowed/bytes-link.txt");
+        SandboxManager sm = getPolicy(("allowed", "bytes"));
+        sm.addFilesystemDeniedPath(lossy);
+        Program p = newProgram(sm);
+        p.issueModuleCmd("jni", "add-classpath " + root + "/allowed");
+        assertEq("missing", p.callFunction("lookup", "getResource", "bytes-link.txt"));
+    }
+
+    nestedPolicyTest() {
+        Program outer = newProgram(getPolicy());
+        # a second policy that allows the nested directory
+        SandboxManager wide();
+        wide.setUncontrolledApiPolicy(True);
+        wide.setFilesystemDefaultPolicy(False);
+        wide.addFilesystemAllowedPath(root + "/allowed", QSEC_READ);
+        Program inner = newProgram(wide);
+        object loader = ClasspathLookupProbe::newSubLoader(outer.callFunction("own_loader"));
+        assertEq("ok", ClasspathLookupProbe::addUrlUnder(outer.callFunction("capture_policy"), loader,
+            root + "/allowed/"));
+        assertEq("ok", ClasspathLookupProbe::addUrlUnder(inner.callFunction("capture_policy"), loader,
+            root + "/allowed/denied/"));
+        assertRegex("^missing", ClasspathLookupProbe::lookup(loader, "findClass", "Inner"));
+        assertEq("missing", ClasspathLookupProbe::lookup(loader, "findResource", "Inner.class"));
+    }
+
+    parentElementTest() {
+        Program p = restricted();
+        foreach string op in ("getResource", "findResource", "getResources", "findResources",
+                "getResourceAsStream") {
+            assertEq(p.callFunction("lookup", op, "up/../h.txt"), p.callFunction("lookup", op, "up/../g.txt"), op);
+        }
+        assertEq("found", p.callFunction("lookup", "getResource", "pkg/../g.txt"));
+    }
+
+    nonAsciiTest() {
+        if (ClasspathLookupProbe::fileNameEncoding() != "UTF-8") {
+            testSkip("the file names of the JVM are not in UTF-8");
+        }
+        Program p = restricted("allowed:second");
+        string location = p.callFunction("lookup", "location", "denied.Bóth");
+        assertRegex("/second/$", location, location);
+    }
+
+    laterJarTest() {
+        string jar = root + "/laterjar/later.jar";
+        if (ClasspathLookupProbe::openDescriptors(jar) < 0) {
+            testSkip("the open files of the process are not known");
+        }
+        Program p = newProgram(getPolicy(("allowed", "laterjar")));
+        object policy = p.callFunction("capture_policy");
+        object loader = ClasspathLookupProbe::newSubLoader(p.callFunction("own_loader"));
+        assertEq("ok", ClasspathLookupProbe::addUrlUnder(policy, loader, root + "/allowed/"));
+        assertEq("ok", ClasspathLookupProbe::addUrlUnder(policy, loader, jar));
+        assertEq("found", ClasspathLookupProbe::lookup(loader, "findClass", "denied.JB"));
+        ClasspathLookupProbe::closeLoader(loader);
+        assertEq(0, ClasspathLookupProbe::openDescriptors(jar));
+    }
+
+    parentPathTest() {
+        Program p = newProgram(getPolicy());
+        object child = p.callFunction("derived");
+        assertEq("ok", p.callFunction("add_parent", child, root + "/allowed"));
+        foreach object loader in (child, p.callFunction("own_loader")) {
+            assertEq("found", p.callFunction("lookup_with", loader, "loadClass", "pkg.Ok"));
+            assertRegex("^missing", p.callFunction("lookup_with", loader, "loadClass", "denied.Hidden"));
+            assertEq("missing", p.callFunction("lookup_with", loader, "getResource", "denied/g.txt"));
+        }
+    }
+
+    #! an entry is bound to the policy that applied when it was added; see the operator rule in the guide
+    policyLimitTest() {
+        SandboxManager sm();
+        sm.setUncontrolledApiPolicy(True);
+        sm.setFilesystemDefaultPolicy(True);
+        Program permissive = newProgram(sm);
+        permissive.issueModuleCmd("jni", "add-classpath " + root + "/allowed");
+        sm.addFilesystemDeniedPath(root + "/allowed/denied");
+        assertEq("found", permissive.callFunction("lookup", "getResource", "denied/g.txt"));
+
+        Program before = newProgram();
+        before.issueModuleCmd("jni", "add-classpath " + root + "/allowed");
+        before.setSandboxManager(getPolicy());
+        assertEq("found", before.callFunction("lookup", "getResource", "denied/g.txt"));
+
+        # a change to a policy that restricts applies to the next lookup
+        SandboxManager changing = getPolicy();
+        Program p = newProgram(changing);
+        p.issueModuleCmd("jni", "add-classpath " + root + "/allowed");
+        assertEq("found", p.callFunction("lookup", "getResource", "h.txt"));
+        changing.addFilesystemDeniedPath(root + "/allowed/h.txt");
+        assertEq("missing", p.callFunction("lookup", "getResource", "h.txt"));
+    }
+}

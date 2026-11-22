@@ -1320,7 +1320,7 @@ LocalReference<jobject> jni_check_classpath_sandbox(const char* cmd, const QoreP
     if (global) {
         jni_check_uncontrolled_cmd(cmd, pgm, "changes the classpath of every Program");
         // a sandbox can trust its code with uncontrolled APIs and still restrict the filesystem: the entry of the
-        // shared classpath would carry no policy, which means that trusted code added it (qore#7276)
+        // shared classpath would carry no policy, and an entry with none is not checked (qore#7276)
         QoreSandboxManagerHelper governing(QoreSandboxManagerHelper::Policy);
         if (governing && governing->filesystemRestricts()) {
             throw QoreJniException("JNI-SANDBOX-ERROR", "the \"%s\" module command changes the classpath of every "
@@ -1361,7 +1361,8 @@ LocalReference<jobject> jni_check_classpath_policy(QoreSandboxManager* policy, E
 #endif
     // a sandbox that does not restrict the filesystem (ex: one for interrupts or limits only) still refuses a special
     // file with an archive name, which the class loader would open, but not one with another name, which it does not
-    // read once: the policy is bound to the entries below exactly when the classpath is resolved as restricted
+    // read once: the policy is bound to the entries below exactly when the classpath is resolved as restricted; an
+    // entry added while the policy restricts nothing is not bound, so tightening the policy later does not reach it
     const bool restricts = policy->filesystemRestricts();
     jargs[2].z = restricts ? JNI_TRUE : JNI_FALSE;
     LocalReference<jobject> rc = env.callStaticObjectMethod(Globals::classQoreSandbox,

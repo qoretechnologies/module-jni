@@ -83,13 +83,19 @@ are `static_assert`ed to match) and calls `QoreSandboxManager::checkFilesystemAc
   routes (`addPath()`, `addParentPath()`, `addPathOrig()`, `addWildcard()`, a subclass's `addURL()`) bind the managers
   that a check by the caller applies (`QoreSandbox.boundClasspath()`, native `classpathManagers0()`), and the module
   routes bind the manager that checked the classpath (`jni_check_classpath_policy()`, `jni_bind_classpath_policy()`).
-  A restricted classpath with no policy is refused, because **an entry with no policy means that trusted code added
-  it**: it is a grant of the host.  The `global-*` commands, which add no policy, are refused under a filesystem
-  policy.  Each path that a classpath reaches, also through a manifest, is recorded as the class loader's URLs name it.
+  A restricted classpath with no policy is refused, because **an entry with no policy is not checked**: it was added by
+  trusted code (a grant of the host), or before a filesystem policy restricted the code that added it (no sandbox yet,
+  or one that restricted nothing then).  Setting or tightening a policy later does not reach such an entry, which is
+  an operator rule in the guide; a per-lookup call for permissive Programs is deliberately not made.  The `global-*`
+  commands, which add no policy, are refused under a filesystem policy.  Each path that a classpath reaches, also
+  through a manifest, is recorded as the class loader's URLs name it.
 - **Lookup.** `findClass()`, `findResource()` and `findResources()`, and the methods that called `super.findClass()`
   directly, enumerate the matches and take the first that `allows()`: the file's real path must pass every policy of
-  the nearest recorded entry.  A denied file is skipped, so a later entry can provide it, and a denial and a missing
-  file have the same outcome.  A URL in no known entry is refused.
+  the entries that contain it, up to the nearest entry of trusted code.  A real path that the JVM's file name encoding
+  cannot represent exactly is refused, and a name with a parent element must resolve to the file of its URL.  A denied
+  file is skipped, so a later entry can provide it, and a denial and a missing file have the same outcome.  A URL in no
+  known entry is refused; on an unverified JDK this includes what the manifests of trusted jars name, in a class loader
+  that also has entries of restricted code.
 - **Whose policy.** Only the captured manager is consulted (`checkClasspathRead0()`), never the thread's caller, so the
   result does not depend on the thread and a stricter thread cannot affect another lookup.
 - **No decision cache.** A `SandboxManager` can be changed at any time and has no change indicator, so a cached answer
@@ -97,8 +103,10 @@ are `static_assert`ed to match) and calls `QoreSandboxManager::checkFilesystemAc
 - **Fast path.** With no guard (trusted code, sandboxes that restrict nothing) a lookup is the plain JDK lookup plus one
   volatile read.
 - **Kotlin.** The compiler reads directories itself, so a restricted compile gets a private copy of the allowed class
-  and `.kotlin_module` files of each guarded directory (`QoreClasspathGuard.compilerLocation()`), bounded in files,
-  bytes and depth, inside the compiler's temporary directory, which every path removes.  The default scripting plugin
+  and `.kotlin_module` files of each guarded directory (`QoreClasspathGuard.compilerLocations()`), bounded in files,
+  bytes, depth and directory entries visited (the system property `qore.jni.compiler.maxEntries` can only lower the
+  last limit), in a private directory that the class loader makes, for code that can
+  reach its Program; the compiler releases it on every path.  The default scripting plugin
   is disabled for a restricted compile, as it discovers script definitions on the classpath and runs their code.  The
   JSR-223 script engine takes its classpath from the class loaders and cannot be filtered, so a script of a restricted
   caller is refused while a guarded directory is on its classpath.

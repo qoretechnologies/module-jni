@@ -25,6 +25,10 @@ class JniClasspathLookupKotlinScriptTest inherits QUnit::Test {
     public {
         const TenantSource = "%modern
 %requires jni
+%module-cmd(jni) import org.qore.jni.test.ClasspathLookupProbe
+string sub ev_other_context(string script, bool bindings) {
+    return Jni::org::qore::jni::test::ClasspathLookupProbe::evalWithOtherContext(get_class_loader(), script, bindings);
+}
 string sub ev(string script) {
     try {
         return sprintf(\"result: %y\", kotlin_eval(script));
@@ -163,6 +167,11 @@ string sub ev(string script) {
         foreach string script in (UsesDenied, Plain) {
             string rv = p.callFunction("ev", script);
             assertRegex("cannot be evaluated by code that a sandbox filesystem policy restricts", rv, rv);
+            # the public API, whatever the thread's context class loader is
+            foreach bool bindings in (False, True) {
+                rv = p.callFunction("ev_other_context", script, bindings);
+                assertRegex("cannot be evaluated by code that a sandbox filesystem policy restricts", rv, rv);
+            }
         }
     }
 

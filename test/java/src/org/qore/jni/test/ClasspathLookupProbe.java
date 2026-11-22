@@ -87,6 +87,142 @@ public class ClasspathLookupProbe {
         }
     }
 
+    //! Adds a classpath to the parent of a class loader; returns "ok" or the error
+    public static String addParentPath(QoreURLClassLoader loader, String classpath) {
+        try {
+            loader.addParentPath(classpath);
+            return "ok";
+        } catch (Throwable e) {
+            return "refused: " + e.getClass().getSimpleName();
+        }
+    }
+
+    //! Returns true if the class loader has a public method that writes compiler locations to a path of the caller
+    public static boolean hasCallerPathCopy() {
+        try {
+            QoreURLClassLoader.class.getMethod("getCheckedCompilerLocations", Path.class);
+            return true;
+        } catch (NoSuchMethodException e) {
+            return false;
+        }
+    }
+
+    //! Asks for the compiler locations of a class loader; a form that takes a directory is given \a dir
+    @SuppressWarnings("unchecked")
+    private static List<File> checkedLocations(QoreURLClassLoader loader, String dir) throws Exception {
+        if (hasCallerPathCopy()) {
+            return (List<File>) QoreURLClassLoader.class.getMethod("getCheckedCompilerLocations", Path.class)
+                .invoke(loader, Path.of(dir));
+        }
+        return (List<File>) QoreURLClassLoader.class.getMethod("getCheckedCompilerLocations").invoke(loader);
+    }
+
+    //! Releases compiler locations, where the class loader has a release for them
+    private static void releaseLocations(QoreURLClassLoader loader, List<File> locations) throws Exception {
+        if (!hasCallerPathCopy()) {
+            QoreURLClassLoader.class.getMethod("releaseCompilerCopies", List.class).invoke(loader, locations);
+        }
+    }
+
+    //! Returns "yes" if a compiler location of the class loader has the file \a rel, "no" if not, or the refusal
+    public static String locationsHold(QoreURLClassLoader loader, String dir, String rel) {
+        try {
+            List<File> locations = checkedLocations(loader, dir);
+            try {
+                for (File location : locations) {
+                    if (new File(location, rel).exists()) {
+                        return "yes";
+                    }
+                }
+                return "no";
+            } finally {
+                releaseLocations(loader, locations);
+            }
+        } catch (java.lang.reflect.InvocationTargetException e) {
+            return "refused: " + e.getCause().getClass().getSimpleName();
+        } catch (Exception e) {
+            return "refused: " + e.getClass().getSimpleName();
+        }
+    }
+
+    //! Returns true if a location made for the class loader no longer exists once it has been released
+    public static boolean copiesReleased(QoreURLClassLoader loader, String original) throws Exception {
+        if (hasCallerPathCopy()) {
+            return false;
+        }
+        List<File> locations = checkedLocations(loader, null);
+        ArrayList<File> copies = new ArrayList<>();
+        for (File location : locations) {
+            if (!location.getPath().equals(original)) {
+                copies.add(location);
+            }
+        }
+        releaseLocations(loader, locations);
+        for (File copy : copies) {
+            if (copy.exists()) {
+                return false;
+            }
+        }
+        return !copies.isEmpty();
+    }
+
+    //! Sets or clears a system property
+    public static void setProperty(String name, String value) {
+        if (value == null || value.isEmpty()) {
+            System.clearProperty(name);
+        } else {
+            System.setProperty(name, value);
+        }
+    }
+
+    //! Returns the encoding of file names in the JVM
+    public static String fileNameEncoding() {
+        return System.getProperty("sun.jnu.encoding");
+    }
+
+    //! Returns the number of file descriptors of the process that are open on \a path, or -1 if that is not known
+    public static int openDescriptors(String path) throws IOException {
+        Path fds = Path.of("/proc/self/fd");
+        if (!Files.isDirectory(fds)) {
+            return -1;
+        }
+        int rv = 0;
+        try (java.nio.file.DirectoryStream<Path> entries = Files.newDirectoryStream(fds)) {
+            for (Path fd : entries) {
+                try {
+                    if (Files.readSymbolicLink(fd).toString().equals(path)) {
+                        ++rv;
+                    }
+                } catch (IOException e) {
+                    // closed since it was listed
+                }
+            }
+        }
+        return rv;
+    }
+
+    //! Closes a class loader
+    public static void closeLoader(QoreURLClassLoader loader) throws IOException {
+        loader.close();
+    }
+
+    //! Evaluates a Kotlin script through the public API for \a loader, with another thread context class loader
+    public static String evalWithOtherContext(QoreURLClassLoader loader, String script, boolean bindings) {
+        Object[] saved = QoreURLClassLoader.saveContext();
+        loader.setContext();
+        Thread.currentThread().setContextClassLoader(ClassLoader.getPlatformClassLoader());
+        try {
+            Object rv = bindings
+                ? org.qore.jni.KotlinScriptEngine.evalWithBindings(script, new java.util.HashMap<>())
+                : org.qore.jni.KotlinScriptEngine.eval(script);
+            return "result: " + rv;
+        } catch (Throwable e) {
+            return "refused: " + e.getMessage();
+        } finally {
+            QoreURLClassLoader.restoreContext(saved);
+        }
+    }
+
     //! Returns a class loader derived from \a parent, for delegation to it
     public static QoreURLClassLoader derived(QoreURLClassLoader parent) {
         return QoreURLClassLoader.createDerived(parent);

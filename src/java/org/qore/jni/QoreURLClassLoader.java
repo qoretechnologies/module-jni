@@ -487,7 +487,9 @@ public class QoreURLClassLoader extends URLClassLoader {
 
     //! Returns the paths that a list of classpath files reaches, with the manifest Class-Path of each jar
     /** Each path is as the class loader's URLs name it.  A manifest that cannot be followed leaves its entries out, so
-        that a lookup below them finds no known entry and is refused.
+        that a lookup below them finds no known entry and is refused.  This includes every manifest \c Class-Path entry
+        on a JDK version that has not been verified (see VERIFIED_CLASS_PATH_JDK_FEATURES): in a class loader that also
+        has entries of restricted code, what the manifests of trusted jars name is then not found (fail closed).
     */
     static java.util.Set<String> reachableRoots(java.util.List<File> entries) {
         ResolvedClasspath rc = new ResolvedClasspath(0);
@@ -531,7 +533,7 @@ public class QoreURLClassLoader extends URLClassLoader {
         boolean first = true;
         while (found.hasMoreElements()) {
             URL url = found.nextElement();
-            if (g.allows(url, urls)) {
+            if (g.allows(url, path, urls)) {
                 // the first match is the file that the plain lookup reads
                 return first ? super.findClass(name) : defineFromUrl(name, url);
             }
@@ -547,19 +549,27 @@ public class QoreURLClassLoader extends URLClassLoader {
         Manifest manifest = null;
         try {
             URLConnection connection = url.openConnection();
-            if (connection instanceof JarURLConnection) {
-                JarURLConnection jar = (JarURLConnection) connection;
-                base = jar.getJarFileURL();
-                manifest = jar.getManifest();
-            } else {
-                String spec = url.toString();
-                base = URI.create(spec.substring(0, spec.length() - (name.replace('.', '/') + ".class").length()))
-                    .toURL();
-            }
+            // not cached, so that closing the stream closes the jar, which this class loader's close() cannot reach
+            connection.setUseCaches(false);
             try (InputStream in = connection.getInputStream()) {
                 bytes = in.readAllBytes();
+                if (connection instanceof JarURLConnection) {
+                    JarURLConnection jar = (JarURLConnection) connection;
+                    base = jar.getJarFileURL();
+                    manifest = jar.getManifest();
+                } else {
+                    // the directory of the entry: one level up for each element of the class's path
+                    File root = new File(url.toURI());
+                    for (int i = name.split("\\.", -1).length; i > 0 && root != null; --i) {
+                        root = root.getParentFile();
+                    }
+                    if (root == null) {
+                        throw new ClassNotFoundException(name);
+                    }
+                    base = root.toURI().toURL();
+                }
             }
-        } catch (IOException | IllegalArgumentException e) {
+        } catch (IOException | IllegalArgumentException | java.net.URISyntaxException e) {
             throw new ClassNotFoundException(name, e);
         }
         int dot = name.lastIndexOf('.');
@@ -592,7 +602,7 @@ public class QoreURLClassLoader extends URLClassLoader {
             Enumeration<URL> found = super.findResources(name);
             while (found.hasMoreElements()) {
                 URL url = found.nextElement();
-                if (g.allows(url, urls)) {
+                if (g.allows(url, name, urls)) {
                     return url;
                 }
             }
@@ -614,7 +624,7 @@ public class QoreURLClassLoader extends URLClassLoader {
         Enumeration<URL> found = super.findResources(name);
         while (found.hasMoreElements()) {
             URL url = found.nextElement();
-            if (g.allows(url, urls)) {
+            if (g.allows(url, name, urls)) {
                 rv.add(url);
             }
         }
@@ -637,19 +647,29 @@ public class QoreURLClassLoader extends URLClassLoader {
     }
 
     //! Returns the locations of this class loader for a compiler of a restricted caller, as the policy allows
-    /** The classpath directories that restricted code added are replaced by private copies of the files that their
-        policy allows.
+    /** The classpath directories that restricted code added are replaced by copies of the files that their policy
+        allows, in a private directory that this class loader makes; give the result to releaseCompilerCopies() when
+        the compiler has finished.  For code that cannot reach this class loader's Program, the entries of restricted
+        code are left out and nothing is copied: a compiler walks the class loaders of its parents, and it only uses
+        the entries that it may use.
 
-        @param dir the directory for the copies, private to the compiler; it is created if needed
+        @throw IOException a copy cannot be made, or is larger than the limits; nothing is left
     */
-    public final java.util.List<File> getCheckedCompilerLocations(java.nio.file.Path dir) throws IOException {
+    public final java.util.List<File> getCheckedCompilerLocations() throws IOException {
         QoreClasspathGuard g = guard;
         java.util.List<File> locations = getCompilerLocations();
         if (g == null) {
             return locations;
         }
-        Files.createDirectories(dir);
-        return QoreClasspathGuard.compilerLocations(g, locations, dir);
+        return g.compilerLocations(locations, programReachable0(getOriginPtr()));
+    }
+
+    //! Removes the private copies among locations that getCheckedCompilerLocations() returned; changes no other file
+    public final void releaseCompilerCopies(java.util.List<File> locations) {
+        QoreClasspathGuard g = guard;
+        if (g != null) {
+            g.releaseCopies(locations);
+        }
     }
 
     //! Returns the file that a class loader URL names, or null if it names no local file
@@ -2703,7 +2723,7 @@ public class QoreURLClassLoader extends URLClassLoader {
             throw new IllegalArgumentException("the classpath has not been checked");
         }
         // before any URL is added, so that no lookup can reach an entry without its policy; a classpath of restricted
-        // code with no policy is refused, as an entry with none is one of trusted code
+        // code with no policy is refused, as an entry with none is not checked
         if (rc.restricted) {
             if (rc.policies == null || rc.policies.length == 0) {
                 throw new IllegalStateException("a classpath of code that a sandbox filesystem policy restricts has "
@@ -2718,7 +2738,7 @@ public class QoreURLClassLoader extends URLClassLoader {
             }
             File fileentry = rc.files.get(i);
             if (fileentry != null && !rc.restricted) {
-                // a sandbox that restricts nothing: as for trusted code
+                // a sandbox that restricts nothing now: as for trusted code, and a policy set later does not apply
                 noteTrustedFile(fileentry);
             }
             if (fileentry == null || classPathElements.contains(fileentry.getPath())) {

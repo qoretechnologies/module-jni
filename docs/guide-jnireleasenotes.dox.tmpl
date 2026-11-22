@@ -18,7 +18,10 @@
       restricted code added is on its classpath.  The \c global-* classpath commands are refused under a sandbox
       filesystem policy, also one that allows uncontrolled APIs, and when trusted code issues them into a Program that
       such a sandbox governs.  An entry that trusted code adds to the class loader of a sandboxed Program is a grant of
-      the host and is not checked
+      the host and is not checked.  An entry added before a Program's filesystem policy applied, or while its sandbox
+      restricted nothing, stays unchecked when the policy is set or tightened later: configure the policy before the
+      classpath is added.  On a JDK version whose manifest \c Class-Path handling has not been verified, what the
+      manifests of trusted jars name is not found in a class loader that also has entries of restricted code
     - A child process created with \c fork() could wait forever when it ended, if another thread of the parent held
       one of the module's locks on the child's exit path or the global context Program at the time of the fork, as that
       thread does not exist in the child.  The module's cleanup in a child no longer waits for that state (qore#7192)

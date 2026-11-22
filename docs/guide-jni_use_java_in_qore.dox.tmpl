@@ -331,13 +331,21 @@ class Outer {
     policy is captured with the entry when it is added, so the result does not depend on the thread that makes the
     lookup, and a lookup that the JVM makes with no %Qore caller is checked in the same way.  A file that the policy
     denies, or that cannot be checked, behaves as a file that does not exist, and the following entries are still
-    searched.  The policy is read for each lookup, so a change to it applies to the next lookup; a class that has
-    already been loaded stays loaded.  A class loader to which no restricted code has added an entry makes no check.
-    A path is checked before it is opened, so a file that is replaced between the check and its use is not covered.
+    searched.  A policy that is bound to an entry is read for each lookup, so a change to it applies to the next lookup;
+    a class that has already been loaded stays loaded.  A class loader to which no restricted code has added an entry
+    makes no check.  A path is checked before it is opened, so a file that is replaced between the check and its use is
+    not covered.  A real path that the JVM's file name encoding cannot represent exactly is treated as denied.
 
-    <b>Operator rule:</b> an entry that trusted code adds to the class loader of a sandboxed Program with the class
-    loader's Java API, or to the classpath that every Program shares, is a grant of the host: the sandboxed Program can
-    load everything below it, whatever its policy says.  Add only what the Program may read.
+    <b>Operator rules:</b>
+    - an entry that trusted code adds to the class loader of a sandboxed Program with the class loader's Java API, or to
+      the classpath that every Program shares, is a grant of the host: the sandboxed Program can load everything below
+      it, whatever its policy says.  Add only what the Program may read
+    - a policy is bound to an entry only if it restricts the filesystem when the entry is added.  An entry that was
+      added before \c setSandboxManager(), or while the Program's sandbox restricted nothing, stays unchecked: setting or
+      tightening the policy later does not apply to it.  Configure the filesystem policy of a Program before its
+      classpath is added
+    - on a JDK version for which manifest \c Class-Path handling has not been verified, what the manifests of trusted
+      jars name is not found in a class loader that also has entries of restricted code (fail closed)
 
     <b>Compilers:</b> the Kotlin compiler validates the source and class names that it is given as Java binary names,
     keeps the files that it makes for them in its private temporary directory, and validates the names of the classes

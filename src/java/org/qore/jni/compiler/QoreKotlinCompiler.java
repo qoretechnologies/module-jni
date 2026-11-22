@@ -116,6 +116,8 @@ public class QoreKotlinCompiler implements AutoCloseable {
             checkNames(injectedClasses.keySet());
         }
         final boolean restricted = QoreSandbox.restrictsFilesystem();
+        // releases the private classpath copies of this compilation
+        final List<Runnable> copies = new ArrayList<>();
 
         try {
             // Create temporary directories for source and output
@@ -172,13 +174,12 @@ public class QoreKotlinCompiler implements AutoCloseable {
             // compiled the identical source: QoreJavaCompiler reads
             // `loader.getURLs()` - the parent - when it populates the file
             // manager's CLASS_PATH.
-            int loaderIndex = 0;
             for (ClassLoader cl = classLoader; cl != null; cl = cl.getParent()) {
                 if (restricted) {
                     // only the files that a class loader of the module has checked, as they were checked, with a
                     // private copy of the files that the policy of an entry of restricted code allows below a
-                    // directory; removed with the temporary directory; the compiler's classpath is one string, so an
-                    // entry cannot contain its separator
+                    // directory, released below; the compiler's classpath is one string, so an entry cannot contain
+                    // its separator
                     if (cl instanceof QoreURLClassLoader) {
                         QoreURLClassLoader qcl = (QoreURLClassLoader) cl;
                         // checked for the entries themselves: the path of a private copy has no separator
@@ -188,8 +189,9 @@ public class QoreKotlinCompiler implements AutoCloseable {
                                     + "so it cannot be given to the compiler", java.util.Collections.emptyList());
                             }
                         }
-                        for (File location : qcl.getCheckedCompilerLocations(
-                                tempDir.resolve("classpath-" + loaderIndex++))) {
+                        List<File> checked = qcl.getCheckedCompilerLocations();
+                        copies.add(() -> qcl.releaseCompilerCopies(checked));
+                        for (File location : checked) {
                             if (location.getPath().indexOf(File.pathSeparatorChar) >= 0) {
                                 throw new QoreKotlinCompilerException("a classpath entry contains the path separator, "
                                     + "so it cannot be given to the compiler", java.util.Collections.emptyList());
@@ -355,6 +357,13 @@ public class QoreKotlinCompiler implements AutoCloseable {
             throw new QoreKotlinCompilerException("I/O error during compilation: " + e.getMessage(),
                 sources.keySet(), e);
         } finally {
+            for (Runnable release : copies) {
+                try {
+                    release.run();
+                } catch (RuntimeException e) {
+                    // the other copies and the temporary directory are still removed
+                }
+            }
             // Clean up temp directory
             cleanupTempDir();
         }
