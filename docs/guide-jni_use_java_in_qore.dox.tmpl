@@ -210,6 +210,14 @@ class Outer {
     JVM's main thread can create a \c QoreURLClassLoader; once sandboxed code has used Java, a new thread that Java
     started, with no %Qore caller, cannot.
 
+    @note <b>Known limit:</b> after any call of Java by code that a sandbox governs, trusted Java-started threads can
+    no longer add classpaths or build compilers, for the rest of the process.  Threads that %Qore code calls are not
+    affected.  The limit is process-wide, so one sandboxed Program can cause it for all trusted Java-started threads;
+    it refuses the operation and grants nothing.  The module does not decide per thread origin because that cannot be
+    proven safe: work that sandboxed code submits to a shared thread (ex: a common pool or a host's executor) looks
+    the same as trusted work there.  A host that needs these operations performs them from %Qore code.  An explicit
+    grant for trusted worker threads is tracked in qoretechnologies/qore#7229.
+
     @par Closing class loaders and compilers
     Closing a \c QoreURLClassLoader or a compiler is refused with \c JNI-ERROR to code that cannot reach its Program:
     code that a sandbox governs and that belongs to another Program, Java code of a class loader of another sandboxed

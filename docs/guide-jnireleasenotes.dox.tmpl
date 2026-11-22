@@ -16,6 +16,11 @@
       %Qore of Java code of its classes are refused.  The classes of a Kotlin script now belong to the Program that
       evaluated it, so trusted and sandboxed scripts keep calling into their own Program.  A process with trusted code
       only is unchanged, unless it issues \c set-java-thread-policy \c strict, which applies this rule from the start
+    - <b>Known limit</b> (qore#7131): after any call of Java by code that a sandbox governs, trusted Java-started
+      threads can no longer add classpaths or build compilers, for the rest of the process; threads that %Qore code
+      calls are not affected.  One sandboxed Program can cause this for all such threads.  It fails closed, because
+      work that sandboxed code submits to a shared thread cannot be told from trusted work there, so deciding per
+      thread origin cannot be proven safe.  An explicit grant for trusted worker threads is tracked in qore#7229
     - A refused \c QoreURLClassLoader constructor no longer leaves an object or changes the thread's context, and a
       class loader with no Program takes the Program of its parent only if it was made with \c createWithoutProgram().
       A compiler that its caller cannot close stays open for code that can reach its Program, and an error of a
