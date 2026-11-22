@@ -32,6 +32,7 @@
 #define QORE_JNI_JAVASANDBOX_H_
 
 #include <qore/Qore.h>
+#include <qore/QoreSandboxManager.h>
 #include <jni.h>
 
 namespace jni {
@@ -47,6 +48,22 @@ DLLLOCAL void jni_register_qore_sandbox_natives(Env& env, jclass cls);
 /** Called by NativeCleanup for a QoreSandbox.Policy that was garbage-collected without being closed.
 */
 DLLLOCAL void jni_release_sandbox_policy(jlong ptr);
+
+//! Releases a policy bound to classpath entries; the thread must be a Qore thread
+/** Called by NativeCleanup for a QoreSandbox.ClasspathPolicy.
+*/
+DLLLOCAL void jni_release_classpath_policy(jlong ptr);
+
+//! Binds a filesystem policy to a resolved classpath, whose entries then apply it to each lookup below them
+/** The classpath takes a new reference to the policy.
+
+    @param env the JNI environment
+    @param rc the resolved classpath (QoreURLClassLoader.ResolvedClasspath)
+    @param policy the policy that checked the classpath
+
+    @throw JavaException the policy cannot be bound; no reference is kept
+*/
+DLLLOCAL void jni_bind_classpath_policy(Env& env, jobject rc, QoreSandboxManager* policy);
 
 } // namespace jni
 

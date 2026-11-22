@@ -57,6 +57,7 @@
 #include "Method.h"
 #include "QoreToJava.h"
 #include "Globals.h"
+#include "JavaSandbox.h"
 #include "QoreJdbcDriver.h"
 #include "ql_jni_debug.h"
 
@@ -1318,6 +1319,13 @@ LocalReference<jobject> jni_check_classpath_sandbox(const char* cmd, const QoreP
         jstring classpath, bool global) {
     if (global) {
         jni_check_uncontrolled_cmd(cmd, pgm, "changes the classpath of every Program");
+        // a sandbox can trust its code with uncontrolled APIs and still restrict the filesystem: the entry of the
+        // shared classpath would carry no policy, which means that trusted code added it (qore#7276)
+        QoreSandboxManagerHelper governing(QoreSandboxManagerHelper::Policy);
+        if (governing && governing->filesystemRestricts()) {
+            throw QoreJniException("JNI-SANDBOX-ERROR", "the \"%s\" module command changes the classpath of every "
+                "Program, so it cannot be used under a sandbox filesystem policy", cmd);
+        }
         return nullptr;
     }
     // the filesystem policy, as for Qore's own file operations
@@ -1353,7 +1361,9 @@ LocalReference<jobject> jni_check_classpath_policy(QoreSandboxManager* policy, E
 #endif
     // a sandbox that does not restrict the filesystem (ex: one for interrupts or limits only) still refuses a special
     // file with an archive name, which the class loader would open, but not one with another name, which it does not
-    jargs[2].z = policy->filesystemRestricts() ? JNI_TRUE : JNI_FALSE;
+    // read once: the policy is bound to the entries below exactly when the classpath is resolved as restricted
+    const bool restricts = policy->filesystemRestricts();
+    jargs[2].z = restricts ? JNI_TRUE : JNI_FALSE;
     LocalReference<jobject> rc = env.callStaticObjectMethod(Globals::classQoreSandbox,
         Globals::methodQoreSandboxResolveClasspath, jargs);
     // the elements grow as they are checked: after an element is allowed, the jars and directories that its manifest
@@ -1416,6 +1426,11 @@ LocalReference<jobject> jni_check_classpath_policy(QoreSandboxManager* policy, E
         args[0].l = rc;
         args[1].i = i;
         env.callStaticVoidMethod(Globals::classQoreSandbox, Globals::methodQoreSandboxExpandClasspath, args);
+    }
+    if (restricts) {
+        // every class and resource lookup below the entries applies this policy, on any thread; the classpath takes
+        // the reference, unless the call raises an exception, in which case it took nothing
+        jni_bind_classpath_policy(env, rc, policy);
     }
     return rc;
 }

@@ -289,6 +289,100 @@ public final class QoreSandbox {
         }
     }
 
+    //! A filesystem policy that is bound to classpath entries of a class loader
+    /** Applied to every class and resource lookup below the entries, on any thread, also one with no %Qore caller;
+        only this policy applies, so that the result of a lookup does not depend on the thread that makes it.  The
+        policy is read for each check, so a change to it applies to the next lookup.  A check that fails for any
+        reason is a denial.  Released when it is garbage-collected, or when the module shuts down, after which every
+        check is a denial.
+    */
+    static final class ClasspathPolicy {
+        //! the referenced native policy manager
+        private final NativeCleanup.Ref ref;
+        //! the address of the policy manager, which identifies it while this object holds its reference
+        private final long id;
+
+        //! Takes a reference to the native policy manager \a ptr, unless an exception is raised
+        ClasspathPolicy(long ptr) {
+            ref = NativeCleanup.register(this, ptr, NativeCleanup.KIND_CLASSPATH_POLICY);
+            id = ptr;
+        }
+
+        //! Returns the identity of the policy
+        long id() {
+            return id;
+        }
+
+        //! Returns true if the policy allows reading \a path, which is a real path in the JVM's file name encoding
+        boolean allowsRead(byte[] path) {
+            long p = ref.enter();
+            if (p == 0) {
+                return false;
+            }
+            try {
+                return checkClasspathRead0(p, path);
+            } catch (RuntimeException e) {
+                return false;
+            } finally {
+                ref.exit();
+                Reference.reachabilityFence(this);
+            }
+        }
+    }
+
+    //! Returns the filesystem policies that apply to the caller, to bind to the classpath entries that it adds
+    /** These are the policies that a check made by the caller applies: those of a task that runs with a captured
+        policy, and of the %Qore code that runs on the thread.
+
+        @throw JNI-SANDBOX-ERROR the policy of the caller cannot be determined
+    */
+    static ClasspathPolicy[] callerClasspathPolicies() {
+        Policy p = current.get();
+        long[] ptrs;
+        if (p != null) {
+            p.lock.readLock().lock();
+            try {
+                long pp = p.enterPtr();
+                try {
+                    ptrs = classpathManagers0(pp);
+                } finally {
+                    p.ref.exit();
+                }
+            } finally {
+                p.lock.readLock().unlock();
+                Reference.reachabilityFence(p);
+            }
+        } else {
+            ptrs = classpathManagers0(0);
+        }
+        int i = 0;
+        try {
+            ClasspathPolicy[] rv = new ClasspathPolicy[ptrs.length];
+            for (; i < ptrs.length; ++i) {
+                rv[i] = new ClasspathPolicy(ptrs[i]);
+            }
+            return rv;
+        } catch (Throwable e) {
+            // the references that no object has taken
+            for (; i < ptrs.length; ++i) {
+                releaseClasspathManager0(ptrs[i]);
+            }
+            throw e;
+        }
+    }
+
+    //! Resolves and checks a classpath for a class loader, and binds the policies of the caller to it
+    static QoreURLClassLoader.ResolvedClasspath boundClasspath(String classpath) {
+        QoreURLClassLoader.ResolvedClasspath rc = checkedClasspath(classpath);
+        rc.bindPolicies(callerClasspathPolicies());
+        return rc;
+    }
+
+    //! Returns the bytes of a real path for a policy check, or null if the file name encoding cannot represent it
+    static byte[] encodeRealPath(String path) {
+        return tryEncode(path);
+    }
+
     //! Captures the sandbox policy of the %Qore code that called into Java on the current thread
     /** Call it in the call from %Qore, before handing work to another thread; on a thread that runs a task with a
         policy (QoreSandbox.Policy.run(), ...), the policy of the task is captured.
@@ -351,9 +445,9 @@ public final class QoreSandbox {
     //! Checks a classpath for a compiler and returns the files to give it, with symbolic links resolved
     /** The classpath is resolved as for the \c add-classpath module command: each entry, the files that a wildcard
         selects, and the jars and directories that manifest \c Class-Path attributes name, and the policy is applied to
-        each.  For a directory, the policy is applied to the directory itself and not to the files below it; the Java
-        compiler checks those as it lists them for a restricted caller, but the class loader and the Kotlin compiler
-        do not (qore#7276).  A compiler that is
+        each.  For a directory, the policy is applied here to the directory itself; the files below it are checked
+        when they are used: by the Java compiler as it lists them, by the class loader for each lookup, and by the
+        Kotlin compiler, which is given a private copy of the allowed files (qore#7276).  A compiler that is
         given the returned files resolves the manifest entries of a jar where they were checked.  It resolves them as
         paths and not as URLs, so a jar whose manifest has an entry for which the two can differ is refused.  A file
         whose real name, after symbolic links are resolved, is not an archive name is refused as well, as its manifest
@@ -667,4 +761,13 @@ public final class QoreSandbox {
 
     //! Returns the JNI-SANDBOX-ERROR exception for a closed policy
     private static native RuntimeException closedError0();
+
+    //! Returns new references to the filesystem policies of the captured policy \a ptr, or of the current thread if 0
+    private static native long[] classpathManagers0(long ptr);
+
+    //! Returns true if the policy manager \a ptr alone allows reading \a path
+    private static native boolean checkClasspathRead0(long ptr, byte[] path);
+
+    //! Releases a reference returned by classpathManagers0()
+    private static native void releaseClasspathManager0(long ptr);
 }

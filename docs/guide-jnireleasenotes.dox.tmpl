@@ -6,6 +6,19 @@
 
     @section jni_3_0_0 jni Module Version 3.0.0
 
+    - <b>Security</b>: the filesystem policy of restricted code now applies to every class and resource lookup below a
+      classpath entry that it added, to the real path of each file, on any thread, also for a lookup that the JVM
+      makes with no %Qore caller.  A file that the policy denies behaves as a file that does not exist.  The Kotlin
+      compiler is given a private copy of the files that the policy allows below such a directory, and its scripting
+      plugin is off for a restricted caller.  Class loaders with no entry from restricted code, which includes trusted
+      code and sandboxes that restrict nothing, make no check.  A file replaced between its check and its use is not
+      covered.  These checks are defense in depth (qore#7276)
+    - <b>Behavior change</b> (qore#7276): a class or resource below a classpath directory of restricted code that its
+      policy denies is no longer found.  A Kotlin script of a restricted caller is refused while a directory that
+      restricted code added is on its classpath.  The \c global-* classpath commands are refused under a sandbox
+      filesystem policy, also one that allows uncontrolled APIs, and when trusted code issues them into a Program that
+      such a sandbox governs.  An entry that trusted code adds to the class loader of a sandboxed Program is a grant of
+      the host and is not checked
     - A child process created with \c fork() could wait forever when it ended, if another thread of the parent held
       one of the module's locks on the child's exit path or the global context Program at the time of the fork, as that
       thread does not exist in the child.  The module's cleanup in a child no longer waits for that state (qore#7192)
@@ -15,8 +28,7 @@
       loader from Java, are checked against the filesystem policy of a caller that one restricts, the locations that a
       compiler takes from them are the files that were checked, and the Java compiler loads no extensions from its
       classpath for such a caller.  The Java compiler checks each file that it finds below a directory of its
-      classpath; the class loader and the Kotlin compiler do not (qore#7276): do not put a directory that contains
-      content the policy denies on the classpath of restricted code.  The Kotlin compiler also uses the host's Qore and
+      classpath.  The Kotlin compiler also uses the host's Qore and
       Kotlin jars and the entries of parent class loaders.  A compiler that trusted code creates is not restricted
       when it is handed to restricted code, and a file that changes between its check and its use is not covered.
       These checks are defense in depth (qore#7195)

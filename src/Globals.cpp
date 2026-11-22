@@ -238,6 +238,7 @@ jmethodID Globals::methodResolvedClasspathIsWildcardMatch;
 jmethodID Globals::methodResolvedClasspathManifestReferrer;
 jmethodID Globals::methodResolvedClasspathGivenEntry;
 jmethodID Globals::methodResolvedClasspathRefusal;
+jmethodID Globals::methodResolvedClasspathBindPolicy;
 jmethodID Globals::methodQoreURLClassLoaderAddParentPath;
 jmethodID Globals::methodQoreURLClassLoaderLoadClass;
 jmethodID Globals::methodQoreURLClassLoaderLoadClassWithPtr;
@@ -3325,6 +3326,8 @@ static GlobalReference<jclass> getPrimitiveClass(Env& env, const char* wrapperNa
 #include "JavaClassQoreJavaApi.inc"
 #include "JavaClassQoreSandbox.inc"
 #include "JavaClassQoreSandbox_Policy.inc"
+#include "JavaClassQoreSandbox_ClasspathPolicy.inc"
+#include "JavaClassQoreClasspathGuard.inc"
 #include "JavaClassJavaCollectionTypes.inc"
 #include "JavaClassQoreRelativeTime.inc"
 #include "JavaClassJdbcColumnarBatch.inc"
@@ -3411,6 +3414,10 @@ static ucmap_t ucmap = {
     {"org.qore.jni.QoreSandbox", {java_org_qore_jni_QoreSandbox_class_len, java_org_qore_jni_QoreSandbox_class}},
     {"org.qore.jni.QoreSandbox$Policy", {java_org_qore_jni_QoreSandbox_Policy_class_len,
         java_org_qore_jni_QoreSandbox_Policy_class}},
+    {"org.qore.jni.QoreSandbox$ClasspathPolicy", {java_org_qore_jni_QoreSandbox_ClasspathPolicy_class_len,
+        java_org_qore_jni_QoreSandbox_ClasspathPolicy_class}},
+    {"org.qore.jni.QoreClasspathGuard", {java_org_qore_jni_QoreClasspathGuard_class_len,
+        java_org_qore_jni_QoreClasspathGuard_class}},
     {"org.qore.jni.QoreURLClassLoader", {java_org_qore_jni_QoreURLClassLoader_class_len, java_org_qore_jni_QoreURLClassLoader_class}},
     {"org.qore.jni.QoreURLClassLoader$1", {java_org_qore_jni_QoreURLClassLoader_1_class_len, java_org_qore_jni_QoreURLClassLoader_1_class}},
     {"org.qore.jni.QoreURLClassLoader$2", {java_org_qore_jni_QoreURLClassLoader_2_class_len, java_org_qore_jni_QoreURLClassLoader_2_class}},
@@ -4270,6 +4277,8 @@ void Globals::defineQoreURLClassLoader(Env& env) {
         "givenEntry", "(I)Ljava/lang/String;");
     methodResolvedClasspathRefusal = env.getMethod(classQoreURLClassLoaderResolvedClasspath, "refusal",
         "(I)Ljava/lang/String;");
+    methodResolvedClasspathBindPolicy = env.getMethod(classQoreURLClassLoaderResolvedClasspath, "bindPolicy",
+        "(J)V");
 
     // create our class loader to load module classes
     classQoreURLClassLoader = findDefineClass(env, "org.qore.jni.QoreURLClassLoader", nullptr,
@@ -4525,6 +4534,11 @@ bool Globals::init() {
         java_org_qore_jni_QoreSandbox_class_len).makeGlobal();
     findDefineClass(env, "org.qore.jni.QoreSandbox$Policy", nullptr, java_org_qore_jni_QoreSandbox_Policy_class,
         java_org_qore_jni_QoreSandbox_Policy_class_len);
+    // the policies bound to classpath entries, and the check of each lookup below them
+    findDefineClass(env, "org.qore.jni.QoreSandbox$ClasspathPolicy", nullptr,
+        java_org_qore_jni_QoreSandbox_ClasspathPolicy_class, java_org_qore_jni_QoreSandbox_ClasspathPolicy_class_len);
+    findDefineClass(env, "org.qore.jni.QoreClasspathGuard", nullptr, java_org_qore_jni_QoreClasspathGuard_class,
+        java_org_qore_jni_QoreClasspathGuard_class_len);
     jni_register_qore_sandbox_natives(env, classQoreSandbox);
     methodQoreSandboxResolveClasspath = env.getStaticMethod(classQoreSandbox, "resolveClasspath",
         "(Ljava/lang/String;IZ)Lorg/qore/jni/QoreURLClassLoader$ResolvedClasspath;");
@@ -5274,6 +5288,11 @@ void native_cleanup_dispatch(jlong ptr, jint kind) {
         case 4: {  // NativeCleanup.KIND_SANDBOX_POLICY
             // a QoreSandbox.Policy that was not closed
             jni_release_sandbox_policy(ptr);
+            break;
+        }
+        case 5: {  // NativeCleanup.KIND_CLASSPATH_POLICY
+            // the policy that is bound to classpath entries of a class loader
+            jni_release_classpath_policy(ptr);
             break;
         }
         default:

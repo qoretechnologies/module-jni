@@ -20,7 +20,8 @@ User documentation: `docs/guide-jni_use_java_in_qore.dox.tmpl`, section `jni_san
 
 The classes are embedded in the module like the other `org.qore.jni` classes (`generate_java()` in
 `CMakeLists.txt`) and listed in the module's class map, so user class loaders define the same classes.  No enum or
-anonymous class is used, so the only class files are `QoreSandbox` and `QoreSandbox$Policy`.
+anonymous class is used, so the class files are `QoreSandbox`, `QoreSandbox$Policy`, `QoreSandbox$ClasspathPolicy` and
+`QoreClasspathGuard`.
 
 ## Which policy a check applies
 
@@ -72,6 +73,36 @@ The host name is resolved also when no sandbox applies, so Java code has one cod
 `checkFileAccess0(ptr, path, mode)` validates `mode` (a non-empty subset of the `QSEC_*` bits; the Java constants
 are `static_assert`ed to match) and calls `QoreSandboxManager::checkFilesystemAccess()`, which canonicalizes the path
 (symbolic links included, also for paths that do not exist yet) as Qore's `File` and `Dir` operations do.
+
+## Classpath lookups (qore#7276)
+
+`QoreClasspathGuard` applies a filesystem policy to each class and resource lookup below a classpath entry.
+
+- **Binding.** A class loader has a guard only once restricted code has added an entry
+  (`addResolvedPath()` of a restricted `ResolvedClasspath`).  The policy travels with the resolved classpath: the Java
+  routes (`addPath()`, `addParentPath()`, `addPathOrig()`, `addWildcard()`, a subclass's `addURL()`) bind the managers
+  that a check by the caller applies (`QoreSandbox.boundClasspath()`, native `classpathManagers0()`), and the module
+  routes bind the manager that checked the classpath (`jni_check_classpath_policy()`, `jni_bind_classpath_policy()`).
+  A restricted classpath with no policy is refused, because **an entry with no policy means that trusted code added
+  it**: it is a grant of the host.  The `global-*` commands, which add no policy, are refused under a filesystem
+  policy.  Each path that a classpath reaches, also through a manifest, is recorded as the class loader's URLs name it.
+- **Lookup.** `findClass()`, `findResource()` and `findResources()`, and the methods that called `super.findClass()`
+  directly, enumerate the matches and take the first that `allows()`: the file's real path must pass every policy of
+  the nearest recorded entry.  A denied file is skipped, so a later entry can provide it, and a denial and a missing
+  file have the same outcome.  A URL in no known entry is refused.
+- **Whose policy.** Only the captured manager is consulted (`checkClasspathRead0()`), never the thread's caller, so the
+  result does not depend on the thread and a stricter thread cannot affect another lookup.
+- **No decision cache.** A `SandboxManager` can be changed at any time and has no change indicator, so a cached answer
+  could outlive the rule it came from.  The policy is read for every lookup.
+- **Fast path.** With no guard (trusted code, sandboxes that restrict nothing) a lookup is the plain JDK lookup plus one
+  volatile read.
+- **Kotlin.** The compiler reads directories itself, so a restricted compile gets a private copy of the allowed class
+  and `.kotlin_module` files of each guarded directory (`QoreClasspathGuard.compilerLocation()`), bounded in files,
+  bytes and depth, inside the compiler's temporary directory, which every path removes.  The default scripting plugin
+  is disabled for a restricted compile, as it discovers script definitions on the classpath and runs their code.  The
+  JSR-223 script engine takes its classpath from the class loaders and cannot be filtered, so a script of a restricted
+  caller is refused while a guarded directory is on its classpath.
+- **Limit.** A check precedes the open, so a file replaced in between is not covered.
 
 ## Strings
 
@@ -223,7 +254,8 @@ and parse options (`src/jni-module.cpp`); before module API 2.3 they are the onl
   `kotlin-eval` (runs code) are refused (`JNI-SANDBOX-ERROR`) in a Program with
   `PO_NO_UNCONTROLLED_APIS` and to any governing sandbox that does not allow uncontrolled APIs
   (`jni_sandbox_restricts_caller(QoreSandboxManagerHelper::All)`, so a policy barrier or a system-policy capability
-  cannot use them either)
+  cannot use them either); the `global-*` classpath commands are also refused when the governing policy restricts the
+  filesystem, as an entry of the shared classpath carries no policy (qore#7276)
 - `jni_check_define_class_restricted()`: `define-class` and `define-pending-class` are refused in a Program with
   `PO_NO_UNCONTROLLED_APIS`, because defining a class runs its static initializer; `define-class` refuses a governing
   sandbox that does not allow uncontrolled APIs (`jni_sandbox_restricts_caller(QoreSandboxManagerHelper::All)`) a

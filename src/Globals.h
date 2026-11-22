@@ -236,6 +236,7 @@ public:
     DLLLOCAL static jmethodID methodResolvedClasspathManifestReferrer;            // String ResolvedClasspath.manifestReferrer(int)
     DLLLOCAL static jmethodID methodResolvedClasspathGivenEntry;                  // String ResolvedClasspath.givenEntry(int)
     DLLLOCAL static jmethodID methodResolvedClasspathRefusal;                     // String ResolvedClasspath.refusal(int)
+    DLLLOCAL static jmethodID methodResolvedClasspathBindPolicy;                  // void ResolvedClasspath.bindPolicy(long)
     DLLLOCAL static jmethodID methodQoreURLClassLoaderAddParentPath;              // void QoreURLClassLoader.addParentPath(String)
     DLLLOCAL static jmethodID methodQoreURLClassLoaderLoadClass;                  // Class QoreURLClassLoader.loadClass(String)
     DLLLOCAL static jmethodID methodQoreURLClassLoaderLoadClassWithPtr;           // Class QoreURLClassLoader.loadClassWithPtr(String, long)

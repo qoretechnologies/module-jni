@@ -323,10 +323,21 @@ class Outer {
       <tt>QoreSandbox.restrictsFilesystem()</tt> whether a filesystem policy restricts it
     - <tt>QoreSandbox.checkCompilerClasspath(classpath)</tt> checks each entry of a classpath, the files that a wildcard
       selects and the entries that manifests name, as for the \c add-classpath module command, and returns the files
-      to give a compiler.  For a directory, the directory itself is checked and not the files below it: the Java
-      compiler checks those as it lists them for a restricted caller; the class loader and the Kotlin compiler do not
-      (qore#7276).  <b>Operator rule:</b> do not put a directory that contains content the policy denies on the
-      classpath of restricted code
+      to give a compiler.  For a directory, the directory itself is checked here; the files below it are checked when
+      they are used (see below)
+
+    <b>Classpath lookups:</b> every class and resource lookup below a classpath entry that restricted code added applies
+    the filesystem policy of that code to the real path of the file, with symbolic links resolved, on any thread.  The
+    policy is captured with the entry when it is added, so the result does not depend on the thread that makes the
+    lookup, and a lookup that the JVM makes with no %Qore caller is checked in the same way.  A file that the policy
+    denies, or that cannot be checked, behaves as a file that does not exist, and the following entries are still
+    searched.  The policy is read for each lookup, so a change to it applies to the next lookup; a class that has
+    already been loaded stays loaded.  A class loader to which no restricted code has added an entry makes no check.
+    A path is checked before it is opened, so a file that is replaced between the check and its use is not covered.
+
+    <b>Operator rule:</b> an entry that trusted code adds to the class loader of a sandboxed Program with the class
+    loader's Java API, or to the classpath that every Program shares, is a grant of the host: the sandboxed Program can
+    load everything below it, whatever its policy says.  Add only what the Program may read.
 
     <b>Compilers:</b> the Kotlin compiler validates the source and class names that it is given as Java binary names,
     keeps the files that it makes for them in its private temporary directory, and validates the names of the classes
@@ -334,9 +345,13 @@ class Outer {
     filesystem policy restricts, Java compiler options that name no file are accepted, a classpath and an output
     directory are checked against the policy and the compiler is given the files that were checked, annotation
     processing and the Java compiler's extensions from the classpath are turned off, and any other option is refused;
-    use the \c add-classpath module command to add to the classpath.  The Kotlin compiler also uses the host's %Qore
-    and Kotlin jars and the entries of parent class loaders; this does not establish that it discovers no extensions
-    on the classpath of restricted code (qore#7276).  A compiler applies these rules to the caller that creates it: a
+    use the \c add-classpath module command to add to the classpath.  For such a caller, the Kotlin compiler is given a
+    private copy of the class files and Kotlin module files that the policy allows below each classpath directory that
+    restricted code added, within fixed limits on the number and size of the files, and its scripting plugin, which
+    discovers script definitions on the classpath and runs their code, is turned off.  The Kotlin compiler also uses
+    the host's %Qore and Kotlin jars and the entries that trusted code added.  A Kotlin script (\c kotlin_eval()) of such
+    a caller is refused while a directory that restricted code added is on its classpath, as the script compiler reads
+    the files below it itself; use jars for that classpath.  A compiler applies these rules to the caller that creates it: a
     compiler that trusted code creates keeps the options and classpath that it was given and does not check the files
     below its classpath directories, also when restricted code uses it, so do not hand one to restricted code.  A
     path is checked before it is opened, so a file that changes between the check and its use is not covered.  A
@@ -542,8 +557,8 @@ public class Fetcher {
       and it has been verified for JDK feature version 25; on any other JDK version, a classpath with a jar that has a
       manifest \c Class-Path attribute is refused with \c JNI-CLASSPATH-ERROR, naming the reason, while a classpath
       whose jars have no \c Class-Path attribute is checked and added as usual.  A denial refuses the whole classpath:
-      nothing of it is added.  The files that the class loader reads under a directory entry are not checked one by
-      one, and the files are checked when the classpath is added, not again when the class loader opens them
+      nothing of it is added.  The policy is bound to the entries that are added, and applies to each file that the
+      class loader then finds below them (see @ref jni_sandbox "Sandboxing Java I/O")
     - the commands that change state of the JVM that every Program shares (\c global-add-classpath,
       \c global-add-relative-classpath, \c set-property, \c register-shared-class, \c set-java-thread-policy) or
       that run Java code
@@ -551,7 +566,10 @@ public class Fetcher {
       a policy barrier or a system-policy capability, and in a Program with \c PO_NO_UNCONTROLLED_APIS, where the
       module's Java classes are not available
       either; so a sandboxed Program cannot make trusted Programs load its classes, or change how the JVM connects
-      for them (ex: \c http.proxyHost, \c javax.net.ssl.trustStore)
+      for them (ex: \c http.proxyHost, \c javax.net.ssl.trustStore).  The \c global-* classpath commands also raise
+      \c JNI-SANDBOX-ERROR under a sandbox filesystem policy, including when that sandbox allows uncontrolled APIs and
+      when trusted code issues the command into a Program that such a sandbox governs: an entry of the shared
+      classpath carries no policy; a trusted host issues these commands in a Program of its own
     - \c define-class and \c define-pending-class raise \c JNI-SANDBOX-ERROR in a Program with
       \c PO_NO_UNCONTROLLED_APIS, as defining a class runs its static initializer, and a Program under a sandbox that
       does not allow uncontrolled APIs defines a class only in its own class loader: a class that belongs to another

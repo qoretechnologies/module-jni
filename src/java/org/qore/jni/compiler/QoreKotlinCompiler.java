@@ -172,12 +172,24 @@ public class QoreKotlinCompiler implements AutoCloseable {
             // compiled the identical source: QoreJavaCompiler reads
             // `loader.getURLs()` - the parent - when it populates the file
             // manager's CLASS_PATH.
+            int loaderIndex = 0;
             for (ClassLoader cl = classLoader; cl != null; cl = cl.getParent()) {
                 if (restricted) {
-                    // only the files that a class loader of the module has checked, as they were checked; the
-                    // compiler's classpath is one string, so an entry cannot contain its separator
+                    // only the files that a class loader of the module has checked, as they were checked, with a
+                    // private copy of the files that the policy of an entry of restricted code allows below a
+                    // directory; removed with the temporary directory; the compiler's classpath is one string, so an
+                    // entry cannot contain its separator
                     if (cl instanceof QoreURLClassLoader) {
-                        for (File location : ((QoreURLClassLoader) cl).getCompilerLocations()) {
+                        QoreURLClassLoader qcl = (QoreURLClassLoader) cl;
+                        // checked for the entries themselves: the path of a private copy has no separator
+                        for (File location : qcl.getCompilerLocations()) {
+                            if (location.getPath().indexOf(File.pathSeparatorChar) >= 0) {
+                                throw new QoreKotlinCompilerException("a classpath entry contains the path separator, "
+                                    + "so it cannot be given to the compiler", java.util.Collections.emptyList());
+                            }
+                        }
+                        for (File location : qcl.getCheckedCompilerLocations(
+                                tempDir.resolve("classpath-" + loaderIndex++))) {
                             if (location.getPath().indexOf(File.pathSeparatorChar) >= 0) {
                                 throw new QoreKotlinCompilerException("a classpath entry contains the path separator, "
                                     + "so it cannot be given to the compiler", java.util.Collections.emptyList());
@@ -235,6 +247,10 @@ public class QoreKotlinCompiler implements AutoCloseable {
             args.setJvmTarget("21");
             args.setNoStdlib(false);
             args.setNoReflect(true);
+            if (restricted) {
+                // the scripting plugin discovers script definitions on the classpath and runs their code
+                args.setDisableDefaultScriptingPlugin(true);
+            }
 
             // Add any custom options
             // Note: K2JVMCompilerArguments doesn't have a direct way to add arbitrary options
