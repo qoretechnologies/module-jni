@@ -140,6 +140,23 @@ test-ubuntu:
       - qualification/
     expire_in: 7 days
 
+# The JDK of the Debian packages and of the RPMs below Fedora 44; the images have JDK 25.  This job does not report to
+# the module-jni GitHub status: the jobs share that context and the last one to report wins, so it fails the pipeline
+# only.
+test-ubuntu-jdk21:
+  stage: test
+  needs: [{job: tree-already-tested, optional: true}]
+  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop
+  before_script:
+    - . test/docker_test/tree-tested-skip.sh
+  script:
+    - test/docker_test/test-ubuntu-jdk21.sh
+  artifacts:
+    when: always
+    paths:
+      - qualification/
+    expire_in: 7 days
+
 test-alpine:
   stage: test
   needs: [{job: tree-already-tested, optional: true}]
