@@ -2053,14 +2053,14 @@ public class QoreURLClassLoader extends URLClassLoader {
             return encoded.get(i);
         }
 
-        //! Returns true if the classpath adds a regular file whose manifest was not checked
+        //! Returns true if the classpath adds a file that is not a directory and whose manifest was not checked
         /** The class loader does not open such a file as an archive, but a compiler can; a file that a wildcard
             selected through a link with an archive name was opened as a jar, and its manifest was checked
         */
         boolean hasUnexpandedFile() {
             for (int i = 0; i < files.size(); ++i) {
                 File f = files.get(i);
-                if (f != null && jarUrls.get(i) == null && Files.isRegularFile(f.toPath())) {
+                if (f != null && jarUrls.get(i) == null && !Files.isDirectory(f.toPath())) {
                     return true;
                 }
             }
@@ -2376,7 +2376,8 @@ public class QoreURLClassLoader extends URLClassLoader {
                     rc.add(fileentry, null, false, null);
                 } else if (Files.isRegularFile(real.toPath()) && isLoadable(real.getName())) {
                     rc.addJar(real, false);
-                } else if (isLoadable(real.getName()) && isSpecialFile(real)) {
+                } else if (isSpecialFile(real)) {
+                    // whatever its name or the name of a link to it: it is not opened
                     rc.refuseSpecial(real, null);
                 } else {
                     rc.add(real, real, false, null);

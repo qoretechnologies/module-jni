@@ -33,7 +33,8 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 
     A denied network destination raises \c NETWORK-ACCESS-DENIED, and a denied path \c FILESYSTEM-ACCESS-DENIED, as
     a QoreExceptionWrapper (a \c RuntimeException) that becomes the original %Qore exception when it reaches %Qore
-    code.  Code that is not sandboxed passes every check.
+    code.  The policy allows code that is not sandboxed, though a check still raises \c JNI-SANDBOX-ERROR for invalid
+    arguments and on a thread whose policy cannot be determined.
 
     <b>Java threads</b>
 
@@ -373,8 +374,9 @@ public final class QoreSandbox {
                 + "differently from the sandbox filesystem policy check");
         }
         if (rc.hasUnexpandedFile()) {
-            throw argumentError0("a file of the classpath is not named as a .jar or .zip archive, so a compiler could "
-                + "open it as one without its manifest being checked against the sandbox filesystem policy");
+            throw argumentError0("a file of the classpath does not have a .jar or .zip name once symbolic links are "
+                + "resolved, so a compiler could open it as an archive without its manifest being checked against "
+                + "the sandbox filesystem policy");
         }
         return rc.addedFiles();
     }

@@ -221,6 +221,8 @@ hash<auto> sub kotlin_compile(hash<auto> sources, *hash<auto> injected, *softlis
         addTestCase("the Java compiler checks the files below a directory", \directoryFilesTest());
         addTestCase("a manifest entry with the form of a directory", \manifestDirectoryFormTest());
         addTestCase("a wildcard link to an archive with another name", \wildcardLinkedArchiveTest());
+        addTestCase("a special file on a classpath, whatever its name", \specialFileTest());
+        addTestCase("an allowed output directory gets no file", \outputDirectoryTest());
 
         start_dir = getcwd();
         # absolute, as the current directory changes
@@ -640,7 +642,51 @@ public class %s extends AbstractProcessor {
         hash<auto> rv = p.callFunction("java_compile", ("-cp", dir + "/classes.dat"), user,
             sprintf("public class %s { }", user));
         assertFalse(rv.ok);
-        assertRegex("not named as a .jar or .zip archive", rv.desc);
+        assertRegex("does not have a .jar or .zip name", rv.desc);
+
+        # the same for a link with an archive name to such a file
+        symlink("classes.dat", dir + "/linked.jar");
+        user = getName("NonArchiveUser");
+        rv = getProgram(False, dir).callFunction("java_compile", ("-cp", dir + "/linked.jar"), user,
+            sprintf("public class %s { }", user));
+        assertFalse(rv.ok);
+        assertRegex("does not have a .jar or .zip name", rv.desc);
+    }
+
+    specialFileTest() {
+        string dir = realpath(scratch) + "/special-names";
+        mkdir(dir, 0700);
+        # never opened: each form is refused before anything could block on it
+        mkfifo(dir + "/entry.data");
+        symlink("entry.data", dir + "/linked.jar");
+        foreach string entry in ("entry.data", "linked.jar") {
+            string path = dir + "/" + entry;
+            string user = getName("SpecialNameUser");
+            hash<auto> rv = getProgram(False, dir).callFunction("java_compile", ("-cp", path), user,
+                sprintf("public class %s { }", user));
+            assertFalse(rv.ok, entry);
+            assertRegex("not a regular file", rv.desc, entry);
+            rv = getProgram(False, dir).callFunction("module_add_classpath", path);
+            assertFalse(rv.ok, entry);
+            assertEq("JNI-CLASSPATH-ERROR", rv.err, entry);
+            assertRegex("not a regular file", rv.desc, entry);
+        }
+    }
+
+    outputDirectoryTest() {
+        string root = realpath(scratch) + "/output-directories";
+        string dir = root + "/allowed";
+        mkdir(root, 0700);
+        mkdir(dir, 0700);
+        # classes stay in memory: a directory that the policy allows gets no file, and nothing appears beside it
+        foreach string opt in ("-h", "-s") {
+            hash<auto> rv = compileJava(getProgram(False, dir, NOTHING, True, NOTHING,
+                QSEC_READ | QSEC_WRITE | QSEC_CREATE), (opt, dir));
+            assertTrue(rv.ok, opt + ": " + rv.desc);
+            assertEq("", trim(backquote(sprintf("find %s -mindepth 1 ! -path %s", shellQuote(root), shellQuote(dir)))),
+                opt);
+            assertEq((), glob(dir + "/*") ?? (), opt);
+        }
     }
 
     unresolvedWildcardTest() {
@@ -757,6 +803,18 @@ public class %s extends AbstractProcessor {
             sprintf("public class %s { }", user));
         assertFalse(rv.ok);
         assertRegex("manifest Class-Path entry", rv.desc);
+
+        # the same in the manifest of a jar that another manifest names, and for a link to a file
+        ClassLoaderAccessProbe::writeJar(dir + "/nested-form.jar", "file-form.jar", NOTHING, NOTHING);
+        symlink("named.jar", dir + "/named-link");
+        ClassLoaderAccessProbe::writeJar(dir + "/link-form.jar", "named-link/", NOTHING, NOTHING);
+        foreach string jar in ("nested-form.jar", "link-form.jar") {
+            user = getName("DirectoryFormUser");
+            rv = getProgram(False, dir).callFunction("java_compile", ("-cp", dir + "/" + jar), user,
+                sprintf("public class %s { }", user));
+            assertFalse(rv.ok, jar);
+            assertRegex("manifest Class-Path entry", rv.desc, jar);
+        }
 
         # an entry that names a directory is followed
         ClassLoaderAccessProbe::writeJar(dir + "/dir-form.jar", "classes/", NOTHING, NOTHING);
@@ -1027,9 +1085,10 @@ public class %s extends AbstractProcessor {
         @param open if the sandbox allows all filesystem access
         @param sandboxed if the Program has a sandbox
         @param denied_path a path that the filesystem policy denies
+        @param allowed_mode the access that the policy allows to \a allowed_path
     */
     private Program getProgram(bool kotlin, *string allowed_path, *bool open, bool sandboxed = True,
-            *string denied_path) {
+            *string denied_path, int allowed_mode = QSEC_READ) {
         Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
         p.loadModule("jni");
         string src = ProgramSource;
@@ -1045,7 +1104,7 @@ public class %s extends AbstractProcessor {
             sm.setUncontrolledApiPolicy(True);
             sm.setFilesystemDefaultPolicy(open ?? False);
             if (allowed_path) {
-                sm.addFilesystemAllowedPath(allowed_path, QSEC_READ);
+                sm.addFilesystemAllowedPath(allowed_path, allowed_mode);
             }
             if (denied_path) {
                 sm.addFilesystemDeniedPath(denied_path);
