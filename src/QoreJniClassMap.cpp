@@ -4894,9 +4894,9 @@ std::mutex& jni_dbg_program_registry_lock() {
 }
 #endif
 
-// The registry is not used in a child process created with fork(): a thread of the parent can have held its lock, or
-// been changing it, at the fork.  No Program can be reached from Java there, so a lookup finds no jni data, and the data
-// of a Program is destroyed without being removed from it.
+// The registry is not used at all in a child process created with fork(), by any of the child's threads: a thread of the
+// parent can have held its lock, or been changing it, at the fork.  No Program can be reached from Java there, so a
+// lookup finds no jni data, and the data of a Program is destroyed without being removed from it.
 static void jni_pgm_data_register(const QoreProgram* pgm, JniExternalProgramData* jpc) {
     if (Jvm::isForkedChild()) {
         return;
@@ -5909,6 +5909,11 @@ bool JniExternalProgramData::isInjectedModule(const char* mod) const {
 // count of JniExternalProgramData destructions since last GC hint
 static std::atomic<int> jni_pgm_deref_count{0};
 
+QoreThreadLock& JniExternalProgramData::saveObjectCallbackLock() {
+    static QoreThreadLock* lock = new QoreThreadLock;
+    return *lock;
+}
+
 void JniExternalProgramData::doDeref() {
     // no C++ exception may leave this function (qore#6773): AbstractQoreProgramExternalData::doDeref() has no
     // exception sink and does not document that it may throw; the teardown of the Program catches an
@@ -5925,7 +5930,7 @@ void JniExternalProgramData::doDeref() {
     while (true) {
         ResolvedCallReferenceNode* callback;
         {
-            SaveObjectCallbackLocker al(save_object_callback_lock);
+            AutoLocker al(saveObjectCallbackLock());
             callback = save_object_callback;
             save_object_callback = nullptr;
         }

@@ -5528,6 +5528,11 @@ jlong Globals::getContextProgram(jobject new_syscl, bool& created) {
 }
 
 QoreProgram* Globals::createJavaContextProgram() {
+    // no Program can be created in a child process created with fork(), as the JVM cannot be used there, and a thread
+    // of the parent can have held the lock
+    if (jni::Jvm::isForkedChild()) {
+        return context_pgm.load(std::memory_order_acquire);
+    }
     std::lock_guard<std::recursive_mutex> guard(getContextLock());
     if (!qph) {
         // the global context Program is deleted when the module's shutdown starts (clearGlobalContext()), and a
@@ -5738,7 +5743,8 @@ void Globals::dbgReleaseContextHold() {
 #endif
 
 void Globals::clearGlobalContextInForkedChild() {
-    // only this thread exists: no lock is needed, and one that a thread of the parent held is never released
+    // called when the module is deleted, after qore_cleanup() has waited for the child's Qore threads, so no lock is
+    // needed; one that a thread of the parent held is never released
     jni_shutting_down.store(true, std::memory_order_seq_cst);
     context_pgm.store(nullptr, std::memory_order_seq_cst);
     std::unique_ptr<QoreProgramHelper> old = std::move(qph);
@@ -5796,7 +5802,8 @@ void Globals::clearGlobalContext() {
 
 void Globals::abandonGlobalContext() {
     // in a child process created with fork(), the lock can be held by a thread of the parent, which does not exist
-    // there; only the forking thread runs, and the Program is only forgotten
+    // there; this runs in the exit handler, which exit() runs only when no other Qore thread is left, and the Program is
+    // only forgotten
     std::unique_lock<std::recursive_mutex> guard(getContextLock(), std::defer_lock);
     if (jni::Jvm::isForkedChild()) {
         if (qph) {

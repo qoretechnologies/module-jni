@@ -29,6 +29,7 @@
 #include "Env.h"
 #include "Class.h"
 #include "JniQoreClass.h"
+#include "ql_jni_debug.h"
 
 #include <atomic>
 #include <set>
@@ -172,31 +173,6 @@ public:
     marks \c m as held, so if any path ever holds \c m across a module load again, libqore asserts on
     the lock-order inversion in debug builds instead of deadlocking in the field.
 */
-//! Holds the save object callback lock of a Program's jni data
-/** Takes no lock in a child process created with fork(): only the forking thread exists there, and a thread of the
-    parent can have held the lock, which is then never released
-*/
-class SaveObjectCallbackLocker {
-public:
-    DLLLOCAL explicit SaveObjectCallbackLocker(QoreThreadLock& lock) : lock(Jvm::isForkedChild() ? nullptr : &lock) {
-        if (this->lock) {
-            this->lock->lock();
-        }
-    }
-
-    DLLLOCAL ~SaveObjectCallbackLocker() {
-        if (lock) {
-            lock->unlock();
-        }
-    }
-
-    SaveObjectCallbackLocker(const SaveObjectCallbackLocker&) = delete;
-    SaveObjectCallbackLocker& operator=(const SaveObjectCallbackLocker&) = delete;
-
-private:
-    QoreThreadLock* lock;
-};
-
 class JniClassMapLocker {
 public:
     DLLLOCAL JniClassMapLocker();
@@ -649,6 +625,15 @@ public:
         if the old callback is running (see getSaveObjectCallbackRef()), its last reference is released, and such an
         exception is raised, by save_object() when it returns
     */
+    //! Returns the lock of the save object callbacks of all Programs
+    /** Held only to swap a callback or take a reference to it.  One process-wide lock, so that the module's fork handler
+        can initialize it again in a child process created with fork(): a thread of the parent can have held it, while
+        the threads that the child starts must still exclude each other.  Never destroyed, as a Program's data can be
+        destroyed during the process's static destruction; created by Jvm::registerForkHandler(), as the fork handler
+        cannot allocate memory
+    */
+    DLLLOCAL static QoreThreadLock& saveObjectCallbackLock();
+
     DLLLOCAL void setSaveObjectCallback(const ResolvedCallReferenceNode* save_object_callback, ExceptionSink* xsink) {
         ResolvedCallReferenceNode* new_callback = save_object_callback ? save_object_callback->refRefSelf()
             : nullptr;
@@ -656,8 +641,13 @@ public:
         // the member is swapped under the lock (qore#6790); the old callback is released after the lock is released,
         // as its release can run Qore code, which could set the callback again
         {
-            SaveObjectCallbackLocker al(save_object_callback_lock);
+            AutoLocker al(saveObjectCallbackLock());
             old = this->save_object_callback;
+#ifdef DEBUG
+            if (dbg_jni_save_object_gate_set.load(std::memory_order_acquire)) {
+                dbg_jni_run_save_object_gate();
+            }
+#endif
             this->save_object_callback = new_callback;
         }
         if (old) {
@@ -672,7 +662,7 @@ public:
         itself (qore#6790)
     */
     DLLLOCAL ResolvedCallReferenceNode* getSaveObjectCallbackRef() const {
-        SaveObjectCallbackLocker al(save_object_callback_lock);
+        AutoLocker al(saveObjectCallbackLock());
         return save_object_callback ? save_object_callback->refRefSelf() : nullptr;
     }
 
@@ -701,7 +691,7 @@ public:
 
     //! Returns the save object callback lock, for a debug hold (see Globals::dbgHoldContext())
     DLLLOCAL QoreThreadLock& dbgSaveObjectLock() {
-        return save_object_callback_lock;
+        return saveObjectCallbackLock();
     }
 #endif
 
@@ -794,7 +784,6 @@ protected:
     // call reference for saving object references; save_object_callback_lock must be held when accessing it
     ResolvedCallReferenceNode* save_object_callback = nullptr;
     // protects save_object_callback; only held to read, reference, or swap the pointer, never while Qore code runs
-    mutable QoreThreadLock save_object_callback_lock;
 
     // QoreJavaDynamicApi.newInstance()
     jmethodID methodQoreJavaDynamicApiNewInstance = 0;

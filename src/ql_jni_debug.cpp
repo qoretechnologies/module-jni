@@ -33,12 +33,14 @@
 #include "defs.h"
 #include "Env.h"
 #include "QoreToJava.h"
+#include "QoreJniClassMap.h"
 
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <cerrno>
 
 #include <atomic>
+#include <condition_variable>
 #include <map>
 #include <mutex>
 #include <new>
@@ -786,6 +788,86 @@ static QoreValue f_dbg_jni_wait_child_status(const QoreListNode* args, RuntimeCo
     return rv;
 }
 
+//! Counts a hold of the global context Program on the calling thread
+static QoreValue f_dbg_jni_hold_own_context_program(const QoreListNode* args, RuntimeConfig& rtcfg,
+        ExceptionSink* xsink) {
+    jni::Globals::dbgHoldContextProgramOnThisThread();
+    return QoreValue();
+}
+
+//! Releases the hold of dbg_jni_hold_own_context_program()
+static QoreValue f_dbg_jni_release_own_context_program(const QoreListNode* args, RuntimeConfig& rtcfg,
+        ExceptionSink* xsink) {
+    jni::Globals::dbgReleaseContextProgramOnThisThread();
+    return QoreValue();
+}
+
+std::atomic<bool> dbg_jni_save_object_gate_set{false};
+
+namespace {
+//! the state of the gate of dbg_jni_run_save_object_gate()
+std::mutex save_object_gate_lock;
+std::condition_variable save_object_gate_cond;
+bool save_object_gate_entered = false;
+bool save_object_gate_released = false;
+}
+
+void dbg_jni_run_save_object_gate() {
+    std::unique_lock<std::mutex> lock(save_object_gate_lock);
+    if (!dbg_jni_save_object_gate_set.exchange(false, std::memory_order_acq_rel)) {
+        return;
+    }
+    save_object_gate_entered = true;
+    save_object_gate_cond.notify_all();
+    save_object_gate_cond.wait(lock, [] () { return save_object_gate_released; });
+}
+
+//! Arms the gate for the next change of a save object callback
+static QoreValue f_dbg_jni_arm_save_object_gate(const QoreListNode* args, RuntimeConfig& rtcfg, ExceptionSink* xsink) {
+    std::lock_guard<std::mutex> lock(save_object_gate_lock);
+    save_object_gate_entered = false;
+    save_object_gate_released = false;
+    dbg_jni_save_object_gate_set.store(true, std::memory_order_release);
+    return QoreValue();
+}
+
+//! Waits until a thread is held by the gate
+static QoreValue f_dbg_jni_wait_save_object_gate(const QoreListNode* args, RuntimeConfig& rtcfg, ExceptionSink* xsink) {
+    std::unique_lock<std::mutex> lock(save_object_gate_lock);
+    save_object_gate_cond.wait(lock, [] () { return save_object_gate_entered; });
+    return QoreValue();
+}
+
+//! Releases the thread held by the gate
+static QoreValue f_dbg_jni_release_save_object_gate(const QoreListNode* args, RuntimeConfig& rtcfg,
+        ExceptionSink* xsink) {
+    std::lock_guard<std::mutex> lock(save_object_gate_lock);
+    save_object_gate_released = true;
+    save_object_gate_cond.notify_all();
+    return QoreValue();
+}
+
+//! Returns True if the save object callback lock of the calling Program's jni data is held
+static QoreValue f_dbg_jni_save_object_lock_held(const QoreListNode* args, RuntimeConfig& rtcfg,
+        ExceptionSink* xsink) {
+    jni::JniExternalProgramData* jpc = jni::jni_get_context();
+    if (!jpc) {
+        return xsink->raiseException("DBG-JNI-HOOK-ERROR", "the Program has no jni data");
+    }
+    QoreThreadLock& lock = jpc->dbgSaveObjectLock();
+    if (lock.trylock()) {
+        return true;
+    }
+    lock.unlock();
+    return false;
+}
+
+//! Returns the reference count of a call reference
+static QoreValue f_dbg_jni_code_reference_count(const QoreListNode* args, RuntimeConfig& rtcfg, ExceptionSink* xsink) {
+    const ResolvedCallReferenceNode* code = get_param_value(args, 0).get<const ResolvedCallReferenceNode>();
+    return static_cast<int64>(code->reference_count());
+}
+
 //! Ends the hold of dbg_jni_hold_context_lock() or dbg_jni_hold_context_program()
 static QoreValue f_dbg_jni_release_context_hold(const QoreListNode* args, RuntimeConfig& rtcfg,
         ExceptionSink* xsink) {
@@ -804,6 +886,20 @@ void init_jni_debug_functions(QoreNamespace& ns) {
         nothingTypeInfo);
     ns.addBuiltinVariant("dbg_jni_release_context_hold", f_dbg_jni_release_context_hold, QCF_NO_FLAGS, QDOM_DEFAULT,
         nothingTypeInfo);
+    ns.addBuiltinVariant("dbg_jni_hold_own_context_program", f_dbg_jni_hold_own_context_program, QCF_NO_FLAGS,
+        QDOM_DEFAULT, nothingTypeInfo);
+    ns.addBuiltinVariant("dbg_jni_release_own_context_program", f_dbg_jni_release_own_context_program, QCF_NO_FLAGS,
+        QDOM_DEFAULT, nothingTypeInfo);
+    ns.addBuiltinVariant("dbg_jni_arm_save_object_gate", f_dbg_jni_arm_save_object_gate, QCF_NO_FLAGS, QDOM_DEFAULT,
+        nothingTypeInfo);
+    ns.addBuiltinVariant("dbg_jni_wait_save_object_gate", f_dbg_jni_wait_save_object_gate, QCF_NO_FLAGS, QDOM_DEFAULT,
+        nothingTypeInfo);
+    ns.addBuiltinVariant("dbg_jni_release_save_object_gate", f_dbg_jni_release_save_object_gate, QCF_NO_FLAGS,
+        QDOM_DEFAULT, nothingTypeInfo);
+    ns.addBuiltinVariant("dbg_jni_save_object_lock_held", f_dbg_jni_save_object_lock_held, QCF_NO_FLAGS, QDOM_DEFAULT,
+        boolTypeInfo);
+    ns.addBuiltinVariant("dbg_jni_code_reference_count", f_dbg_jni_code_reference_count, QCF_NO_FLAGS, QDOM_DEFAULT,
+        bigIntTypeInfo, 1, codeTypeInfo, QoreValue(), "code");
     ns.addBuiltinVariant("dbg_jni_wait_child_status", f_dbg_jni_wait_child_status, QCF_NO_FLAGS, QDOM_DEFAULT,
         stringTypeInfo, 1, bigIntTypeInfo, QoreValue(), "pid");
     ns.addBuiltinVariant("dbg_jni_describe_throwable", f_dbg_jni_describe_throwable, QCF_NO_FLAGS, QDOM_DEFAULT,

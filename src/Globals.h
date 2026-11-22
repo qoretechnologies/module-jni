@@ -682,6 +682,16 @@ public:
     //! false if a hold is active or the calling Program has no jni data
     DLLLOCAL static bool dbgHoldContext(DbgContextHoldKind kind);
 
+    //! Counts a hold of the global context Program on the calling thread (debug builds only)
+    DLLLOCAL static void dbgHoldContextProgramOnThisThread() {
+        holdContextProgram();
+    }
+
+    //! Releases a hold of dbgHoldContextProgramOnThisThread() (debug builds only)
+    DLLLOCAL static void dbgReleaseContextProgramOnThisThread() {
+        releaseContextProgram();
+    }
+
     //! Writes a marker of the module's cleanup to stderr, if QORE_JNI_DBG_FORK_MARKERS is set (debug builds only)
     DLLLOCAL static void dbgContextMarker(const char* marker);
 
@@ -813,11 +823,12 @@ private:
     DLLLOCAL static int waitForContextHolders();
 
     //! clearGlobalContext() in a child process created with fork()
-    /** Only the forking thread exists in the child: a lock or a hold of the global context Program that another thread
-        of the parent had at the fork is never released, so the function waits for neither.  The Program is deleted
-        here, while the module's data exists: a Program left allocated would be cleared by qore_cleanup() after the
-        module has been deleted.  The library has made the Program's own locks and thread counts consistent in the
-        child.  Only a hold of the forking thread itself keeps the Program, as in any other process
+    /** A lock or a hold of the global context Program that another thread of the parent had at the fork is never
+        released, so the function waits for neither.  It needs no lock against the child's own threads, as the module is
+        deleted after qore_cleanup() has waited for them.  The Program is deleted here, while the module's data exists:
+        a Program left allocated would be cleared by qore_cleanup() after the module has been deleted.  The library has
+        made the Program's own locks and thread counts consistent in the child.  Only a hold of the calling thread
+        itself keeps the Program, as in any other process
     */
     DLLLOCAL static void clearGlobalContextInForkedChild();
 
