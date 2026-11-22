@@ -5,6 +5,7 @@
 
 %modern
 %no-child-restrictions
+%allow-injection
 %prepend-module-path "${SCRIPT_DIR}/../build"
 %requires QUnit
 %requires jni
@@ -26,6 +27,28 @@ class HandleTarget {
     string block() {
         NativeHandleProbe::blockInCall();
         return "done";
+    }
+}
+
+#! the class that a generated method is bound to in the injection tests
+class InjectTarget {
+    string value() {
+        return "target-value";
+    }
+
+    string other() {
+        return "target-other";
+    }
+}
+
+#! the class that is injected in place of InjectTarget
+class InjectMock {
+    string value() {
+        return "mock-value";
+    }
+
+    string other() {
+        return "mock-other";
     }
 }
 
@@ -67,11 +90,13 @@ public namespace NativeHandleTest {
     public namespace A {
         public class Same {
             int value(int arg) { return arg + 3; }
+            int other(int arg) { return arg + 4; }
         }
     }
     public namespace B {
         public class Same {
             int value(int arg) { return arg + 100; }
+            int other(int arg) { return arg + 200; }
         }
     }
 }
@@ -93,6 +118,70 @@ object sub make(string name) {
     return new NativeHandleTest::Unrelated();
 }
 ";
+
+        #! a class parsed separately, with the name and the signature of a class of the fixture
+        const NamesakeSource = "%modern
+public namespace NativeHandleTest {
+    public namespace A {
+        public class Same {
+            int value(int arg) { return arg + 1000; }
+            int other(int arg) { return arg + 2000; }
+        }
+    }
+}
+object sub make() {
+    return new NativeHandleTest::A::Same();
+}
+";
+
+        #! calls a method binding from the Program's own code
+        const CallerSource = "%modern
+%requires jni
+%module-cmd(jni) import org.qore.jni.test.NativeHandleProbe
+string sub call_binding(string name, object receiver, int binding, int arg) {
+    return NativeHandleProbe::callBinding(name, receiver, binding, arg);
+}
+";
+
+        #! the code of the Programs of the injection tests
+        const InjectSource = "%modern
+%requires jni
+%module-cmd(jni) import org.qore.jni.QoreURLClassLoader
+class InjectChild inherits InjectTarget {
+}
+binary sub bytes() {
+    return QoreURLClassLoader::getCurrent().generateByteCode(\"qore.InjectTarget\");
+}
+object sub make() {
+    return new InjectTarget();
+}
+object sub make_child() {
+    return new InjectChild();
+}
+";
+
+        const InjectHostSource = "%modern
+%requires jni
+%module-cmd(jni) import org.qore.jni.QoreURLClassLoader
+binary sub bytes() {
+    return QoreURLClassLoader::getCurrent().generateByteCode(\"qore.InjectTarget\");
+}
+";
+
+        const InjectNamesakeSource = "%modern
+class InjectTarget {
+    string value() {
+        return \"namesake-value\";
+    }
+
+    string other() {
+        return \"namesake-other\";
+    }
+}
+object sub make() {
+    return new InjectTarget();
+}
+";
     }
 
     constructor() : QUnit::Test("jni native handles", "1.0") {
@@ -111,6 +200,10 @@ object sub make(string name) {
         addTestCase("handles of the wrong kind", \wrongKindTest());
         addTestCase("policies and connection waiters", \policyWaiterTest());
         addTestCase("a method call on an object of another class", \mismatchedClassTest());
+        addTestCase("a method call on a same-named class", \namesakeReceiverTest());
+        addTestCase("a method call on a same-named class from sandboxed code", \sandboxedNamesakeTest());
+        addTestCase("a method call on an injected class", \injectedReceiverTest());
+        addTestCase("a method call on a receiver with a large hierarchy", \largeHierarchyReceiverTest());
         addTestCase("a null method name", \nullNameTest());
         addTestCase("a Java class that claims a Qore class", \claimedClassTest());
         addTestCase("a Java subclass with an ancestor's constructor", \ancestorConstructorTest());
@@ -319,9 +412,112 @@ object sub make(string name) {
         }
         # the right class still works
         assertEq("ok: 10", NativeHandleProbe::callBinding("value", f.calls, f.binding, 7));
-        # a class of the same name and shape in another namespace never runs the body of the method's class
         assertEq("ok: 10", NativeHandleProbe::callBinding("value", f.same_a, f.same_a_binding, 7));
-        assertEq("ok: 107", NativeHandleProbe::callBinding("value", f.same_b, f.same_a_binding, 7));
+    }
+
+    private assertNotInstance(string result, string label) {
+        assertTrue(result =~ /^exception: .*not an instance of the class/, sprintf("%s: %s", label, result));
+    }
+
+    namesakeReceiverTest() {
+        Program p(PO_NEW_STYLE);
+        hash<auto> f = bindingFixture(p);
+        # a class of the same name and signature in another namespace is another class
+        assertNotInstance(NativeHandleProbe::callBinding("value", f.same_b, f.same_a_binding, 7), "other namespace");
+        # the name that the caller gives does not select a method of it
+        assertNotInstance(NativeHandleProbe::callBinding("other", f.same_b, f.same_a_binding, 7),
+            "other namespace, another name");
+
+        # nor is a class of the same name and signature that was parsed separately
+        Program separate(PO_NEW_STYLE);
+        separate.parse(NamesakeSource, "native-handle-namesake");
+        object namesake = separate.callFunction("make");
+        assertNotInstance(NativeHandleProbe::callBinding("value", namesake, f.same_a_binding, 7), "other Program");
+        assertNotInstance(NativeHandleProbe::callBinding("other", namesake, f.same_a_binding, 7),
+            "other Program, another name");
+
+        # the objects are unaffected
+        assertEq(107, f.same_b.value(7));
+        assertEq(1007, namesake.value(7));
+    }
+
+    sandboxedNamesakeTest() {
+        Program p(PO_NEW_STYLE);
+        hash<auto> f = bindingFixture(p);
+        SandboxManager mgr();
+        mgr.setUncontrolledApiPolicy(True);
+        Program tenant(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        # the host gives the Program the test classes before the sandbox applies
+        tenant.loadModule("jni");
+        tenant.issueModuleCmd("jni", "add-classpath " + get_script_dir() + "/../build/qore-jni-test.jar");
+        tenant.setSandboxManager(mgr);
+        tenant.parse(CallerSource, "native-handle-sandboxed-caller");
+        foreach string name in ("value", "other") {
+            assertNotInstance(tenant.callFunction("call_binding", name, f.same_b, f.same_a_binding, 7),
+                "sandboxed caller, " + name);
+        }
+    }
+
+    injectedReceiverTest() {
+        Program injected(PO_NEW_STYLE | PO_ALLOW_INJECTION | PO_NO_CHILD_PO_RESTRICTIONS);
+        injected.importClass("InjectMock", "InjectTarget", True);
+        injected.parse(InjectSource, "native-handle-injected");
+        Program host(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        host.importClass("InjectTarget");
+        host.parse(InjectHostSource, "native-handle-inject-host");
+        int target = NativeHandleProbe::methodBinding(host.callFunction("bytes"), "value");
+
+        # the class that was injected for the method's class runs its own method
+        object mock = injected.callFunction("make");
+        assertEq("ok: mock-value", NativeHandleProbe::callBinding("value", mock, target));
+        # a class that derives from it
+        object child = injected.callFunction("make_child");
+        assertEq("ok: mock-value", NativeHandleProbe::callBinding("value", child, target));
+        # the method is the bound one, whatever name the caller gives
+        assertEq("ok: mock-value", NativeHandleProbe::callBinding("other", mock, target));
+
+        # the method's class was injected in place of the class of the receiver
+        int injected_method = NativeHandleProbe::methodBinding(injected.callFunction("bytes"), "value");
+        InjectTarget real();
+        assertEq("ok: target-value", NativeHandleProbe::callBinding("value", real, injected_method));
+        assertEq("ok: target-value", NativeHandleProbe::callBinding("other", real, injected_method));
+
+        # a class of the same name that no injection relates to the method's class
+        Program separate(PO_NEW_STYLE);
+        separate.parse(InjectNamesakeSource, "native-handle-inject-namesake");
+        object namesake = separate.callFunction("make");
+        assertNotInstance(NativeHandleProbe::callBinding("value", namesake, target), "namesake of the injected class");
+        assertNotInstance(NativeHandleProbe::callBinding("value", namesake, injected_method),
+            "namesake of the class replaced");
+    }
+
+    #! returns source for a chain of classes, or of diamonds, that ends in class Leaf
+    private string hierarchySource(int depth, bool diamonds) {
+        string src = "%modern\nclass C0 {\n    string value() { return \"leaf\"; }\n}\n";
+        int last = 0;
+        for (int i = 1; i <= depth; ++i) {
+            if (diamonds) {
+                src += sprintf("class L%d inherits C%d {}\nclass R%d inherits C%d {}\n"
+                    "class C%d inherits L%d, R%d {}\n", i, i - 1, i, i - 1, i, i, i);
+            } else {
+                src += sprintf("class C%d inherits C%d {}\n", i, i - 1);
+            }
+            last = i;
+        }
+        return src + sprintf("object sub make() { return new C%d(); }\n", last);
+    }
+
+    #! the check of a receiver is not limited by the depth or the shape of the receiver's hierarchy
+    largeHierarchyReceiverTest() {
+        Program p(PO_NEW_STYLE);
+        hash<auto> f = bindingFixture(p);
+        foreach hash<auto> c in ({"depth": 500, "diamonds": False}, {"depth": 40, "diamonds": True}) {
+            Program h(PO_NEW_STYLE);
+            h.parse(hierarchySource(c.depth, c.diamonds), "native-handle-hierarchy");
+            object receiver = h.callFunction("make");
+            assertNotInstance(NativeHandleProbe::callBinding("value", receiver, f.binding, 7),
+                sprintf("depth %d diamonds %y", c.depth, c.diamonds));
+        }
     }
 
     claimedClassTest() {

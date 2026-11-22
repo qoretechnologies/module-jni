@@ -62,6 +62,27 @@ struct JniHandleTraits<Dispatcher> {
     static constexpr JniHandleKind kind = JniHandleKind::InvocationHandler;
 };
 
+//! Reports the errors of releasing a dispatcher to the caller if this thread drops the last reference to it
+/** Whichever thread drops the last reference destroys the dispatcher.  While this object exists, a destruction of the
+    given dispatcher on this thread reports to the given sink.  A destruction outside of this scope, when a call that
+    was in progress holds the last reference, discards its errors.
+*/
+class DispatcherReleaseScope {
+public:
+    DLLLOCAL DispatcherReleaseScope(const Dispatcher* dispatcher, ExceptionSink& xsink) noexcept;
+    DLLLOCAL ~DispatcherReleaseScope();
+
+    //! Returns the sink for the destruction of the dispatcher on this thread, or nullptr
+    DLLLOCAL static ExceptionSink* sinkFor(const Dispatcher* dispatcher) noexcept;
+
+    DispatcherReleaseScope(const DispatcherReleaseScope&) = delete;
+    DispatcherReleaseScope& operator=(const DispatcherReleaseScope&) = delete;
+
+private:
+    const Dispatcher* prev_dispatcher;
+    ExceptionSink* prev_sink;
+};
+
 /**
  * \brief An implementation of Dispatcher that delegates the dispatch() call to a Qore function.
  */

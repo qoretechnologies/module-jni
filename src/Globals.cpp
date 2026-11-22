@@ -820,14 +820,23 @@ static void JNICALL invocation_handler_finalize(JNIEnv* jenv, jclass, jlong ptr)
     if (!dispatcher) {
         throw JniInvalidHandle();
     }
-    // a call in progress holds the dispatcher: the last reference releases it when the call returns
-    if (dispatcher.use_count() > 1) {
+    // the thread is attached before the exception sink is created, so that an error of the release is handled while
+    // the thread has a Qore thread state
+    QoreThreadAttachHelper attach_helper;
+    try {
+        attach_helper.attach();
+    } catch (Exception& e) {
+        jni_throw_runtime_exception(jenv, "Unable to attach thread to Qore");
         return;
     }
     ExceptionSink xsink;
     try {
-        dispatcher->destroy(xsink);
-        dispatcher.reset();
+        // a call in progress holds the dispatcher, and the last reference destroys it: its errors are reported here
+        // if that is this one
+        {
+            DispatcherReleaseScope release_scope(dispatcher.get(), xsink);
+            dispatcher.reset();
+        }
         if (xsink) {
             Env env(jenv);
             QoreToJava::wrapException(env, xsink);
@@ -1595,8 +1604,9 @@ static jboolean JNICALL qore_object_instance_of(JNIEnv* jenv, jclass, jlong ptr,
 static jobject qore_object_closure_call_internal(JNIEnv* jenv, jclass, QoreProgram* pgm,
         const JniObjectHandle* object_handle, const JniClosureHandle* closure_handle, jboolean save,
         jstring mname, jobjectArray args, const QoreMethod* m = nullptr,
-        const QoreExternalMethodVariant* v = nullptr, bool flatten = false) {
+        const QoreExternalMethodVariant* v = nullptr, bool flatten = false, bool injected_receiver = false) {
     assert(!object_handle != !closure_handle);
+    assert(!injected_receiver || (m && !v));
     // must ensure that the thread is attached before executing Qore code, and before the Program context of the
     // thread is looked up: with no Program, or a Program with no jni data, the lookup uses the Qore thread state of
     // the thread, which a Java thread that Java started does not have until it is attached (qore#6828)
@@ -1661,18 +1671,11 @@ static jobject qore_object_closure_call_internal(JNIEnv* jenv, jclass, QoreProgr
             } else {
                 printd(5, "qore_object_closure_call_internal() %s::%s() (v: %p id: %d) %d arg(s) obj: %p\n",
                     m->getClassName(), m->getName(), v, m->getClass()->getID(), (int)len, obj);
-                val = obj->evalMethodVariant(*m, v, *qore_args, &xsink);
-
-                // check for errors from objects with injected classes; make sure the error was raised due to
-                // injection issues
-                if (xsink && obj->isValid()
-                    && !obj->validInstanceOfStrict(*m->getClass())
-                    && xsink.getExceptionErr().getType() == NT_STRING) {
-                    QoreStringValueHelper err(xsink.getExceptionErr());
-                    if (!strcmp(err->c_str(), "OBJECT-ALREADY-DELETED")) {
-                        xsink.clear();
-                        val = obj->evalMethod(m->getName(), *qore_args, &xsink);
-                    }
+                if (injected_receiver) {
+                    // the object's class stands in for the method's class: its own method of the bound name is called
+                    val = obj->evalMethod(m->getName(), *qore_args, &xsink);
+                } else {
+                    val = obj->evalMethodVariant(*m, v, *qore_args, &xsink);
                 }
             }
         } else {
@@ -1927,6 +1930,47 @@ static JniExternalProgramData* generated_program_context(QoreProgram* pgm, jlong
     return jpc;
 }
 
+//! Returns true if this class was injected in place of the class with the given ID
+static bool jni_class_is_injected_as(const QoreClass& cls, qore_classid_t target) {
+    for (const QoreClass* i = cls.getInjectedAsClass(); i; i = i->getInjectedAsClass()) {
+        if (i->getID() == target) {
+            return true;
+        }
+    }
+    return false;
+}
+
+//! Returns true if the class or one of its parents was injected in place of the class with the given ID
+/** Uses libqore's flat view of the hierarchy: the depth and shape of a class hierarchy are not bounded, so it is not
+    walked recursively
+*/
+static bool jni_class_injected_as(const QoreClass& cls, qore_classid_t target) {
+    if (jni_class_is_injected_as(cls, target)) {
+        return true;
+    }
+    QoreClassHierarchyIterator ci(cls);
+    while (ci.next()) {
+        if (jni_class_is_injected_as(ci.get(), target)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+//! Returns true if a class injection relates the receiver's class to the class of a method
+/** Only a declared injection counts (Program::importClass() with injection, which needs \c PO_ALLOW_INJECTION): either
+    the receiver's class, or a parent of it, was injected in place of the method's class, or the method's class was
+    injected in place of a class of the receiver.  A class that merely has the same name and signature does not.
+*/
+static bool jni_is_injected_receiver(const QoreClass& receiver, const QoreClass& method_class) {
+    for (const QoreClass* i = method_class.getInjectedAsClass(); i; i = i->getInjectedAsClass()) {
+        if (receiver.getClass(i->getID())) {
+            return true;
+        }
+    }
+    return jni_class_injected_as(receiver, method_class.getID());
+}
+
 static jobject JNICALL java_class_builder_do_normal_call(JNIEnv* jenv, jclass jcls, jstring mname, jlong qobj,
         jlong method_handle, jlong reserved, jobjectArray args) try {
     return generated_native_call<jobject>(jenv, [&](Env& env, ExceptionSink& xsink) -> jobject {
@@ -1936,19 +1980,21 @@ static jobject JNICALL java_class_builder_do_normal_call(JNIEnv* jenv, jclass jc
         }
         std::shared_ptr<JniObjectHandle> handle = jni_handle_get<JniObjectHandle>(qobj);
         QoreObject* obj = handle->getObject();
-        // the method is only called on an object of its class; a deleted object raises its own error in the call
+        // the method is only called on an object of its class, also if the object has been deleted, which raises its
+        // own error in the call
         const QoreMethod* method = binding->method;
         const QoreExternalMethodVariant* variant = static_cast<const QoreExternalMethodVariant*>(binding->variant);
+        bool injected_receiver = false;
         // by class ID: libqore's instance checks also accept a class of the same name and signature in another
-        // namespace; copies of a class imported into another Program have the same ID
-        if (obj->isValid() && !obj->getClass()->getClass(method->getClass()->getID())) {
-            if (!obj->validInstanceOf(*method->getClass()) || !mname) {
+        // namespace or Program; copies of a class imported into another Program have the same ID
+        if (!obj->getClass()->getClass(method->getClass()->getID())) {
+            if (!jni_is_injected_receiver(*obj->getClass(), *method->getClass())) {
                 throw std::runtime_error("Invalid object in generated Qore method call: the object is not an "
                     "instance of the class of the method");
             }
-            // a compatible class that is not the method's class (ex: an injected class): the object's own method of
-            // that name is called, never the body of the method of the other class
-            method = nullptr;
+            // a class injected for the method's class: the object's own method of the bound name is called, never
+            // the body of the method of the other class, and never a name that the caller gives
+            injected_receiver = true;
             variant = nullptr;
         }
         QoreProgram* pgm = obj->getProgram();
@@ -1958,7 +2004,7 @@ static jobject JNICALL java_class_builder_do_normal_call(JNIEnv* jenv, jclass jc
             pgm = binding->pgm;
         }
         return qore_object_closure_call_internal(jenv, jcls, pgm, handle.get(), nullptr, true, mname, args,
-            method, variant);
+            method, variant, false, injected_receiver);
     });
 } JNI_NATIVE_CATCH(jenv, nullptr)
 

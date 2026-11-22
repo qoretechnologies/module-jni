@@ -90,15 +90,13 @@ public class QoreClassFileLocator implements ClassFileLocator {
     /** The stub extends {@link QoreJavaClassBase} rather than {@code Object}.  A stub is not always
         consumed as a bare name token: while a strongly-connected cluster is mid-generation, a stub
         can stand in as the actual SUPERCLASS of another generated Qore class.  In that role Byte
-        Buddy resolves, from the stub's described hierarchy, both the inherited Qore object handle
-        (the {@code obj} field declared in {@code QoreObjectBase}) and the super constructors that a
-        generated subclass delegates to.  {@code QoreJavaClassBase} is-a {@code QoreObjectBase} (so
-        {@code obj} is inherited) and declares exactly the {@code (QoreJavaObjectPtr)} and
-        {@code (long, long, long, Object...)} constructors that every generated Qore class invokes via
-        {@code super}; the default constructor strategy imitates them onto the stub.  A name-only
-        {@code "extends Object"} stub instead failed generation with "Could not locate field 'obj'"
-        and then "Cannot invoke ... as a super method".  The stub is abstract and is never loaded; it
-        exists only for type/field/constructor resolution and never reaches {@code defineClass}.
+        Buddy resolves, from the stub's described hierarchy, the super constructors that a generated
+        subclass delegates to.  {@code QoreJavaClassBase} declares exactly the
+        {@code (QoreJavaObjectPtr)} and {@code (long, long, long, Object...)} constructors that every
+        generated Qore class invokes via {@code super}; the default constructor strategy imitates them
+        onto the stub.  A name-only {@code "extends Object"} stub has no such constructors and fails
+        generation.  The stub is abstract and is never loaded; it exists only for type and constructor
+        resolution and never reaches {@code defineClass}.
     */
     private static byte[] getStub(String name) {
         return stubCache.computeIfAbsent(name, n -> new ByteBuddy()

@@ -68,9 +68,30 @@ QoreCodeDispatcher::QoreCodeDispatcher(const ResolvedCallReferenceNode *callback
     printd(LogLevel, "QoreCodeDispatcher::QoreCodeDispatcher(), this: %p pgm: %p\n", this, pgm);
 }
 
+namespace {
+thread_local const Dispatcher* release_dispatcher = nullptr;
+thread_local ExceptionSink* release_sink = nullptr;
+}
+
+DispatcherReleaseScope::DispatcherReleaseScope(const Dispatcher* dispatcher, ExceptionSink& xsink) noexcept
+        : prev_dispatcher(release_dispatcher), prev_sink(release_sink) {
+    release_dispatcher = dispatcher;
+    release_sink = &xsink;
+}
+
+DispatcherReleaseScope::~DispatcherReleaseScope() {
+    release_dispatcher = prev_dispatcher;
+    release_sink = prev_sink;
+}
+
+ExceptionSink* DispatcherReleaseScope::sinkFor(const Dispatcher* dispatcher) noexcept {
+    return dispatcher == release_dispatcher ? release_sink : nullptr;
+}
+
 QoreCodeDispatcher::~QoreCodeDispatcher() {
     ExceptionSink xsink;
-    destroy(xsink);
+    ExceptionSink* report = DispatcherReleaseScope::sinkFor(this);
+    destroy(report ? *report : xsink);
     xsink.clear();
 }
 

@@ -5,7 +5,7 @@ package org.qore.jni;
 
     @since 2.0
  */
-public class QoreJavaObjectPtr {
+public final class QoreJavaObjectPtr {
     //! the opaque handle that the module issued
     final long ptr;
 

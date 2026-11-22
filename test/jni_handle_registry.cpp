@@ -11,6 +11,7 @@
 #include <cstdlib>
 #include <mutex>
 #include <set>
+#include <stdexcept>
 #include <thread>
 #include <vector>
 
@@ -148,12 +149,92 @@ static void concurrent_release() {
     }
 }
 
+// a publication that does not reach its Java wrapper is rolled back: the handle is dead and its state is released,
+// including when the failure is an exception, while a lease that was taken keeps the state valid
+static void publication_rollback() {
+    std::atomic<int> destroyed{0};
+    size_t base = jni_handle_count();
+    jlong unpublished = 0;
+    bool caught = false;
+    try {
+        JniHandleGuard<TestState> pending(std::make_shared<TestState>(&destroyed));
+        unpublished = pending.get();
+        check((bool)jni_handle_find(unpublished, JniHandleKind::Object), "an unfinished publication is live");
+        check(jni_handle_count() == base + 1, "an unfinished publication is counted");
+        throw std::runtime_error("the Java wrapper could not be created");
+    } catch (const std::runtime_error&) {
+        caught = true;
+    }
+    check(caught, "the failure of the publication reached the caller");
+    check(!jni_handle_find(unpublished, JniHandleKind::Object), "a rolled back handle is not found");
+    check(!jni_handle_consume<TestState>(unpublished), "a rolled back handle cannot be released again");
+    check(destroyed.load() == 1, "a rolled back publication releases its state once");
+    check(jni_handle_count() == base, "a rolled back handle is no longer counted");
+
+    std::shared_ptr<TestState> lease;
+    jlong leased;
+    {
+        JniHandleGuard<TestState> pending(std::make_shared<TestState>(&destroyed));
+        leased = pending.get();
+        lease = jni_handle_get<TestState>(leased);
+    }
+    check(!jni_handle_find(leased, JniHandleKind::Object), "the rollback removes a handle that has a lease");
+    check(destroyed.load() == 1, "a lease keeps the state of a rolled back publication");
+    lease.reset();
+    check(destroyed.load() == 2, "the last lease releases the state of a rolled back publication");
+
+    // a publication that completed is not rolled back
+    jlong published;
+    {
+        JniHandleGuard<TestState> done(std::make_shared<TestState>(&destroyed));
+        published = done.get();
+        done.release();
+    }
+    check((bool)jni_handle_find(published, JniHandleKind::Object), "a completed publication stays live");
+    check((bool)jni_handle_consume<TestState>(published), "a completed publication is released by its owner");
+    check(destroyed.load() == 3, "the owner's release destroys the state");
+}
+
+// the registry identifies state by handle and kind, never by what the state is: a class of the same name that was
+// parsed separately is a different class, and only the class ID decides.  This is the check that a generated method
+// call makes on its receiver
+static void namesake_class() {
+    ExceptionSink xsink;
+    QoreProgramHelper first(PO_NEW_STYLE, xsink);
+    first->parse("%new-style\nclass RefBase {int value() {return 1;}} class Derived inherits RefBase {} "
+        "class Other {} Derived sub receiver() {return new Derived();}", "handle-registry-first", &xsink);
+    check(!xsink, "the first fixture parses");
+    QoreProgramHelper second(PO_NEW_STYLE, xsink);
+    second->parse("%new-style\nclass RefBase {int value() {return 2;}}", "handle-registry-second", &xsink);
+    check(!xsink, "the second fixture parses");
+
+    const QoreClass* base = first->findClass("RefBase", &xsink);
+    const QoreClass* other = first->findClass("Other", &xsink);
+    const QoreClass* namesake = second->findClass("RefBase", &xsink);
+    check(!xsink && base && other && namesake, "the fixture classes are found");
+    check(base != namesake && base->getID() != namesake->getID(), "a separately parsed class has its own ID");
+
+    ValueHolder value(first->callFunction("receiver", nullptr, &xsink), &xsink);
+    check(!xsink && value->getType() == NT_OBJECT, "the receiver is created");
+    QoreObject* obj = value->get<QoreObject>();
+
+    check(obj->getClass()->getClass(base->getID()) != nullptr, "the receiver is an instance of its parent by ID");
+    check(obj->getClass()->getClass(obj->getClass()->getID()) != nullptr, "the receiver is an instance of its class");
+    check(!obj->getClass()->getClass(other->getID()), "the receiver is not an instance of an unrelated class");
+    check(!obj->getClass()->getClass(namesake->getID()), "the receiver is not an instance of the namesake by ID");
+    check(!base->getInjectedAsClass() && !namesake->getInjectedAsClass(), "no injection relates the two classes");
+}
+
 int main() {
     known_answer();
     lifecycle();
     guard();
     unique_ids();
     concurrent_release();
+    publication_rollback();
+    qore_init(QL_MIT, nullptr, false, QLO_DISABLE_SIGNAL_HANDLING);
+    namesake_class();
+    qore_cleanup();
     printf("jni_handle_registry: all tests passed\n");
     return 0;
 }
