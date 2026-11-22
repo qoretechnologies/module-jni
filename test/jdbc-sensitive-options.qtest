@@ -42,8 +42,14 @@ class JdbcSensitiveOptionsTest inherits QUnit::Test {
 %ifdef QORE_HAVE_DBI_SENSITIVE_OPTIONS
         # the driver must be loaded for the options that are not sensitive to be shown
         dbi_get_driver_options("jdbc");
-        assertEq({"url": "****", "lob-max-size": 1024}, mask_datasource_options("jdbc", {
+        assertEq({"url": "****", "lob-max-size": "1024"}, mask_datasource_options("jdbc", {
             "url": "firebird://localhost:3050/db?user=sysdba&password=" + Secret,
+            "lob-max-size": 1024,
+        }));
+        # classpath is not sensitive, but a value that cannot be shown in a datasource string, such as a URL with
+        # credentials, is masked
+        assertEq({"classpath": "****", "lob-max-size": "1024"}, mask_datasource_options("jdbc", {
+            "classpath": "https://u:" + Secret + "@h/x.jar",
             "lob-max-size": 1024,
         }));
 %else
