@@ -39,6 +39,10 @@ public class ClasspathLookupProbe {
             addURL(new File(path).toURI().toURL());
         }
 
+        public void addUrlDirect(URL url) {
+            addURL(url);
+        }
+
         public Class<?> findClassFromSubclass(String name) throws ClassNotFoundException {
             return findClass(name);
         }
@@ -164,6 +168,203 @@ public class ClasspathLookupProbe {
             }
         }
         return !copies.isEmpty();
+    }
+
+    //! Returns the number of compiler copies that can be held at once, up to \a max; releases them
+    public static int holdCopies(QoreURLClassLoader loader, int max) {
+        ArrayList<List<File>> held = new ArrayList<>();
+        try {
+            for (int i = 0; i < max; ++i) {
+                held.add(checkedLocations(loader, null));
+            }
+        } catch (Exception e) {
+            // the limit has been reached
+        } finally {
+            for (List<File> locations : held) {
+                try {
+                    releaseLocations(loader, locations);
+                } catch (Exception e) {
+                    // the others are still released
+                }
+            }
+        }
+        return held.size();
+    }
+
+    //! Holds the compiler locations of a chain of \a len derived class loaders that each have \a dir on their classpath
+    /** @return "ok", or the refusal
+    */
+    public static String holdChain(QoreURLClassLoader first, String dir, int len) {
+        ArrayList<QoreURLClassLoader> loaders = new ArrayList<>();
+        ArrayList<List<File>> held = new ArrayList<>();
+        try {
+            QoreURLClassLoader prev = first;
+            for (int i = 0; i < len; ++i) {
+                prev = QoreURLClassLoader.createDerived(prev);
+                prev.addPath(dir);
+                loaders.add(prev);
+            }
+            for (QoreURLClassLoader loader : loaders) {
+                held.add(checkedLocations(loader, null));
+            }
+            return "ok";
+        } catch (java.lang.reflect.InvocationTargetException e) {
+            return "refused: " + e.getCause().getClass().getSimpleName();
+        } catch (Exception e) {
+            return "refused: " + e.getClass().getSimpleName();
+        } finally {
+            for (int i = 0; i < held.size(); ++i) {
+                try {
+                    releaseLocations(loaders.get(i), held.get(i));
+                } catch (Exception e) {
+                    // the others are still released
+                }
+            }
+        }
+    }
+
+    //! Returns true if closing a derived class loader removes the compiler copies that it holds
+    public static boolean closeRemovesCopies(QoreURLClassLoader parent, String dir) throws Exception {
+        QoreURLClassLoader loader = QoreURLClassLoader.createDerived(parent);
+        loader.addPath(dir);
+        List<File> locations = checkedLocations(loader, null);
+        ArrayList<File> copies = new ArrayList<>();
+        for (File location : locations) {
+            if (!location.getPath().equals(dir)) {
+                copies.add(location);
+            }
+        }
+        loader.close();
+        boolean rv = !copies.isEmpty();
+        for (File copy : copies) {
+            rv = rv && !copy.exists();
+        }
+        releaseLocations(loader, locations);
+        return rv;
+    }
+
+    //! the compiler locations that holdLocations() holds
+    private static volatile List<File> heldLocations;
+
+    //! Holds the compiler locations of a class loader, for releaseHeld()
+    public static void holdLocations(QoreURLClassLoader loader) throws Exception {
+        heldLocations = checkedLocations(loader, null);
+    }
+
+    //! Tries to release the held locations; returns "released" or the refusal
+    public static String releaseHeld(QoreURLClassLoader loader) {
+        try {
+            releaseLocations(loader, heldLocations);
+            return "released";
+        } catch (java.lang.reflect.InvocationTargetException e) {
+            return "refused: " + e.getCause().getClass().getSimpleName();
+        } catch (Exception e) {
+            return "refused: " + e.getClass().getSimpleName();
+        }
+    }
+
+    //! Returns true if every held location exists
+    public static boolean heldExist() {
+        for (File location : heldLocations) {
+            if (!location.exists()) {
+                return false;
+            }
+        }
+        return !heldLocations.isEmpty();
+    }
+
+    //! Checks the copy of a class loader's classpath directory; returns "ok" or what is wrong with it
+    public static String checkCopy(QoreURLClassLoader loader, String original, String allowedFile, String deniedFile,
+            String otherFile) throws Exception {
+        List<File> locations = checkedLocations(loader, null);
+        try {
+            for (File location : locations) {
+                if (location.getPath().equals(original)) {
+                    return "the directory itself was given";
+                }
+                if (!new File(location, allowedFile).isFile()) {
+                    continue;
+                }
+                String perms = java.nio.file.attribute.PosixFilePermissions.toString(
+                    Files.getPosixFilePermissions(location.toPath().getParent()));
+                if (!perms.equals("rwx------")) {
+                    return "the directory of the copy is not private: " + perms;
+                }
+                if (new File(location, deniedFile).exists()) {
+                    return "the copy has a denied file";
+                }
+                if (new File(location, otherFile).exists()) {
+                    return "the copy has a file that is not for a compiler";
+                }
+                return "ok";
+            }
+            return "no copy";
+        } finally {
+            releaseLocations(loader, locations);
+        }
+    }
+
+    //! Returns the number of compiler copy directories in the JVM's temporary directory
+    public static int copyDirectories() throws IOException {
+        int rv = 0;
+        try (java.nio.file.DirectoryStream<Path> entries = Files.newDirectoryStream(
+                Path.of(System.getProperty("java.io.tmpdir")), "qore-classpath-*")) {
+            for (Path entry : entries) {
+                ++rv;
+            }
+        }
+        return rv;
+    }
+
+    //! Returns true if the JDK finds a path
+    public static boolean pathExists(String path) {
+        return Files.exists(Path.of(path));
+    }
+
+    //! Adds a classpath under a captured policy; returns "ok" or the error
+    public static String addPathUnder(QoreSandbox.Policy policy, QoreURLClassLoader loader, String path) {
+        try {
+            policy.call(() -> {
+                loader.addPath(path);
+                return null;
+            });
+            return "ok";
+        } catch (Throwable e) {
+            return "refused: " + e.getClass().getSimpleName();
+        }
+    }
+
+    //! Serves the files of a directory with a URL protocol that names no local file
+    private static final class ServedDirectory extends java.net.URLStreamHandler {
+        private final Path dir;
+
+        ServedDirectory(Path dir) {
+            this.dir = dir;
+        }
+
+        @Override
+        protected java.net.URLConnection openConnection(URL url) {
+            Path file = dir.resolve(url.getPath().substring(1));
+            return new java.net.URLConnection(url) {
+                @Override
+                public void connect() {
+                }
+
+                @Override
+                public InputStream getInputStream() throws IOException {
+                    if (!Files.isRegularFile(file)) {
+                        throw new java.io.FileNotFoundException(url.toString());
+                    }
+                    return Files.newInputStream(file);
+                }
+            };
+        }
+    }
+
+    //! Adds a URL that names no local file, which serves the files of \a dir, as trusted code
+    @SuppressWarnings("deprecation")
+    public static void addServedUrl(SubLoader loader, String dir) throws IOException {
+        loader.addUrlDirect(new URL(null, "qoreprobe:/", new ServedDirectory(Path.of(dir))));
     }
 
     //! Sets or clears a system property

@@ -337,9 +337,12 @@ class Outer {
     not covered.  A real path that the JVM's file name encoding cannot represent exactly is treated as denied.
 
     <b>Operator rules:</b>
-    - an entry that trusted code adds to the class loader of a sandboxed Program with the class loader's Java API, or to
-      the classpath that every Program shares, is a grant of the host: the sandboxed Program can load everything below
-      it, whatever its policy says.  Add only what the Program may read
+    - whoever adds a classpath entry owns its policy.  An entry that restricted code adds carries that code's policy and
+      fails closed
+    - an entry that a trusted host deliberately adds, to the class loader of a sandboxed Program with the class loader's
+      Java API or to the classpath that every Program shares, is a grant of the host: it is not also checked against
+      the policy of the Program that owns the class loader, so that Program can load everything below it.  Add only
+      what the Program may read
     - a policy is bound to an entry only if it restricts the filesystem when the entry is added.  An entry that was
       added before \c setSandboxManager(), or while the Program's sandbox restricted nothing, stays unchecked: setting or
       tightening the policy later does not apply to it.  Configure the filesystem policy of a Program before its
@@ -354,12 +357,18 @@ class Outer {
     directory are checked against the policy and the compiler is given the files that were checked, annotation
     processing and the Java compiler's extensions from the classpath are turned off, and any other option is refused;
     use the \c add-classpath module command to add to the classpath.  For such a caller, the Kotlin compiler is given a
-    private copy of the class files and Kotlin module files that the policy allows below each classpath directory that
-    restricted code added, within fixed limits on the number and size of the files, and its scripting plugin, which
-    discovers script definitions on the classpath and runs their code, is turned off.  The Kotlin compiler also uses
+    private copy of the class files and Kotlin module files that every policy of the enclosing entries allows below each
+    classpath directory that restricted code added, and its scripting plugin, which
+    discovers script definitions on the classpath and runs their code, is turned off.  The copies that a Program has at
+    one time are limited in number, files, bytes and directory entries visited, across all of its class loaders; a
+    compile that would go over a limit fails, and the copies are removed when the compile ends and when their class
+    loader is closed.  The Kotlin compiler also uses
     the host's %Qore and Kotlin jars and the entries that trusted code added.  A Kotlin script (\c kotlin_eval()) of such
-    a caller is refused while a directory that restricted code added is on its classpath, as the script compiler reads
-    the files below it itself; use jars for that classpath.  A compiler applies these rules to the caller that creates it: a
+    a caller is refused while a directory that restricted code added, directly or through a jar's manifest, is on its
+    classpath, as the script compiler reads the files below it itself; use jars for that classpath.  The refusal
+    covers only those directories: a jar is used as a whole once the policy has allowed it, and a directory with no
+    bound policy (a grant of the host, or an entry added before a filesystem policy applied) does not refuse a script,
+    which can then read all of it.  A compiler applies these rules to the caller that creates it: a
     compiler that trusted code creates keeps the options and classpath that it was given and does not check the files
     below its classpath directories, also when restricted code uses it, so do not hand one to restricted code.  A
     path is checked before it is opened, so a file that changes between the check and its use is not covered.  A

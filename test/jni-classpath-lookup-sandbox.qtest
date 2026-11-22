@@ -95,6 +95,7 @@ string sub kotlin_compile(string src) {
         addTestCase("an entry that a trusted host adds is a host grant", \hostGrantTest());
         addTestCase("policies of two Programs do not mix", \twoPoliciesTest());
         addTestCase("Kotlin: a classpath directory with denied content", \kotlinTest());
+        addTestCase("Kotlin: every policy of nested entries applies", \kotlinNestedTest());
         set_return_value(main());
     }
 
@@ -124,6 +125,7 @@ string sub kotlin_compile(string src) {
         writeClassAs("secret/DeepS.class", "a/linked/DeepS");
         writeClassAs("secret/LinkedS.class", "LinkedS");
         writeClassAs("secret/LinkedPkg.class", "pkg/LinkedPkg");
+        writeClassAs("allowed/denied/NestedK.class", "NestedK");
         writeFile("secret/s.txt", "secret");
         writeClass("jars/src", "jarpkg.InJar");
         writeFile("jars/src/jarpkg/r.txt", "jar");
@@ -440,6 +442,26 @@ string sub kotlin_compile(string src) {
         assertEq("found", b.callFunction("lookup", "loadClass", "opkg.OtherOnly"));
         assertRegex("^missing", a.callFunction("lookup", "loadClass", "opkg.OtherOnly"));
         assertRegex("^missing", b.callFunction("lookup", "loadClass", "denied.Hidden"));
+    }
+
+    kotlinNestedTest() {
+        if (!kotlin_jars) {
+            if (ENV.CI) {
+                throw "KOTLIN-MISSING", "the Kotlin compiler JAR is required in CI for this test";
+            }
+            testSkip("Kotlin compiler JAR not available");
+        }
+        Program p = restricted();
+        # a second policy, which allows the nested directory, adds it as an entry of the same class loader
+        SandboxManager wide();
+        wide.setUncontrolledApiPolicy(True);
+        wide.setFilesystemDefaultPolicy(False);
+        wide.addFilesystemAllowedPath(root + "/allowed", QSEC_READ);
+        Program inner = newProgram(wide);
+        assertEq("ok", ClasspathLookupProbe::addPathUnder(inner.callFunction("capture_policy"),
+            p.callFunction("own_loader"), root + "/allowed/denied"));
+        assertEq("unresolved", p.callFunction("kotlin_compile", "class KProbe { fun f(x: NestedK?) = x }\n"));
+        assertEq("compiled", p.callFunction("kotlin_compile", "class KProbe { fun f(x: pkg.Ok?) = x }\n"));
     }
 
     kotlinTest() {

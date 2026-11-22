@@ -543,6 +543,7 @@ public class QoreURLClassLoader extends URLClassLoader {
     }
 
     //! Defines a class from a URL of a later classpath entry, whose check has passed
+    @SuppressWarnings("deprecation")
     private Class<?> defineFromUrl(String name, URL url) throws ClassNotFoundException {
         byte[] bytes;
         URL base;
@@ -558,18 +559,16 @@ public class QoreURLClassLoader extends URLClassLoader {
                     base = jar.getJarFileURL();
                     manifest = jar.getManifest();
                 } else {
-                    // the directory of the entry: one level up for each element of the class's path
-                    File root = new File(url.toURI());
-                    for (int i = name.split("\\.", -1).length; i > 0 && root != null; --i) {
-                        root = root.getParentFile();
+                    // the base of the entry, for a URL of any protocol: one level up for each package of the class,
+                    // resolved on the URL as it is encoded
+                    StringBuilder up = new StringBuilder("./");
+                    for (int i = name.indexOf('.'); i >= 0; i = name.indexOf('.', i + 1)) {
+                        up.append("../");
                     }
-                    if (root == null) {
-                        throw new ClassNotFoundException(name);
-                    }
-                    base = root.toURI().toURL();
+                    base = new URL(url, up.toString());
                 }
             }
-        } catch (IOException | IllegalArgumentException | java.net.URISyntaxException e) {
+        } catch (IOException | IllegalArgumentException e) {
             throw new ClassNotFoundException(name, e);
         }
         int dot = name.lastIndexOf('.');
@@ -661,14 +660,26 @@ public class QoreURLClassLoader extends URLClassLoader {
         if (g == null) {
             return locations;
         }
-        return g.compilerLocations(locations, programReachable0(getOriginPtr()));
+        return g.compilerLocations(locations, programReachable0(getOriginPtr()), getOriginPtr(), super.getURLs());
     }
 
     //! Removes the private copies among locations that getCheckedCompilerLocations() returned; changes no other file
+    /** @throws RuntimeException the locations have a copy of this class loader, and the calling code cannot reach its
+        Program; nothing is changed
+    */
     public final void releaseCompilerCopies(java.util.List<File> locations) {
         QoreClasspathGuard g = guard;
-        if (g != null) {
+        if (g != null && g.holdsCopy(locations)) {
+            checkAccess();
             g.releaseCopies(locations);
+        }
+    }
+
+    //! Removes the compiler copies of this class loader, which then makes no new ones
+    private void releaseAllCompilerCopies() {
+        QoreClasspathGuard g = guard;
+        if (g != null) {
+            g.releaseAllCopies();
         }
     }
 
@@ -1753,7 +1764,11 @@ public class QoreURLClassLoader extends URLClassLoader {
     @Override
     public void close() throws IOException {
         if (checkAccessUnlessShutDown0(getOriginPtr())) {
-            super.close();
+            try {
+                super.close();
+            } finally {
+                releaseAllCompilerCopies();
+            }
         }
     }
 
@@ -1865,6 +1880,7 @@ public class QoreURLClassLoader extends URLClassLoader {
         that require a valid Qore Program.
     */
     void clearProgramPtrIntern() {
+        releaseAllCompilerCopies();
         setPtrIntern(0, true);
         sharedDynamicClassLoaders.entrySet().removeIf(entry -> entry.getValue() == this);
     }

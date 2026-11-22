@@ -9,16 +9,18 @@
     - <b>Security</b>: the filesystem policy of restricted code now applies to every class and resource lookup below a
       classpath entry that it added, to the real path of each file, on any thread, also for a lookup that the JVM
       makes with no %Qore caller.  A file that the policy denies behaves as a file that does not exist.  The Kotlin
-      compiler is given a private copy of the files that the policy allows below such a directory, and its scripting
-      plugin is off for a restricted caller.  Class loaders with no entry from restricted code, which includes trusted
+      compiler is given a private copy of the files that the policy allows below such a directory, within limits for
+      each Program, and its scripting plugin is off for a restricted caller.  Class loaders with no entry from restricted code, which includes trusted
       code and sandboxes that restrict nothing, make no check.  A file replaced between its check and its use is not
       covered.  These checks are defense in depth (qore#7276)
     - <b>Behavior change</b> (qore#7276): a class or resource below a classpath directory of restricted code that its
       policy denies is no longer found.  A Kotlin script of a restricted caller is refused while a directory that
       restricted code added is on its classpath.  The \c global-* classpath commands are refused under a sandbox
       filesystem policy, also one that allows uncontrolled APIs, and when trusted code issues them into a Program that
-      such a sandbox governs.  An entry that trusted code adds to the class loader of a sandboxed Program is a grant of
-      the host and is not checked.  An entry added before a Program's filesystem policy applied, or while its sandbox
+      such a sandbox governs.  <b>Operator rule:</b> whoever adds a classpath entry owns its policy: an entry that
+      restricted code adds carries that code's policy and fails closed, and an entry that a trusted host deliberately
+      adds to the class loader of a sandboxed Program is a grant of the host, which is not also checked against the
+      policy of that Program.  An entry added before a Program's filesystem policy applied, or while its sandbox
       restricted nothing, stays unchecked when the policy is set or tightened later: configure the policy before the
       classpath is added.  On a JDK version whose manifest \c Class-Path handling has not been verified, what the
       manifests of trusted jars name is not found in a class loader that also has entries of restricted code

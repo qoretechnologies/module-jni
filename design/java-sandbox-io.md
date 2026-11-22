@@ -83,6 +83,9 @@ are `static_assert`ed to match) and calls `QoreSandboxManager::checkFilesystemAc
   routes (`addPath()`, `addParentPath()`, `addPathOrig()`, `addWildcard()`, a subclass's `addURL()`) bind the managers
   that a check by the caller applies (`QoreSandbox.boundClasspath()`, native `classpathManagers0()`), and the module
   routes bind the manager that checked the classpath (`jni_check_classpath_policy()`, `jni_bind_classpath_policy()`).
+  **Operator rule: whoever adds a classpath entry owns its policy.**  An entry that restricted code adds carries that
+  code's policy and fails closed; an entry that a trusted host deliberately adds is a host grant, and is not also
+  checked against the policy of the Program that owns the class loader.
   A restricted classpath with no policy is refused, because **an entry with no policy is not checked**: it was added by
   trusted code (a grant of the host), or before a filesystem policy restricted the code that added it (no sandbox yet,
   or one that restricted nothing then).  Setting or tightening a policy later does not reach such an entry, which is
@@ -103,13 +106,20 @@ are `static_assert`ed to match) and calls `QoreSandboxManager::checkFilesystemAc
 - **Fast path.** With no guard (trusted code, sandboxes that restrict nothing) a lookup is the plain JDK lookup plus one
   volatile read.
 - **Kotlin.** The compiler reads directories itself, so a restricted compile gets a private copy of the allowed class
-  and `.kotlin_module` files of each guarded directory (`QoreClasspathGuard.compilerLocations()`), bounded in files,
-  bytes, depth and directory entries visited (the system property `qore.jni.compiler.maxEntries` can only lower the
-  last limit), in a private directory that the class loader makes, for code that can
-  reach its Program; the compiler releases it on every path.  The default scripting plugin
+  and `.kotlin_module` files of each guarded directory (`QoreClasspathGuard.compilerLocations()`), judged per entry by
+  the same enclosing policies as a lookup, in a private directory that the class loader makes, for code that can reach
+  its Program.  What the outstanding copies use (copy directories, files, bytes, directory entries visited) is charged
+  to the Program of the class loader until they are released, so the limits hold across a chain of class loaders and
+  for copies that are kept, and a copy over a limit fails closed (the system property `qore.jni.compiler.maxEntries`
+  can only lower the entries limit).  The compiler releases its copies on every path; closing the class loader or
+  clearing its Program pointer releases what remains and refuses new ones, and only code that can reach the Program
+  releases them.  The default scripting plugin
   is disabled for a restricted compile, as it discovers script definitions on the classpath and runs their code.  The
   JSR-223 script engine takes its classpath from the class loaders and cannot be filtered, so a script of a restricted
-  caller is refused while a guarded directory is on its classpath.
+  caller is refused while a guarded directory, added directly or named by a manifest, is on its classpath.  A jar is
+  used whole once its policy has allowed it, and a directory with no bound policy does not refuse a script.
+- **File name encoding.** The bytes that a policy judges use the encoding that is read once when the class is
+  initialized, as the file name encoding is fixed at startup.
 - **Limit.** A check precedes the open, so a file replaced in between is not covered.
 
 ## Strings

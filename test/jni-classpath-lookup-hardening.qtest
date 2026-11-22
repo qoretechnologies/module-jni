@@ -37,6 +37,21 @@ string sub lookup_with(object loader, string op, string name) {
 string sub locations_hold(object loader, string dir, string rel) {
     return ClasspathLookupProbe::locationsHold(loader, dir, rel);
 }
+int sub hold_copies(object loader, int max) {
+    return ClasspathLookupProbe::holdCopies(loader, max);
+}
+string sub hold_chain(object loader, string dir, int len) {
+    return ClasspathLookupProbe::holdChain(loader, dir, len);
+}
+bool sub close_removes(object loader, string dir) {
+    return ClasspathLookupProbe::closeRemovesCopies(loader, dir);
+}
+nothing sub hold_locations(object loader) {
+    ClasspathLookupProbe::holdLocations(loader);
+}
+string sub release_held(object loader) {
+    return ClasspathLookupProbe::releaseHeld(loader);
+}
 string sub add_parent(object loader, string path) {
     return ClasspathLookupProbe::addParentPath(loader, path);
 }
@@ -48,6 +63,10 @@ object sub derived() {
         const EntriesProp = "qore.jni.compiler.maxEntries";
         #! the levels of the tree of directory links
         const LinkLevels = 12;
+        #! more compiler copies than a Program can hold at once
+        const MaxCopiesTried = 64;
+        #! the locales that the cases that need UTF-8 file names try, in order
+        const Utf8Locales = ("C.UTF-8", "C.utf8", "en_US.UTF-8", "en_US.utf8");
     }
 
     private {
@@ -59,6 +78,13 @@ object sub derived() {
         addTestCase("compiler copies are not made for another Program", \copyOtherProgramTest());
         addTestCase("compiler copies are removed when released", \copyReleaseTest());
         addTestCase("the entries visited for a compiler are limited", \copyBudgetTest());
+        addTestCase("the outstanding compiler copies are limited", \copyCapTest());
+        addTestCase("the compiler limits apply across a class loader chain", \copyChainTest());
+        addTestCase("closing a class loader removes its copies", \copyCloseTest());
+        addTestCase("only reachable code releases compiler copies", \copyReleaseOtherTest());
+        addTestCase("a compiler copy applies every policy of nested entries", \copyNestedTest());
+        addTestCase("a class from a later trusted entry with no local file", \laterServedUrlTest());
+        addTestCase("the file name encoding is fixed at startup", \charsetTest());
         addTestCase("a real path that the file name encoding cannot represent", \lossyNameTest());
         addTestCase("every policy of nested entries applies", \nestedPolicyTest());
         addTestCase("a resource name with parent elements gives no signal", \parentElementTest());
@@ -75,8 +101,11 @@ object sub derived() {
         mkdir(base, 0700);
         root = realpath(base);
         foreach string d in (("allowed/pkg", "allowed/denied/sub", "second/denied", "outside", "jars/src/denied",
-                "laterjar", "links", "bytes")) {
+                "laterjar", "links", "bytes", "chain")) {
             makeDirs(d);
+        }
+        for (int i = 0; i < 10; ++i) {
+            writeFile(sprintf("chain/f%d.txt", i), "x");
         }
         writeClass("allowed", "pkg.Ok");
         writeClass("allowed", "denied.Hidden");
@@ -201,20 +230,19 @@ object sub derived() {
         return p;
     }
 
+    #! the copy is private and has only the allowed files for a compiler
     copyTargetTest() {
         Program p = restricted();
-        string target = root + "/outside/chosen";
-        p.callFunction("locations_hold", p.callFunction("own_loader"), target, "pkg/Ok.class");
-        assertFalse(is_dir(target), "nothing is created at a path that the caller chooses");
         assertFalse(ClasspathLookupProbe::hasCallerPathCopy());
+        assertEq("ok", ClasspathLookupProbe::checkCopy(p.callFunction("own_loader"), root + "/allowed", "pkg/Ok.class",
+            "denied/Hidden.class", "g.txt"));
     }
 
     copyOtherProgramTest() {
         Program owner = restricted();
         Program other = newProgram(getPolicy());
-        string rv = other.callFunction("locations_hold", owner.callFunction("own_loader"),
-            root + "/outside/other", "pkg/Ok.class");
-        assertTrue(rv != "yes", rv);
+        assertEq("no", other.callFunction("locations_hold", owner.callFunction("own_loader"),
+            root + "/outside/other", "pkg/Ok.class"));
         assertEq("yes", owner.callFunction("locations_hold", owner.callFunction("own_loader"),
             root + "/outside/own", "pkg/Ok.class"));
     }
@@ -224,34 +252,113 @@ object sub derived() {
         assertTrue(ClasspathLookupProbe::copiesReleased(p.callFunction("own_loader"), root + "/allowed"));
     }
 
+    #! a copy over the limit is refused and leaves nothing, in a process with a temporary directory of its own
     copyBudgetTest() {
-        SandboxManager sm = getPolicy(("links",));
-        Program p = newProgram(sm);
-        p.issueModuleCmd("jni", "add-classpath " + root + "/links/l0");
-        ClasspathLookupProbe::setProperty(EntriesProp, "1000");
-        on_exit ClasspathLookupProbe::setProperty(EntriesProp, NOTHING);
-        string rv = p.callFunction("locations_hold", p.callFunction("own_loader"), root + "/outside/budget",
-            "x.class");
-        assertEq("refused: IOException", rv);
+        runChildCase("budget");
     }
 
-    lossyNameTest() {
-        if (ClasspathLookupProbe::fileNameEncoding() != "UTF-8") {
-            testSkip("the file names of the JVM are not in UTF-8");
+    #! the outstanding copies of a Program are limited, and a released copy no longer counts
+    copyCapTest() {
+        Program p = restricted();
+        object loader = p.callFunction("own_loader");
+        int held = p.callFunction("hold_copies", loader, MaxCopiesTried);
+        assertTrue(held > 0 && held < MaxCopiesTried, sprintf("held %d", held));
+        assertEq(held, p.callFunction("hold_copies", loader, MaxCopiesTried), "released copies do not count");
+    }
+
+    #! the limits apply across a chain of class loaders of a Program
+    copyChainTest() {
+        Program p = newProgram(getPolicy(("chain",)));
+        object loader = p.callFunction("own_loader");
+        ClasspathLookupProbe::setProperty(EntriesProp, "15");
+        on_exit ClasspathLookupProbe::setProperty(EntriesProp, NOTHING);
+        assertEq("ok", p.callFunction("hold_chain", loader, root + "/chain", 1));
+        assertEq("refused: IOException", p.callFunction("hold_chain", loader, root + "/chain", 2));
+    }
+
+    #! closing a class loader removes its copies
+    copyCloseTest() {
+        Program p = newProgram(getPolicy());
+        assertTrue(p.callFunction("close_removes", p.callFunction("own_loader"), root + "/allowed"));
+    }
+
+    #! only code that can reach a class loader's Program releases its copies
+    copyReleaseOtherTest() {
+        Program owner = restricted();
+        object loader = owner.callFunction("own_loader");
+        owner.callFunction("hold_locations", loader);
+        Program other = newProgram(getPolicy());
+        assertRegex("^refused", other.callFunction("release_held", loader));
+        assertTrue(ClasspathLookupProbe::heldExist());
+        assertEq("released", owner.callFunction("release_held", loader));
+        assertFalse(ClasspathLookupProbe::heldExist());
+    }
+
+    #! a compiler copy applies every policy of nested entries
+    copyNestedTest() {
+        Program outer = newProgram(getPolicy());
+        SandboxManager wide();
+        wide.setUncontrolledApiPolicy(True);
+        wide.setFilesystemDefaultPolicy(False);
+        wide.addFilesystemAllowedPath(root + "/allowed", QSEC_READ);
+        Program inner = newProgram(wide);
+        object loader = ClasspathLookupProbe::newSubLoader(outer.callFunction("own_loader"));
+        assertEq("ok", ClasspathLookupProbe::addUrlUnder(outer.callFunction("capture_policy"), loader,
+            root + "/allowed/"));
+        assertEq("ok", ClasspathLookupProbe::addUrlUnder(inner.callFunction("capture_policy"), loader,
+            root + "/allowed/denied/"));
+        assertEq("yes", ClasspathLookupProbe::locationsHold(loader, root + "/outside/nested", "pkg/Ok.class"));
+        assertEq("no", ClasspathLookupProbe::locationsHold(loader, root + "/outside/nested2", "Inner.class"));
+        assertEq("no", ClasspathLookupProbe::locationsHold(loader, root + "/outside/nested3", "denied/Inner.class"));
+    }
+
+    #! a class from a later trusted entry that names no local file
+    laterServedUrlTest() {
+        Program p = newProgram(getPolicy());
+        object policy = p.callFunction("capture_policy");
+        object loader = ClasspathLookupProbe::newSubLoader(p.callFunction("own_loader"));
+        assertEq("ok", ClasspathLookupProbe::addUrlUnder(policy, loader, root + "/allowed/"));
+        ClasspathLookupProbe::addServedUrl(loader, root + "/jars/src");
+        assertEq("/", ClasspathLookupProbe::lookup(loader, "location", "denied.JB"));
+    }
+
+    #! runs a case in a child process in a UTF-8 locale, with a temporary directory of its own
+    private runChildCase(string name) {
+        string child = normalize_dir(get_script_dir() + "/jni-classpath-lookup-child.q");
+        string reason;
+        foreach string locale in (Utf8Locales) {
+            string tmp = sprintf("%s/child-tmp-%s-%d", root, name, $#);
+            mkdir(tmp, 0700);
+            string cmd = sprintf("unset JAVA_TOOL_OPTIONS _JAVA_OPTIONS JDK_JAVA_OPTIONS && LC_ALL=%s "
+                "QORE_JNI_JVM_ARGS=-Djava.io.tmpdir=%s %s -b --enable-debug %s %s %s 2>&1", locale, shellQuote(tmp),
+                shellQuote(QORE_ARGV[0]), shellQuote(child), name, shellQuote(root));
+            int rc;
+            string out = backquote(cmd, \rc);
+            if (*string why = (out =~ x/^result: skipped: (.*)$/m)[0]) {
+                reason = sprintf("%s: %s", locale, why);
+                continue;
+            }
+            assertEq(0, rc, out);
+            list<string> lines = select out.split("\n"), $1 =~ /^result: /;
+            assertTrue(lines.size() > 0, out);
+            map assertRegex(": OK$", $1, $1), lines;
+            return;
         }
-        string lossy = root + "/bytes/" + binary_to_string(<64656eff>, "UTF-8");
-        mkdir(lossy, 0700);
-        File f();
-        f.open2(lossy + "/s.txt", O_CREAT | O_WRONLY | O_TRUNC, 0600);
-        f.write("denied");
-        f.close();
-        symlink(lossy + "/s.txt", root + "/allowed/bytes-link.txt");
-        on_exit unlink(root + "/allowed/bytes-link.txt");
-        SandboxManager sm = getPolicy(("allowed", "bytes"));
-        sm.addFilesystemDeniedPath(lossy);
-        Program p = newProgram(sm);
-        p.issueModuleCmd("jni", "add-classpath " + root + "/allowed");
-        assertEq("missing", p.callFunction("lookup", "getResource", "bytes-link.txt"));
+        testSkip("no UTF-8 locale is available: " + reason);
+    }
+
+    private static string shellQuote(string arg) {
+        return "'" + replace(arg, "'", "'\\''") + "'";
+    }
+
+    #! a real path that the file name encoding cannot represent is denied
+    lossyNameTest() {
+        runChildCase("lossy");
+    }
+
+    #! the file name encoding is fixed at startup
+    charsetTest() {
+        runChildCase("charset");
     }
 
     nestedPolicyTest() {
@@ -281,12 +388,7 @@ object sub derived() {
     }
 
     nonAsciiTest() {
-        if (ClasspathLookupProbe::fileNameEncoding() != "UTF-8") {
-            testSkip("the file names of the JVM are not in UTF-8");
-        }
-        Program p = restricted("allowed:second");
-        string location = p.callFunction("lookup", "location", "denied.Bóth");
-        assertRegex("/second/$", location, location);
+        runChildCase("nonascii");
     }
 
     laterJarTest() {

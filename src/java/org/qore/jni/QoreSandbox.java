@@ -89,6 +89,9 @@ public final class QoreSandbox {
     //! The policy that the static methods use on the current thread instead of the thread's %Qore caller
     private static final ThreadLocal<Policy> current = new ThreadLocal<>();
 
+    //! The encoding of the names that the JVM passes to the operating system; the file name encoding is fixed at startup
+    private static final Charset NAME_CHARSET = readNameCharset();
+
     private QoreSandbox() {
     }
 
@@ -700,6 +703,13 @@ public final class QoreSandbox {
 
     //! Returns the encoding that the JVM uses for file names and other strings passed to the operating system
     private static Charset nameCharset() {
+        return NAME_CHARSET;
+    }
+
+    //! Reads the file name encoding once, as the file name encoding is fixed at startup
+    /** The class is initialized when the module is initialized (a static method ID is looked up for it)
+    */
+    private static Charset readNameCharset() {
         String name = System.getProperty("sun.jnu.encoding");
         if (name != null) {
             try {
