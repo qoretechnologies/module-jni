@@ -2896,9 +2896,16 @@ static jboolean JNICALL qore_url_classloader_clear_compilation_cache(JNIEnv* jen
         std::optional<JniJavaProgramRef> java_pgm;
         try {
             java_pgm.emplace(env, ptr, class_loader);
-        } catch (BasicException& e) {
-            // the Program has been deleted
+        } catch (JavaProgramDeletedException& e) {
             static_cast<Exception&>(e).ignore();
+            // the class loader now names another Program, which the access check was not made for; a refusal of the
+            // Program is not caught here, and stays a refusal
+            jlong current = env.callLongMethod(class_loader, Globals::methodQoreURLClassLoaderGetPtr, nullptr);
+            if (current && current != ptr) {
+                throw BasicException("the Qore Program of the Java class loader changed while its compilation cache "
+                    "was being cleared");
+            }
+            // the Program has been deleted
             return JNI_TRUE;
         }
         if (java_pgm->get()) {
@@ -4285,7 +4292,7 @@ void Globals::defineQoreURLClassLoader(Env& env) {
     methodQoreURLClassLoaderClearCache = env.getMethod(classQoreURLClassLoader, "clearCacheIntern", "()V");
     methodQoreURLClassLoaderDefineClassUnconditional = env.getMethod(classQoreURLClassLoader, "defineClassUnconditionalIntern",
         "(Ljava/lang/String;[B)Ljava/lang/Class;");
-    methodQoreURLClassLoaderGetPtr = env.getMethod(classQoreURLClassLoader, "getPtr", "()J");
+    methodQoreURLClassLoaderGetPtr = env.getMethod(classQoreURLClassLoader, "getPtrIntern", "()J");
     methodQoreURLClassLoaderGetCurrent = env.getStaticMethod(classQoreURLClassLoader, "getCurrent",
         "()Lorg/qore/jni/QoreURLClassLoader;");
     methodQoreURLClassLoaderCheckInProgress = env.getMethod(classQoreURLClassLoader, "checkInProgress",
@@ -5741,7 +5748,8 @@ void Globals::clearGlobalContext() {
         shutdown_gate_closing.store(true, std::memory_order_seq_cst);
         // taken first and released before the Program is deleted: an access check that runs ends before the flag is
         // set, and takes neither of the other locks while this thread waits for it; in a child process created with
-        // fork(), the gate can be held by a thread of the parent, which does not exist there
+        // fork(), the gate can be held by a thread of the parent, which does not exist there, so only the gate is
+        // skipped: the context lock below and the wait for the Program's holders are not
         std::unique_lock<std::shared_mutex> gate(getShutdownGate(), std::defer_lock);
         if (!jni::Jvm::isForkedChild()) {
             gate.lock();

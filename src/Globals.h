@@ -246,7 +246,7 @@ public:
     DLLLOCAL static jmethodID methodQoreURLClassLoaderGetResolveClass;            // Class<?> QoreURLClassLoader.getResolveClass(String)
     DLLLOCAL static jmethodID methodQoreURLClassLoaderClearCache;                 // void QoreURLClassLoader.clearCache()
     DLLLOCAL static jmethodID methodQoreURLClassLoaderDefineClassUnconditional;   // Class<?> QoreURLClassLoader.defineClassUnconditional(String, byte[])
-    DLLLOCAL static jmethodID methodQoreURLClassLoaderGetPtr;                     // long getPtr()
+    DLLLOCAL static jmethodID methodQoreURLClassLoaderGetPtr;                     // long getPtrIntern()
     DLLLOCAL static jmethodID methodQoreURLClassLoaderGetCurrent;                 // OoreURLClassLoader getCurrent()
     DLLLOCAL static jmethodID methodQoreURLClassLoaderCheckInProgress;            // boolean checkInProgress(String)
     DLLLOCAL static jmethodID methodQoreURLClassLoaderClearProgramPtr;            // void ClearProgramPtr()
@@ -684,7 +684,7 @@ public:
     //! Returns the lock that serializes the access checks of class loader cleanup with the start of the shutdown
     /** Held shared by a check, which uses Qore APIs, and exclusively while clearGlobalContext() sets the shutdown flag,
         so that a check either ends first or sees the flag; never destroyed.  Checks take it with enterShutdownGate(),
-        so that they cannot keep the shutdown waiting
+        so that no new check starts once the shutdown is announced; the shutdown waits for the checks already running
     */
     DLLLOCAL static std::shared_mutex& getShutdownGate();
 

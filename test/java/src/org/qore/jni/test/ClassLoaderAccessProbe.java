@@ -207,6 +207,92 @@ public class ClassLoaderAccessProbe {
         return loader.define(name, classBytes(name)).getDeclaredConstructor().newInstance();
     }
 
+    //! a subclass that records calls of the public accessor of the Program pointer
+    public static class PointerAccessorLoader extends QoreURLClassLoader {
+        volatile boolean called;
+
+        public PointerAccessorLoader(String name, ClassLoader parent) {
+            super(name, parent);
+        }
+
+        @Override
+        public long getPtr() {
+            called = true;
+            return super.getPtr();
+        }
+    }
+
+    //! clears the compilation cache of a subclass; reports whether the module called code that the subclass overrides
+    public static String clearCallsOverride(ClassLoader parent) {
+        QoreURLClassLoader prev = QoreURLClassLoader.getCurrent();
+        ClassLoader prev_tccl = Thread.currentThread().getContextClassLoader();
+        try {
+            return run(() -> {
+                PointerAccessorLoader loader = new PointerAccessorLoader("access-probe", parent);
+                loader.called = false;
+                loader.clearCompilationCache();
+                return "override called=" + loader.called;
+            });
+        } finally {
+            if (prev != null) {
+                prev.setContext();
+            }
+            Thread.currentThread().setContextClassLoader(prev_tccl);
+        }
+    }
+
+    //! changes the Program pointer of a class loader where a native method has received it
+    public static final class PointerChangeHook implements java.util.function.BooleanSupplier {
+        private final QoreURLClassLoader loader;
+        private final long ptr;
+        private final boolean cleared;
+        private final Thread thread = Thread.currentThread();
+
+        public PointerChangeHook(QoreURLClassLoader loader, long ptr, boolean cleared) {
+            this.loader = loader;
+            this.ptr = ptr;
+            this.cleared = cleared;
+        }
+
+        @Override
+        public boolean getAsBoolean() {
+            if (Thread.currentThread() != thread) {
+                return false;
+            }
+            try {
+                java.lang.reflect.Method set = QoreURLClassLoader.class.getDeclaredMethod("setPtrIntern", long.class,
+                    boolean.class);
+                set.setAccessible(true);
+                set.invoke(loader, ptr, cleared);
+            } catch (ReflectiveOperationException e) {
+                throw new AssertionError(e);
+            }
+            return true;
+        }
+    }
+
+    //! creates a PointerChangeHook for the calling thread
+    public static Object newPointerChangeHook(QoreURLClassLoader loader, long ptr, boolean cleared) {
+        return new PointerChangeHook(loader, ptr, cleared);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static java.util.Map<String, Object> compilationEntries(QoreURLClassLoader loader) throws Exception {
+        java.lang.reflect.Field field = QoreURLClassLoader.class.getDeclaredField("classes");
+        field.setAccessible(true);
+        return (java.util.Map<String, Object>)field.get(loader);
+    }
+
+    //! adds an entry to the Java compilation cache of \a loader
+    public static void addCompilationEntry(QoreURLClassLoader loader) throws Exception {
+        compilationEntries(loader).put("access-probe", new Object());
+    }
+
+    //! returns true if the Java compilation cache of \a loader has the entry of addCompilationEntry()
+    public static boolean hasCompilationEntry(QoreURLClassLoader loader) throws Exception {
+        return compilationEntries(loader).containsKey("access-probe");
+    }
+
     //! runs close() of \a object on a new thread through a proxy made only of JDK classes
     /** The error is taken from the thread that ran the proxy, whose stack has no frame of this class
     */

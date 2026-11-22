@@ -1361,13 +1361,13 @@ public class QoreURLClassLoader extends URLClassLoader {
     //! Returns the Program pointer of the class loader, or the first one that it had if it has been cleared
     /** For the attribution of the Java code of its classes (qore#7023)
     */
-    long getOriginPtr() {
+    final long getOriginPtr() {
         long ptr = pgm_ptr.get();
         return ptr != 0L ? ptr : origin_ptr;
     }
 
     //! Returns true if a class loader with no Program pointer takes the Program of its parent (qore#7131)
-    boolean inheritsProgram() {
+    final boolean inheritsProgram() {
         return inherits_program;
     }
 
@@ -1514,6 +1514,12 @@ public class QoreURLClassLoader extends URLClassLoader {
         to ensure the pointer is valid
     */
     public long getPtr() {
+        return getPtrIntern();
+    }
+
+    //! Returns the program pointer, for the jni module: a subclass cannot override it, so that no code of a subclass
+    //! runs in the module's native methods (qore#7131)
+    private long getPtrIntern() {
         return pgm_ptr.get();
     }
 
@@ -2470,7 +2476,9 @@ public class QoreURLClassLoader extends URLClassLoader {
     public void clearCompilationCache() {
         // the access is checked and the native caches are cleared together; once the module's shutdown has started,
         // the native caches are gone with the module, and the access can no longer be checked
-        if (!clearCompilationCache0(getOriginPtr(), pgm_ptr.get())) {
+        // the pointer is read once, so that the check is made for the Program whose cache is cleared
+        long ptr = pgm_ptr.get();
+        if (!clearCompilationCache0(ptr != 0L ? ptr : origin_ptr, ptr)) {
             return;
         }
         classCache.clear();

@@ -96,6 +96,8 @@ string sub compile_error(object compiler) {
         addTestCase("other class loader state", \loaderStateTest());
         addTestCase("a refused constructor", \refusedConstructorTest());
         addTestCase("a compiler's own resources", \compilerResourcesTest());
+        addTestCase("no code of a subclass runs in the cleanup check", \subclassCodeTest());
+        addTestCase("a Program pointer that changes during the cleanup", \pointerChangeTest());
         set_return_value(main());
     }
 
@@ -180,6 +182,39 @@ string sub compile_error(object compiler) {
             rv = ClassLoaderAccessProbe::tryRecordingLoader(ctor, host_loader);
             assertRegex("^ok: true ", rv, rv);
         }
+    }
+
+    subclassCodeTest() {
+        string rv = ClassLoaderAccessProbe::clearCallsOverride(host_loader);
+        assertEq("ok: override called=false", rv, rv);
+    }
+
+    #! the cache is cleared only for the Program that the access check was made for; needs the module's debug hooks
+    pointerChangeTest() {
+        string SetHook = "Jni::org::qore::jni::dbg_jni_set_java_program_ptr_hook";
+        try {
+            call_function("Jni::org::qore::jni::dbg_jni_context_program_counts");
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip("the jni module's debug hooks require a debug build");
+        }
+        on_exit call_function(SetHook, NOTHING);
+
+        # the pointer changes to another Program: refused, and nothing is cleared
+        object loader = ClassLoaderAccessProbe::newDerived(host_loader);
+        ClassLoaderAccessProbe::addCompilationEntry(loader);
+        object tenant_loader = getTenant().callFunction("own_loader");
+        call_function(SetHook, ClassLoaderAccessProbe::newPointerChangeHook(loader, tenant_loader.getPtr(), False));
+        string rv = ClassLoaderAccessProbe::clearCompilationCache(loader);
+        assertRegex("^refused: .*JNI-ERROR", rv, rv);
+        assertTrue(ClassLoaderAccessProbe::hasCompilationEntry(loader));
+
+        # the Program is deleted meanwhile: there is no native cache left, and the Java caches are cleared
+        loader = ClassLoaderAccessProbe::newDerived(host_loader);
+        ClassLoaderAccessProbe::addCompilationEntry(loader);
+        call_function(SetHook, ClassLoaderAccessProbe::newPointerChangeHook(loader, 0, True));
+        rv = ClassLoaderAccessProbe::clearCompilationCache(loader);
+        assertEq("ok: cleared", rv, rv);
+        assertFalse(ClassLoaderAccessProbe::hasCompilationEntry(loader));
     }
 
     compilerResourcesTest() {

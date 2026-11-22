@@ -249,6 +249,14 @@ private:
 };
 
 /**
+ * \brief The Qore Program named by a Java class loader's pointer has been deleted, or is no longer the class loader's.
+ */
+class JavaProgramDeletedException : public BasicException {
+public:
+   using BasicException::BasicException;
+};
+
+/**
  * \brief Basic exception with a simple string messsage.
  */
 class QoreJniException : public IgnorableException {
