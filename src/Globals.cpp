@@ -41,8 +41,12 @@
 #include "JavaSandbox.h"
 #include "ql_jni_debug.h"
 
+#include <cstdlib>
+#include <cstring>
+#include <future>
 #include <thread>
 #include <unordered_map>
+#include <unistd.h>
 
 #include <qore/ModuleManager.h>
 
@@ -5606,6 +5610,12 @@ jlong Globals::getContextProgram(jobject new_syscl, bool& created) {
 }
 
 QoreProgram* Globals::createJavaContextProgram() {
+    // no Program can be created in a child process created with fork(), as the JVM cannot be used there, and a thread
+    // of the parent can have held the lock; the Program is missing there only if the fork interrupted the module's
+    // initialization, and libqore then fails the load of the module in the child, so no jni API reaches this
+    if (jni::Jvm::isForkedChild()) {
+        return context_pgm.load(std::memory_order_acquire);
+    }
     std::lock_guard<std::recursive_mutex> guard(getContextLock());
     if (!qph) {
         // the global context Program is deleted when the module's shutdown starts (clearGlobalContext()), and a
@@ -5670,8 +5680,9 @@ void Globals::releaseContextProgram() noexcept {
     --context_holders_in_thread;
     context_holders.fetch_sub(1, std::memory_order_seq_cst);
     // clearGlobalContext() reads the count after it has set the flag: if the flag is not set here, it sees this
-    // release; if it is, it is woken, the lock making sure that it either has not checked the count yet or waits
-    if (jni_shutting_down.load(std::memory_order_seq_cst)) {
+    // release; if it is, it is woken, the lock making sure that it either has not checked the count yet or waits; in a
+    // child process created with fork(), no thread waits, and a thread of the parent can have held the lock
+    if (jni_shutting_down.load(std::memory_order_seq_cst) && !jni::Jvm::isForkedChild()) {
         // std::mutex::lock() throws only for a system error (ex: EDEADLK, which this lock cannot raise, as it is never
         // taken recursively), which ends the process here, as the release is noexcept
         std::lock_guard<std::mutex> guard(getContextHolderLock());
@@ -5719,12 +5730,127 @@ QoreProgram* JniContextProgramHolder::acquire() {
         throw;
     }
     if (!rv) {
-        // the module's shutdown has started
+        // the module's shutdown has started (see createJavaContextProgram() for a child process created with fork())
         Globals::releaseContextProgram();
         return nullptr;
     }
     pgm = rv;
     return rv;
+}
+
+#ifdef DEBUG
+namespace {
+//! A thread that holds the context lock or the global context Program; see Globals::dbgHoldContext()
+struct DbgContextHold {
+    std::thread thread;
+    std::promise<void> held;
+    std::promise<void> release;
+};
+
+//! Never destroyed: in a child process created with fork(), the thread of the hold does not exist
+DbgContextHold* dbg_context_hold = nullptr;
+
+//! Writes a marker of the module's shutdown to stderr, if QORE_JNI_DBG_FORK_MARKERS is set
+void dbg_context_marker(const char* marker) {
+    if (getenv("QORE_JNI_DBG_FORK_MARKERS")) {
+        ssize_t rc = write(STDERR_FILENO, marker, strlen(marker));
+        (void)rc;
+    }
+}
+}
+
+void Globals::dbgContextMarker(const char* marker) {
+    dbg_context_marker(marker);
+}
+
+bool Globals::dbgHoldContext(DbgContextHoldKind kind) {
+    if (dbg_context_hold) {
+        return false;
+    }
+    QoreThreadLock* save_object_lock = nullptr;
+    if (kind == DbgContextHoldKind::SaveObject) {
+        JniExternalProgramData* jpc = jni_get_context();
+        if (!jpc) {
+            return false;
+        }
+        save_object_lock = &jpc->dbgSaveObjectLock();
+    }
+    std::unique_ptr<DbgContextHold> hold(new DbgContextHold);
+    std::future<void> held = hold->held.get_future();
+    std::future<void> release = hold->release.get_future();
+    hold->thread = std::thread([p = hold.get(), kind, save_object_lock, release = std::move(release)] () {
+        switch (kind) {
+            case DbgContextHoldKind::Lock: {
+                std::lock_guard<std::recursive_mutex> guard(getContextLock());
+                p->held.set_value();
+                release.wait();
+                break;
+            }
+            case DbgContextHoldKind::Program: {
+                holdContextProgram();
+                p->held.set_value();
+                release.wait();
+                releaseContextProgram();
+                break;
+            }
+            case DbgContextHoldKind::Registry: {
+                std::lock_guard<std::mutex> guard(jni_dbg_program_registry_lock());
+                p->held.set_value();
+                release.wait();
+                break;
+            }
+            case DbgContextHoldKind::SaveObject: {
+                AutoLocker guard(*save_object_lock);
+                p->held.set_value();
+                release.wait();
+                break;
+            }
+            case DbgContextHoldKind::ShutdownGate: {
+                std::shared_lock<std::shared_mutex> guard(getShutdownGate());
+                p->held.set_value();
+                release.wait();
+                break;
+            }
+        }
+    });
+    held.wait();
+    dbg_context_hold = hold.release();
+    return true;
+}
+
+void Globals::dbgReleaseContextHold() {
+    if (!dbg_context_hold) {
+        return;
+    }
+    std::unique_ptr<DbgContextHold> hold(dbg_context_hold);
+    dbg_context_hold = nullptr;
+    hold->release.set_value();
+    hold->thread.join();
+}
+#else
+#define dbg_context_marker(marker)
+#endif
+
+void Globals::clearGlobalContextInForkedChild() {
+    // called when the module is deleted, after qore_cleanup() has waited for the child's Qore threads, so no lock is
+    // needed; one that a thread of the parent held is never released
+    jni_shutting_down.store(true, std::memory_order_seq_cst);
+    context_pgm.store(nullptr, std::memory_order_seq_cst);
+    std::unique_ptr<QoreProgramHelper> old = std::move(qph);
+    if (old) {
+        if (context_holders_in_thread) {
+            // this thread uses the Program: it is not deleted under the caller
+            old.release();
+            dbg_context_marker("jni-dbg: clearGlobalContext: forked child: kept the Program for this thread\n");
+        } else {
+            old.reset();
+#ifdef DEBUG
+            dbg_context_programs_deleted.fetch_add(1, std::memory_order_relaxed);
+#endif
+            dbg_context_marker("jni-dbg: clearGlobalContext: forked child: deleted the Program\n");
+        }
+    }
+    getGlobalXsink().handleExceptions();
 }
 
 std::shared_mutex& Globals::getShutdownGate() {
@@ -5742,19 +5868,21 @@ bool Globals::enterShutdownGate(std::shared_lock<std::shared_mutex>& lock) {
 }
 
 void Globals::clearGlobalContext() {
+    // first, before the shutdown gate: a child takes neither the gate nor any lock here, and clears the Program
+    if (jni::Jvm::isForkedChild()) {
+        clearGlobalContextInForkedChild();
+        return;
+    }
     std::unique_ptr<QoreProgramHelper> old;
     {
         // announced before the wait, so that new checks do not take the gate and only those running are waited for
         shutdown_gate_closing.store(true, std::memory_order_seq_cst);
-        // taken first and released before the Program is deleted: an access check that runs ends before the flag is
-        // set, and takes neither of the other locks while this thread waits for it; in a child process created with
-        // fork(), the gate can be held by a thread of the parent, which does not exist there, so only the gate is
-        // skipped: the context lock below and the wait for the Program's holders are not
-        std::unique_lock<std::shared_mutex> gate(getShutdownGate(), std::defer_lock);
-        if (!jni::Jvm::isForkedChild()) {
-            gate.lock();
-        }
+        // taken first and released before the Program is deleted: an access check that runs ends before
+        // jni_shutting_down is set, and takes neither of the other locks while this thread waits for it
+        std::unique_lock<std::shared_mutex> gate(getShutdownGate());
+        dbg_context_marker("jni-dbg: clearGlobalContext: taking the context lock\n");
         std::lock_guard<std::recursive_mutex> guard(getContextLock());
+        dbg_context_marker("jni-dbg: clearGlobalContext: has the context lock\n");
         // sequentially consistent, as the holders of the Program check it (see context_holders)
         jni_shutting_down.store(true, std::memory_order_seq_cst);
         context_pgm.store(nullptr, std::memory_order_seq_cst);
@@ -5762,7 +5890,10 @@ void Globals::clearGlobalContext() {
     }
     if (old) {
         // a thread that obtained the Program before the shutdown started can still be using it (qore#6829)
-        if (waitForContextHolders()) {
+        dbg_context_marker("jni-dbg: clearGlobalContext: waiting for the holders\n");
+        int own_holders = waitForContextHolders();
+        dbg_context_marker("jni-dbg: clearGlobalContext: no other holders\n");
+        if (own_holders) {
             // this thread holds the Program, and cannot wait for itself: it is left allocated, as
             // abandonGlobalContext() leaves it, as deleting it would free it under the caller
             printd(5, "Globals::clearGlobalContext(): the thread holds the global context Program; it is not "
@@ -5779,7 +5910,17 @@ void Globals::clearGlobalContext() {
 }
 
 void Globals::abandonGlobalContext() {
-    std::lock_guard<std::recursive_mutex> guard(getContextLock());
+    // in a child process created with fork(), the lock can be held by a thread of the parent, which does not exist
+    // there; this runs in the exit handler, which exit() runs only when no other Qore thread is left, and the Program is
+    // only forgotten
+    std::unique_lock<std::recursive_mutex> guard(getContextLock(), std::defer_lock);
+    if (jni::Jvm::isForkedChild()) {
+        if (qph) {
+            dbg_context_marker("jni-dbg: abandonGlobalContext: forked child: left the Program allocated\n");
+        }
+    } else {
+        guard.lock();
+    }
     jni_shutting_down.store(true, std::memory_order_seq_cst);
     context_pgm.store(nullptr, std::memory_order_seq_cst);
     qph.release();

@@ -4888,13 +4888,28 @@ JniProgramDataRegistry& jni_pgm_data() {
 }
 }  // namespace
 
+#ifdef DEBUG
+std::mutex& jni_dbg_program_registry_lock() {
+    return jni_pgm_data().lock;
+}
+#endif
+
+// The registry is not used at all in a child process created with fork(), by any of the child's threads: a thread of the
+// parent can have held its lock, or been changing it, at the fork.  No Program can be reached from Java there, so a
+// lookup finds no jni data, and the data of a Program is destroyed without being removed from it.
 static void jni_pgm_data_register(const QoreProgram* pgm, JniExternalProgramData* jpc) {
+    if (Jvm::isForkedChild()) {
+        return;
+    }
     JniProgramDataRegistry& reg = jni_pgm_data();
     std::lock_guard<std::mutex> guard(reg.lock);
     reg.pgms.emplace(pgm, jpc);
 }
 
 static void jni_pgm_data_unregister(const QoreProgram* pgm, JniExternalProgramData* jpc) {
+    if (Jvm::isForkedChild()) {
+        return;
+    }
     JniProgramDataRegistry& reg = jni_pgm_data();
     std::lock_guard<std::mutex> guard(reg.lock);
     auto range = reg.pgms.equal_range(pgm);
@@ -4907,6 +4922,9 @@ static void jni_pgm_data_unregister(const QoreProgram* pgm, JniExternalProgramDa
 }
 
 bool JniExternalProgramData::clearCompilationCache(const QoreProgram* pgm) {
+    if (Jvm::isForkedChild()) {
+        return false;
+    }
     JniProgramDataRegistry& reg = jni_pgm_data();
     // the data is kept alive by the lock, as its destructor, which can run at the same time, unregisters it first
     std::lock_guard<std::mutex> guard(reg.lock);
@@ -4922,6 +4940,9 @@ bool JniExternalProgramData::clearCompilationCache(const QoreProgram* pgm) {
 
 #ifdef DEBUG
 int64 JniExternalProgramData::getCompilationCacheSizeForTest(const QoreProgram* pgm) {
+    if (Jvm::isForkedChild()) {
+        return -1;
+    }
     JniProgramDataRegistry& reg = jni_pgm_data();
     std::lock_guard<std::mutex> guard(reg.lock);
     auto range = reg.pgms.equal_range(pgm);
@@ -4937,6 +4958,9 @@ int64 JniExternalProgramData::getCompilationCacheSizeForTest(const QoreProgram* 
 #endif
 
 bool JniExternalProgramData::hasProgramData(const QoreProgram* pgm) {
+    if (Jvm::isForkedChild()) {
+        return false;
+    }
     JniProgramDataRegistry& reg = jni_pgm_data();
     std::lock_guard<std::mutex> guard(reg.lock);
     return reg.pgms.find(pgm) != reg.pgms.end();
@@ -5108,6 +5132,10 @@ QoreProgram* JniJavaCallerScope::callSite() {
     Program that has been deleted) counts as sandboxed: the code of its classes is not known to be trusted
 */
 static bool jni_program_ptr_sandboxed(jlong ptr) {
+    // Java does not run in a child process created with fork(); fails closed
+    if (Jvm::isForkedChild()) {
+        return true;
+    }
     QoreProgram* p = reinterpret_cast<QoreProgram*>(ptr);
     {
         JniProgramDataRegistry& reg = jni_pgm_data();
@@ -5270,6 +5298,10 @@ void JniJavaProgramRef::acquire(Env& env, jlong ptr, jobject loader, bool callba
 #endif
     if (!ptr) {
         return;
+    }
+    // Java does not run in a child process created with fork(), and the registry is not used there
+    if (Jvm::isForkedChild()) {
+        throw ForkedChildException();
     }
     QoreProgram* p = reinterpret_cast<QoreProgram*>(ptr);
     {
@@ -5505,6 +5537,9 @@ AbstractQoreProgramExternalData* JniExternalProgramData::copy(QoreProgram* pgm) 
 }
 
 JniExternalProgramData::~JniExternalProgramData() {
+#ifdef DEBUG
+    Globals::dbgContextMarker("jni-dbg: the jni data of a Program is destroyed\n");
+#endif
     jni_pgm_data_unregister(pgm, this);
     // NOTE: the module root namespace cache is NOT purged here.  It is keyed by the Program that
     // owns each class (qc.getProgram()), which for a module class is the module's own Program and
@@ -5874,6 +5909,11 @@ bool JniExternalProgramData::isInjectedModule(const char* mod) const {
 // count of JniExternalProgramData destructions since last GC hint
 static std::atomic<int> jni_pgm_deref_count{0};
 
+QoreThreadLock& JniExternalProgramData::saveObjectCallbackLock() {
+    static QoreThreadLock* lock = new QoreThreadLock;
+    return *lock;
+}
+
 void JniExternalProgramData::doDeref() {
     // no C++ exception may leave this function (qore#6773): AbstractQoreProgramExternalData::doDeref() has no
     // exception sink and does not document that it may throw; the teardown of the Program catches an
@@ -5890,7 +5930,7 @@ void JniExternalProgramData::doDeref() {
     while (true) {
         ResolvedCallReferenceNode* callback;
         {
-            AutoLocker al(save_object_callback_lock);
+            AutoLocker al(saveObjectCallbackLock());
             callback = save_object_callback;
             save_object_callback = nullptr;
         }

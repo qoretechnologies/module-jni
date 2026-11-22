@@ -765,7 +765,8 @@ static void jni_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     signals_assigned = true;
 
     // marks a child process created with fork() after the JVM is started, which cannot use the JVM (see
-    // jni::Jvm::isForkedChild()); registered before the JVM is started, so that no fork() is missed, and removed
+    // jni::Jvm::isForkedChild()), and initializes the save object callback lock again in the child; registered before
+    // the JVM is started, so that no fork() is missed, and removed
     // when the module is deleted, or here if its initialization fails, as the module is then unloaded
     if (jni::Jvm::registerForkHandler()) {
         xsink.outOfMemory();
@@ -918,6 +919,7 @@ static void jni_module_delete() noexcept {
 #ifdef DEBUG
     // each global context Program created must have been deleted (qore#6799)
     dbg_jni_report_context_programs();
+    Globals::dbgContextMarker("jni-dbg: the module has been deleted\n");
 #endif
     // the signals reserved for the JVM stay reserved: the module is deleted as the library is torn down, or the JVM
     // belongs to the Java host (the jvm-ptr option) and keeps running, and its handlers stay installed in either case

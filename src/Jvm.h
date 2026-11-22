@@ -141,7 +141,9 @@ public:
     }
 
     /**
-     * \brief Registers the fork handler that marks a child process created with fork() (see isForkedChild())
+     * \brief Registers the fork handler for a child process created with fork()
+     *
+     * The handler marks the child (see isForkedChild()) and initializes the save object callback lock again.
      *
      * Called in the module's initialization function, as fork handlers must be (see QoreForkHandler.h).
      * \return 0 if successful, -1 if there was no memory for the registration
@@ -169,7 +171,8 @@ private:
     Jvm() = delete;
 
     /**
-     * \brief The fork handler run in the child of fork(): marks the process if the JVM was created or set
+     * \brief The fork handler run in the child of fork(): initializes the save object callback lock again, and marks
+     * the process if the JVM was created or set
      */
     static void forkChild(void*);
 
