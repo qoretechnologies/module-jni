@@ -5,9 +5,11 @@
 #
 # Fails unless this job really uses JDK MAJOR.
 #
-# tools: java and javac on PATH and in JAVA_HOME are MAJOR, and JAVA_HOME holds the only libjvm in the container.
+# tools: java and javac on PATH and in JAVA_HOME are MAJOR, and JAVA_HOME holds the only libjvm on the root filesystem;
+# other mounted filesystems are not searched.
 # built: the same, and also the module that BUILD_DIR built links the libjvm in JAVA_HOME, no jar that it installed
-# has a class file newer than MAJOR, and a JVM started through the module (under RUNNER, as the tests run) is MAJOR.
+# has a class file newer than MAJOR, and a JVM started through the module (under RUNNER, as the tests run) is MAJOR and
+# has only the libjvm in JAVA_HOME mapped, which is the proof of the JVM that the module really runs in.
 #
 # Copyright 2026 Qore Technologies, s.r.o.
 
@@ -47,15 +49,16 @@ real_home=$(readlink -f "${java_home}")
 [ "$(readlink -f "$(command -v java)")" = "${real_home}/bin/java" ] || fail "java on PATH is not in ${java_home}"
 [ "$(readlink -f "$(command -v javac)")" = "${real_home}/bin/javac" ] || fail "javac on PATH is not in ${java_home}"
 
+# the root filesystem only (-xdev); the mapped libjvm checked in "built" mode covers a JVM loaded from anywhere else
 jvms=$(find / -xdev -name libjvm.so -not -path '/proc/*' -exec readlink -f {} + | sort -u)
-[ -n "${jvms}" ] || fail "no libjvm.so found"
+[ -n "${jvms}" ] || fail "no libjvm.so found on the root filesystem"
 while read -r jvm; do
     case "${jvm}" in
         "${real_home}"/*) ;;
         *) fail "another JVM is present: ${jvm}" ;;
     esac
 done <<< "${jvms}"
-echo "-- JDK ${major}: java and javac in ${java_home}; only JVM: ${jvms//$'\n'/ }"
+echo "-- JDK ${major}: java and javac in ${java_home}; only libjvm on the root filesystem: ${jvms//$'\n'/ }"
 
 if [ "${mode}" = "tools" ]; then
     exit 0
