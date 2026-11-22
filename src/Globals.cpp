@@ -41,8 +41,12 @@
 #include "JavaSandbox.h"
 #include "ql_jni_debug.h"
 
+#include <cstdlib>
+#include <cstring>
+#include <future>
 #include <thread>
 #include <unordered_map>
+#include <unistd.h>
 
 #include <qore/ModuleManager.h>
 
@@ -5645,10 +5649,97 @@ QoreProgram* JniContextProgramHolder::acquire() {
     return rv;
 }
 
+#ifdef DEBUG
+namespace {
+//! A thread that holds the context lock or the global context Program; see Globals::dbgHoldContext()
+struct DbgContextHold {
+    std::thread thread;
+    std::promise<void> held;
+    std::promise<void> release;
+};
+
+//! Never destroyed: in a child process created with fork(), the thread of the hold does not exist
+DbgContextHold* dbg_context_hold = nullptr;
+
+//! Writes a marker of the module's shutdown to stderr, if QORE_JNI_DBG_FORK_MARKERS is set
+void dbg_context_marker(const char* marker) {
+    if (getenv("QORE_JNI_DBG_FORK_MARKERS")) {
+        ssize_t rc = write(STDERR_FILENO, marker, strlen(marker));
+        (void)rc;
+    }
+}
+}
+
+bool Globals::dbgHoldContext(bool lock) {
+    if (dbg_context_hold) {
+        return false;
+    }
+    std::unique_ptr<DbgContextHold> hold(new DbgContextHold);
+    std::future<void> held = hold->held.get_future();
+    std::future<void> release = hold->release.get_future();
+    hold->thread = std::thread([p = hold.get(), lock, release = std::move(release)] () {
+        if (lock) {
+            std::lock_guard<std::recursive_mutex> guard(getContextLock());
+            p->held.set_value();
+            release.wait();
+        } else {
+            holdContextProgram();
+            p->held.set_value();
+            release.wait();
+            releaseContextProgram();
+        }
+    });
+    held.wait();
+    dbg_context_hold = hold.release();
+    return true;
+}
+
+void Globals::dbgReleaseContextHold() {
+    if (!dbg_context_hold) {
+        return;
+    }
+    std::unique_ptr<DbgContextHold> hold(dbg_context_hold);
+    dbg_context_hold = nullptr;
+    hold->release.set_value();
+    hold->thread.join();
+}
+#else
+#define dbg_context_marker(marker)
+#endif
+
+void Globals::clearGlobalContextInForkedChild() {
+    dbg_context_marker("jni-dbg: clearGlobalContext: forked child\n");
+    // does not wait: a lock that another thread of the parent held is never released; this thread can hold it itself
+    std::unique_lock<std::recursive_mutex> lock(getContextLock(), std::try_to_lock);
+    const bool unheld = lock.owns_lock() && !context_holders.load(std::memory_order_seq_cst);
+    jni_shutting_down.store(true, std::memory_order_seq_cst);
+    context_pgm.store(nullptr, std::memory_order_seq_cst);
+    if (!unheld) {
+        // the Program can be in use or partly built: it is not touched, and no JNI call is made for it
+        qph.release();
+        return;
+    }
+    std::unique_ptr<QoreProgramHelper> old = std::move(qph);
+    lock.unlock();
+    if (old) {
+        old.reset();
+#ifdef DEBUG
+        dbg_context_programs_deleted.fetch_add(1, std::memory_order_relaxed);
+#endif
+    }
+    getGlobalXsink().handleExceptions();
+}
+
 void Globals::clearGlobalContext() {
+    if (jni::Jvm::isForkedChild()) {
+        clearGlobalContextInForkedChild();
+        return;
+    }
     std::unique_ptr<QoreProgramHelper> old;
     {
+        dbg_context_marker("jni-dbg: clearGlobalContext: taking the context lock\n");
         std::lock_guard<std::recursive_mutex> guard(getContextLock());
+        dbg_context_marker("jni-dbg: clearGlobalContext: has the context lock\n");
         // sequentially consistent, as the holders of the Program check it (see context_holders)
         jni_shutting_down.store(true, std::memory_order_seq_cst);
         context_pgm.store(nullptr, std::memory_order_seq_cst);
@@ -5656,7 +5747,10 @@ void Globals::clearGlobalContext() {
     }
     if (old) {
         // a thread that obtained the Program before the shutdown started can still be using it (qore#6829)
-        if (waitForContextHolders()) {
+        dbg_context_marker("jni-dbg: clearGlobalContext: waiting for the holders\n");
+        int own_holders = waitForContextHolders();
+        dbg_context_marker("jni-dbg: clearGlobalContext: no other holders\n");
+        if (own_holders) {
             // this thread holds the Program, and cannot wait for itself: it is left allocated, as
             // abandonGlobalContext() leaves it, as deleting it would free it under the caller
             printd(5, "Globals::clearGlobalContext(): the thread holds the global context Program; it is not "
@@ -5673,7 +5767,14 @@ void Globals::clearGlobalContext() {
 }
 
 void Globals::abandonGlobalContext() {
-    std::lock_guard<std::recursive_mutex> guard(getContextLock());
+    // in a child process created with fork(), the lock can be held by a thread of the parent, which does not exist
+    // there; only the forking thread runs, and the Program is only forgotten
+    std::unique_lock<std::recursive_mutex> guard(getContextLock(), std::defer_lock);
+    if (jni::Jvm::isForkedChild()) {
+        dbg_context_marker("jni-dbg: abandonGlobalContext: forked child\n");
+    } else {
+        guard.lock();
+    }
     jni_shutting_down.store(true, std::memory_order_seq_cst);
     context_pgm.store(nullptr, std::memory_order_seq_cst);
     qph.release();

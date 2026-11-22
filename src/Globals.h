@@ -665,6 +665,13 @@ public:
     DLLLOCAL static std::atomic<int> dbg_context_programs_created;
     //! The number of global context Programs deleted by clearGlobalContext() in the process (debug builds only)
     DLLLOCAL static std::atomic<int> dbg_context_programs_deleted;
+
+    //! Makes a new thread hold the context lock (\a lock true) or the global context Program (false) until
+    //! dbgReleaseContextHold() (debug builds only); returns once it holds it, or false if a hold is active
+    DLLLOCAL static bool dbgHoldContext(bool lock);
+
+    //! Ends the hold of dbgHoldContext(), if any, and joins its thread (debug builds only)
+    DLLLOCAL static void dbgReleaseContextHold();
 #endif
 
     //! Abandons the global context during process exit without running Qore destructors
@@ -789,6 +796,14 @@ private:
     //! Waits until no other thread holds the global context Program, and returns the number of holders of this
     //! thread, which it cannot wait for
     DLLLOCAL static int waitForContextHolders();
+
+    //! clearGlobalContext() in a child process created with fork()
+    /** Only the forking thread exists in the child: a lock or a hold of the global context Program that another thread
+        of the parent had at the fork is never released.  The function waits for neither.  The Program is deleted only
+        if no such state exists, as in any other process; otherwise it can be in use or partly built, and it is left
+        allocated, as abandonGlobalContext() leaves it, and released with the process
+    */
+    DLLLOCAL static void clearGlobalContextInForkedChild();
 
     friend class JniContextProgramHolder;
 

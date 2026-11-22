@@ -732,7 +732,37 @@ void dbg_jni_run_java_program_ptr_hook() noexcept {
     run_supplier_hook(java_program_ptr_hook);
 }
 
+//! Makes a new thread hold the context lock until dbg_jni_release_context_hold()
+static QoreValue f_dbg_jni_hold_context_lock(const QoreListNode* args, RuntimeConfig& rtcfg, ExceptionSink* xsink) {
+    if (!jni::Globals::dbgHoldContext(true)) {
+        xsink->raiseException("DBG-JNI-HOOK-ERROR", "a context hold is already active");
+    }
+    return QoreValue();
+}
+
+//! Makes a new thread hold the global context Program until dbg_jni_release_context_hold()
+static QoreValue f_dbg_jni_hold_context_program(const QoreListNode* args, RuntimeConfig& rtcfg,
+        ExceptionSink* xsink) {
+    if (!jni::Globals::dbgHoldContext(false)) {
+        xsink->raiseException("DBG-JNI-HOOK-ERROR", "a context hold is already active");
+    }
+    return QoreValue();
+}
+
+//! Ends the hold of dbg_jni_hold_context_lock() or dbg_jni_hold_context_program()
+static QoreValue f_dbg_jni_release_context_hold(const QoreListNode* args, RuntimeConfig& rtcfg,
+        ExceptionSink* xsink) {
+    jni::Globals::dbgReleaseContextHold();
+    return QoreValue();
+}
+
 void init_jni_debug_functions(QoreNamespace& ns) {
+    ns.addBuiltinVariant("dbg_jni_hold_context_lock", f_dbg_jni_hold_context_lock, QCF_NO_FLAGS, QDOM_DEFAULT,
+        nothingTypeInfo);
+    ns.addBuiltinVariant("dbg_jni_hold_context_program", f_dbg_jni_hold_context_program, QCF_NO_FLAGS, QDOM_DEFAULT,
+        nothingTypeInfo);
+    ns.addBuiltinVariant("dbg_jni_release_context_hold", f_dbg_jni_release_context_hold, QCF_NO_FLAGS, QDOM_DEFAULT,
+        nothingTypeInfo);
     ns.addBuiltinVariant("dbg_jni_describe_throwable", f_dbg_jni_describe_throwable, QCF_NO_FLAGS, QDOM_DEFAULT,
         stringTypeInfo, 1, objectTypeInfo, QoreValue(), "throwable");
     ns.addBuiltinVariant("dbg_jni_set_classpath_jdk_feature", f_dbg_jni_set_classpath_jdk_feature, QCF_NO_FLAGS,

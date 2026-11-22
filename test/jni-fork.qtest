@@ -53,6 +53,9 @@ class JniForkTest inherits QUnit::Test {
         addTestCase("a child raises JNI-FORK-ERROR when it uses Java", \javaInChildTest());
         addTestCase("a child deletes a Program whose binding a Java thread is calling", \bindingLeaseTest());
         addTestCase("a child ends its script, and the module is deleted", \moduleCleanupTest());
+        addTestCase("a child ends while another thread holds the context lock", \contextLockTest());
+        addTestCase("a child ends while another thread holds the context Program", \contextProgramTest());
+        addTestCase("a child ends with no hold on the context", \contextNoHoldTest());
         set_return_value(main());
     }
 
@@ -144,6 +147,40 @@ class JniForkTest inherits QUnit::Test {
         assertRegex("parent: used", output);
         assertRegex("child: done", output);
         assertRegex("parent: done", output);
+    }
+
+    # the module's cleanup in a child takes no lock and waits for no holder that a thread of the parent left: that
+    # thread does not exist in the child, which waited forever
+    contextLockTest() {
+        checkContextHold("lock");
+    }
+
+    contextProgramTest() {
+        checkContextHold("program");
+    }
+
+    contextNoHoldTest() {
+        checkContextHold("none");
+    }
+
+    #! runs the child script for both ways that a child can end; needs the debug hooks of the module
+    private checkContextHold(string hold) {
+        checkFork();
+        try {
+            call_function("Jni::org::qore::jni::dbg_jni_context_program_counts");
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip("the jni module's debug hooks require a debug build");
+        }
+        string script = get_script_dir() + "/jni-fork-context-child.q";
+        foreach string ending in (("end", "exit")) {
+            string output = backquote(sprintf("%s -b --enable-debug %s %s %s 2>&1", shellQuote(QORE_ARGV[0]),
+                shellQuote(script), hold, ending));
+            assertRegex("child: ending", output, hold + "-" + ending);
+            assertRegex("parent: the child has exited", output, hold + "-" + ending);
+            # the child reached the module's cleanup for this way of ending
+            assertRegex(ending == "end" ? "jni-dbg: clearGlobalContext" : "jni-dbg: abandonGlobalContext", output,
+                hold + "-" + ending);
+        }
     }
 
     private checkFork() {
