@@ -182,11 +182,14 @@ class JniForkTest inherits QUnit::Test {
     # a child can start threads of its own, which must exclude each other: each old callback is released once
     saveObjectSwapTest() {
         checkContextHooks();
-        string output = runContextChild("none", "swap");
-        assertRegex("parent: the child has ended: exited 0", output);
-        *list<*string> swap = output =~ x/child: swap exclusive=(\w+) references=(\d+) expected=(\d+)/;
-        assertEq("True", swap[0], output);
-        assertEq(swap[2], swap[1], output);
+        # also with the lock held by a thread of the parent at the fork, which must not block the child's threads
+        foreach string hold in (("none", "save-object")) {
+            string output = runContextChild(hold, "swap");
+            assertRegex("parent: the child has ended: exited 0", output, hold);
+            *list<*string> swap = output =~ x/child: swap exclusive=(\w+) references=(\d+) expected=(\d+)/;
+            assertEq("True", swap[0], hold + ": " + output);
+            assertEq(swap[2], swap[1], hold + ": " + output);
+        }
     }
 
     #! skips the test if the module's debug hooks or the bound of the child script are not available

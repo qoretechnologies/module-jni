@@ -5529,7 +5529,8 @@ jlong Globals::getContextProgram(jobject new_syscl, bool& created) {
 
 QoreProgram* Globals::createJavaContextProgram() {
     // no Program can be created in a child process created with fork(), as the JVM cannot be used there, and a thread
-    // of the parent can have held the lock
+    // of the parent can have held the lock; the Program is missing there only if the fork interrupted the module's
+    // initialization, and libqore then fails the load of the module in the child, so no jni API reaches this
     if (jni::Jvm::isForkedChild()) {
         return context_pgm.load(std::memory_order_acquire);
     }
@@ -5647,7 +5648,7 @@ QoreProgram* JniContextProgramHolder::acquire() {
         throw;
     }
     if (!rv) {
-        // the module's shutdown has started
+        // the module's shutdown has started (see createJavaContextProgram() for a child process created with fork())
         Globals::releaseContextProgram();
         return nullptr;
     }

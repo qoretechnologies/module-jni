@@ -619,12 +619,6 @@ public:
         return setting < 0 ? jni_compat_types : setting != 0;
     }
 
-    //! Sets the save object callback, releasing the old one
-    /** The old callback is released after the new one is set, as releasing it can run Qore code, for example the
-        destructor of an object that only the callback holds; an exception raised by that code is raised in \a xsink;
-        if the old callback is running (see getSaveObjectCallbackRef()), its last reference is released, and such an
-        exception is raised, by save_object() when it returns
-    */
     //! Returns the lock of the save object callbacks of all Programs
     /** Held only to swap a callback or take a reference to it.  One process-wide lock, so that the module's fork handler
         can initialize it again in a child process created with fork(): a thread of the parent can have held it, while
@@ -634,6 +628,12 @@ public:
     */
     DLLLOCAL static QoreThreadLock& saveObjectCallbackLock();
 
+    //! Sets the save object callback, releasing the old one
+    /** The old callback is released after the new one is set, as releasing it can run Qore code, for example the
+        destructor of an object that only the callback holds; an exception raised by that code is raised in \a xsink;
+        if the old callback is running (see getSaveObjectCallbackRef()), its last reference is released, and such an
+        exception is raised, by save_object() when it returns
+    */
     DLLLOCAL void setSaveObjectCallback(const ResolvedCallReferenceNode* save_object_callback, ExceptionSink* xsink) {
         ResolvedCallReferenceNode* new_callback = save_object_callback ? save_object_callback->refRefSelf()
             : nullptr;
@@ -781,9 +781,9 @@ protected:
     bool borrowedClassLoader = false;
     // dynamic API class
     GlobalReference<jclass> dynamicApi;
-    // call reference for saving object references; save_object_callback_lock must be held when accessing it
+    // call reference for saving object references; saveObjectCallbackLock() must be held when accessing it, and is held
+    // only to read, reference, or swap the pointer, never while Qore code runs
     ResolvedCallReferenceNode* save_object_callback = nullptr;
-    // protects save_object_callback; only held to read, reference, or swap the pointer, never while Qore code runs
 
     // QoreJavaDynamicApi.newInstance()
     jmethodID methodQoreJavaDynamicApiNewInstance = 0;
@@ -1005,7 +1005,9 @@ DLLLOCAL JniExternalProgramData* jni_get_context(QoreProgram*& pgm);
 
 //! Returns the jni data of the Program context as jni_get_context(), or of the global Java context Program
 /** Returns nullptr once the module's shutdown has started, as no global context Program exists then
-    (Globals::getJavaContextProgram()); \a pgm is set to the Program, or to nullptr
+    (Globals::getJavaContextProgram()); \a pgm is set to the Program, or to nullptr.  A child process created with
+    fork() while the module was being initialized also has none, but the load of the module fails in that child, so no
+    jni API that calls this function can be called there
 
     The global context Program is held by \a holder, which the caller keeps for as long as it uses the Program or its
     jni data, as the module's shutdown deletes it once no other thread holds it (qore#6829)

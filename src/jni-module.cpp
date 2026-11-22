@@ -765,7 +765,8 @@ static void jni_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     signals_assigned = true;
 
     // marks a child process created with fork() after the JVM is started, which cannot use the JVM (see
-    // jni::Jvm::isForkedChild()); registered before the JVM is started, so that no fork() is missed, and removed
+    // jni::Jvm::isForkedChild()), and initializes the save object callback lock again in the child; registered before
+    // the JVM is started, so that no fork() is missed, and removed
     // when the module is deleted, or here if its initialization fails, as the module is then unloaded
     if (jni::Jvm::registerForkHandler()) {
         xsink.outOfMemory();
