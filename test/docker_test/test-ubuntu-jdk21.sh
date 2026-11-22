@@ -49,9 +49,11 @@ fi
 rc=0
 "${script_dir}/test-ubuntu.sh" || rc=$?
 
-# the install manifest is written when the install completes: without it, there is no build to check and no test ran
+# the install manifest is written when the install completes: without it, there is no installed module to check and
+# the module tests did not run (the build, the unit tests run by ctest or a check before the install failed)
 if [ "${rc}" != "0" ] && [ ! -s "${src_dir}/build/install_manifest.txt" ]; then
-    echo "ERROR: the build or install failed on JDK ${JDK_MAJOR} (test-ubuntu.sh exit code ${rc}); no test ran" >&2
+    echo "ERROR: failed before the install completed on JDK ${JDK_MAJOR} (test-ubuntu.sh exit code ${rc});" \
+        "the module tests did not run" >&2
     exit "${rc}"
 fi
 
@@ -66,7 +68,7 @@ proof=0
 ) || proof=$?
 
 if [ "${proof}" != "0" ]; then
-    echo "ERROR: this job did not prove JDK ${JDK_MAJOR}" >&2
+    echo "ERROR: this job did not prove JDK ${JDK_MAJOR} (test-ubuntu.sh exit code ${rc})" >&2
     exit 1
 fi
 if [ "${rc}" != "0" ]; then
