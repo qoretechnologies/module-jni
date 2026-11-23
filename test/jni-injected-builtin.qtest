@@ -226,8 +226,9 @@ string sub call_args(object cls, object o, string method, int count) {
         }
     }
     public static String callArgs(Object o, String method, String count) {
-        Object[] list = new Object[Integer.parseInt(count)];
-        for (int i = 0; i < list.length; ++i) {
+        int n = Integer.parseInt(count);
+        Object[] list = n < 0 ? null : new Object[n];
+        for (int i = 0; i < n; ++i) {
             list[i] = i + 1;
         }
         try {
@@ -351,6 +352,12 @@ string sub call_args(object cls, object o, string method, int count) {
                 p.callFunction("call_args", compiled.cls, o, "variadicCall", c.count), "declared list");
             assertEq(sprintf("ok: trailing:q:%d:%s", c.count, c.list),
                 p.callFunction("call_args", compiled.cls, o, "listCall", c.count), "trailing list");
+        }
+
+        # a null array for a declared list is no list: the call is refused with the error of the method's signature
+        foreach string method in (("variadicCall", "listCall")) {
+            assertRegex("^exception: .*RUNTIME-OVERLOAD-ERROR: no variant matching",
+                p.callFunction("call_args", compiled.cls, o, method, -1), method + " with a null array");
         }
     }
 }

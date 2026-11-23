@@ -10,9 +10,9 @@
 # the parent prints "status: <how the child ended>", or "skip: <reason>"
 #
 # The child's stderr is the write end of a pipe, which stays open until the child has ended, and the child reports each
-# stage of its exit on it.  The limit applies to the time with no report from the child, and not to the start of the JVM
-# in the parent: a child that reports nothing for that long is reported as not having exited.  Whatever fails in the
-# parent, it kills a child that it has not collected and releases the Java thread that holds the locks.
+# stage of its exit on it.  A child is reported as not having exited only if it is blocked (see wait_fork_child()), with
+# no limit on the time that a child that makes progress can take.  Whatever fails in the parent, it kills a child that it
+# has not collected and releases the Java thread that holds the locks.
 
 %modern
 %no-child-restrictions
@@ -21,7 +21,8 @@
 %module-cmd(jni) add-relative-classpath qore-jni-test.jar
 %module-cmd(jni) import org.qore.jni.test.GeneratedBindings
 
-const ChildLimit = 30s;
+%include jni-fork-progress.ql
+
 const WaitChild = "Jni::org::qore::jni::dbg_jni_wait_child_status";
 
 const Source = "%modern\n%requires jni\n"
@@ -102,15 +103,7 @@ if (!pid) {
 } else {
     uncollected = pid;
     pipe.write.close();
-    bool ended = False;
-    while (pipe.read.isDataAvailable(ChildLimit)) {
-        # one byte: a larger read would wait for that many bytes, past the limit
-        *binary data = pipe.read.readBinary(1);
-        if (!data) {
-            ended = True;
-            break;
-        }
-    }
+    bool ended = wait_fork_child(pipe.read, pid);
     string result;
     if (ended) {
         result = call_function(WaitChild, pid);

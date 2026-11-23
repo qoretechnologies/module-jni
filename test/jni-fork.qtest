@@ -7,8 +7,8 @@
 # so the child cannot use Java, and the module's cleanup in the child must not wait for any of them.
 #
 # Each child exits with exit() and writes its result to a pipe whose write end it keeps open until it has exited:
-# the parent reads until the end of the data, so it waits for the child's exit deterministically.  A child that
-# waits forever makes the parent wait forever (the test runner's time limit is only a guard).
+# the parent reads until the end of the data, so it waits for the child's exit deterministically.  A child that is
+# blocked is reported (see wait_fork_child()), and a child that makes progress can take as long as it needs.
 
 %modern
 %no-child-restrictions
@@ -21,6 +21,8 @@
 %module-cmd(jni) add-relative-classpath qore-jni-test.jar
 %module-cmd(jni) import org.qore.jni.test.GeneratedBindings
 %module-cmd(jni) import java.lang.StringBuilder
+
+%include jni-fork-progress.ql
 
 %exec-class JniForkTest
 
@@ -80,7 +82,7 @@ class JniForkTest inherits QUnit::Test {
     }
 
     #! runs the child script of heldLocksTest() and returns the line with its result
-    /** The script limits the time with no report from the child, and not the start of the JVM in the parent
+    /** The script reports a child that is blocked; see wait_fork_child()
     */
     private string runLocksChild(string route, int status) {
         string script = get_script_dir() + "/jni-fork-locks-child.q";
@@ -142,14 +144,22 @@ class JniForkTest inherits QUnit::Test {
         object thread = f.functionInThread("hold", 1);
         # the Java thread is in the call when hold() has signaled it
         p.callFunction("wait_entered");
+        int parent_pid = getpid();
+        bool released = False;
+        code release = sub () {
+            # only the parent has the thread; it leaves the call
+            if (!released && getpid() == parent_pid) {
+                released = True;
+                p.callFunction("release");
+                thread.join();
+            }
+        };
+        # also if the fork or the read of the child's result fails
+        on_exit release();
         string result = runChild(string sub () {
             delete p;
             return "deleted";
-        }, sub () {
-            # the parent's thread leaves the call
-            p.callFunction("release");
-            thread.join();
-        });
+        }, release);
         assertEq("deleted", result);
         assertEq(8, f.function(7));
     }
@@ -234,8 +244,8 @@ class JniForkTest inherits QUnit::Test {
     }
 
     #! runs the child script and returns its output
-    /** The script limits the time with no report from the child; a limit on the whole script would measure the start of
-        the JVM in the parent, which depends on the load
+    /** The script reports a child that is blocked (see wait_fork_child()); a limit on the time of the whole script would
+        measure the start of the JVM in the parent, which depends on the load
     */
     private string runContextChild(string hold, string ending) {
         return backquote(sprintf("%s -b --enable-debug %s %s %s 2>&1", shellQuote(QORE_ARGV[0]),
@@ -305,13 +315,21 @@ class JniForkTest inherits QUnit::Test {
         }
         pipe.write.close();
         assertGt(0, pid);
+        # a child that has not ended is killed also if the code below fails: it holds the test's standard output open
+        bool ended = False;
+        on_exit {
+            if (!ended) {
+                kill(pid, SIGKILL);
+            }
+        }
         if (parent) {
             parent();
         }
         string result;
-        while (*binary data = pipe.read.readBinary(4096)) {
-            result += data.toString();
+        if (!wait_fork_child(pipe.read, pid, sub (binary data) { result += data.toString(); })) {
+            return "child blocked: " + result;
         }
+        ended = True;
         return result;
     }
 
