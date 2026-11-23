@@ -239,9 +239,13 @@ bool QoreJdbcSecretMasker::maskText(QoreString& text) const {
         return false;
     }
     jdbc_secret_list_t secrets;
-    // the url option, in UTF-8, and the database name, which the url option overrides
-    jdbc_add_url_secrets(secrets, url);
-    jdbc_add_url_secrets(secrets, ds_utf8(ds, ds->getDBNameStr()));
+    // the url option, in UTF-8, or the database name if there is no url option, as connect() uses them: a database
+    // name that the url option overrides is often a placeholder (ex: "ignored") that is not masked
+    if (!url.empty()) {
+        jdbc_add_url_secrets(secrets, url);
+    } else {
+        jdbc_add_url_secrets(secrets, ds_utf8(ds, ds->getDBNameStr()));
+    }
     // the password of the datasource, which is passed to the driver as a property
     {
         std::string pass = ds_utf8(ds, ds->getPasswordStr());

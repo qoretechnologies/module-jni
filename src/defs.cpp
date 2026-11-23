@@ -134,8 +134,6 @@ QoreStringNode* JavaException::toString(bool clear) const {
     // raised again afterwards unless it is to be cleared
     env->ExceptionClear();
     QoreStringNode* rv = describe(env, throwable);
-    // the secrets of the operation are masked in the text (qore#7344)
-    JavaExceptionMaskHelper::mask(*rv);
     if (!clear) {
         env->Throw(throwable);
     }
@@ -163,7 +161,10 @@ QoreStringNode* JavaException::describe(JNIEnv* env, jthrowable original) {
                     env->ExceptionClear();
                 } else {
                     Env::ModifiedUtf8 m(chars.get());
-                    desc->concat(m.c_str(), m.size());
+                    // the secrets of the operation are masked in the message (qore#7344)
+                    QoreString text(m.c_str(), m.size(), QCS_UTF8);
+                    JavaExceptionMaskHelper::mask(text);
+                    desc->concat(text.c_str(), text.size());
                 }
             }
             break;
@@ -200,7 +201,10 @@ QoreStringNode* JavaException::describe(JNIEnv* env, jthrowable original) {
                 env->ExceptionClear();
             } else {
                 Env::ModifiedUtf8 m(chars.get());
-                desc->concat(m.c_str(), m.size());
+                // the secrets of the operation are masked in the message, not in the class name (qore#7344)
+                QoreString text(m.c_str(), m.size(), QCS_UTF8);
+                JavaExceptionMaskHelper::mask(text);
+                desc->concat(text.c_str(), text.size());
             }
         }
 
@@ -486,17 +490,17 @@ void JavaException::convert(ExceptionSink* xsink) {
             env->ExceptionClear();
         } else {
             Env::ModifiedUtf8 m(chars.get());
-            desc->concat(m.c_str(), m.size());
             msg_text.concat(m.c_str(), m.size());
         }
     }
+    // the secrets of the operation are masked in the message, not in the class name (qore#7344)
+    bool masked = JavaExceptionMaskHelper::mask(msg_text);
+    desc->concat(msg_text.c_str(), msg_text.size());
 
     // add Java call stack to Qore call stack; the stack of the exception that was raised
     QoreExternalProgramLocationWrapper loc;
     JniCallStack stack(throwable, loc);
 
-    // the secrets of the operation are masked in the text (qore#7344)
-    bool masked = JavaExceptionMaskHelper::mask(**desc);
     // the Java exception is the argument of the Qore exception, whose text (ex: its toString(), which
     // AbstractConnection::ping() gives), causes, next exceptions and suppressed exceptions can name the secrets too:
     // it is replaced with a copy without them
@@ -505,7 +509,6 @@ void JavaException::convert(ExceptionSink* xsink) {
     // SQLException
     bool drop_arg = false;
     if (replace_arg) {
-        JavaExceptionMaskHelper::mask(msg_text);
         LocalReference<jthrowable> copy = masked_sql_exception(env, throwable, msg_text);
         if (copy) {
             throwable = std::move(copy);

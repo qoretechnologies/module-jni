@@ -83,6 +83,10 @@ public class EchoDriver implements Driver {
         if (\"plain\".equals(mode)) {
             throw new SQLException(\"plain connection failure 42\", \"08001\", 42);
         }
+        // a message with the database name that the url option overrides
+        if (\"word\".equals(mode)) {
+            throw new SQLException(\"word: ignored\", \"08001\", 43, new SQLException(\"plain cause\"));
+        }
         // the URL only in the next exception of an SQLException
         if (\"next\".equals(mode)) {
             SQLException e = new SQLException(\"plain next failure\", \"08001\", 1);
@@ -135,6 +139,8 @@ public class EchoDriver implements Driver {
         addTestCase("unrelated text", \unrelatedTextTest());
         addTestCase("short password", \shortPasswordTest());
         addTestCase("exception chains", \exceptionChainsTest());
+        addTestCase("overridden database name", \overriddenDbNameTest());
+        addTestCase("class name", \classNameTest());
         set_return_value(main());
     }
 
@@ -339,6 +345,39 @@ public class EchoDriver implements Driver {
                 assertEq("08001", ex.arg.getSQLState(), mode);
                 assertEq(1, ex.arg.getErrorCode(), mode);
             }
+        }
+    }
+
+    overriddenDbNameTest() {
+        # the database name that the url option overrides is not used for the connection and is not masked: the
+        # exception is not changed
+        Datasource ds("jdbc", "u", dsSecret, "ignored");
+        ds.setOption("url", "qore-echo7344://h/db;mode=word");
+        ds.setOption("classpath", tmp.path);
+        try {
+            ds.open();
+            fail("no exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("JNI-ERROR", ex.err);
+            assertEq("java.sql.SQLException: word: ignored", ex.desc);
+            # the driver's exception, with its cause
+            assertEq(43, ex.arg.getErrorCode());
+            assertEq("java.sql.SQLException: plain cause", ex.arg.getCause().toString());
+        }
+    }
+
+    classNameTest() {
+        # a secret is masked in the message, not in the class name of the exception
+        Datasource ds("jdbc", "u", "SQLException", "qore-echo7344://h/db");
+        ds.setOption("classpath", tmp.path);
+        try {
+            ds.open();
+            fail("no exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("JNI-ERROR", ex.err);
+            assertTrue(ex.desc.equalPartial("java.sql.SQLException: cannot connect to jdbc:qore-echo7344:**** "),
+                ex.desc);
+            assertTrue(ex.desc =~ /; password: \*\*\*\*$/, ex.desc);
         }
     }
 
