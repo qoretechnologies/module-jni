@@ -26,8 +26,20 @@ string sub lookup(string op, string name) {
 string sub locations_hold(string rel) {
     return ClasspathLookupProbe::locationsHold(get_class_loader(), \"\", rel);
 }
-string sub end_copy(string dir, string trigger, int at, int limit) {
-    return ClasspathLookupProbe::endCopyDuringMake(get_class_loader(), dir, trigger, at, limit);
+string sub end_copy(string dir, int at, int limit) {
+    return ClasspathLookupProbe::endCopyDuringMake(get_class_loader(), dir, at, limit);
+}
+string sub detached_limit(string dir) {
+    return ClasspathLookupProbe::detachedLimit(get_class_loader(), dir);
+}
+object sub capture_policy() {
+    return ClasspathLookupProbe::capturePolicy();
+}
+string sub end_with_error(string dir, string mode) {
+    return ClasspathLookupProbe::endCopiesWithError(get_class_loader(), dir, mode);
+}
+string sub compile_ending(string key, int at, string source) {
+    return ClasspathLookupProbe::compileWhileEnding(get_class_loader(), key, at, source);
 }
 string sub hold_derived(string dir) {
     return ClasspathLookupProbe::holdDerived(get_class_loader(), dir);
@@ -49,6 +61,8 @@ const AddressTries = 64;
 
 const EntriesProp = "qore.jni.compiler.maxEntries";
 const EncodingProp = "sun.jnu.encoding";
+#! a system property that the Kotlin compiler reads while it runs, after its classpath has been made
+const CompilerProp = "kotlin.environment.keepalive";
 
 list<string> sub module_dirs() {
     list<string> rv = (get_script_dir() + "/../build", get_script_dir() + "/../qlib");
@@ -142,13 +156,75 @@ sub budget_case(string root) {
 }
 
 #! a copy that is ended at each step of making it leaves nothing, and returns its charges once
-sub end_copy_case(string root, string trigger, string label) {
+sub end_copy_case(string root, string label) {
     # the derived class loader and its parent each have the directory on their classpath
     int entries = EndingEntries * 2;
     for (int at = 1; at <= entries; ++at) {
         Program p = new_program(get_policy(root, ("ending",)), root + "/ending");
-        result(sprintf("%s at %d", label, at), "clean", p.callFunction("end_copy", root + "/ending", trigger, at,
-            entries));
+        result(sprintf("%s at %d", label, at), "clean", p.callFunction("end_copy", root + "/ending", at, entries));
+    }
+}
+
+#! returns a sandboxed Program with no classpath of its own
+Program sub new_empty_program(SandboxManager sm) {
+    Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+    p.parse(TenantSource, "tenant");
+    p.setSandboxManager(sm);
+    return p;
+}
+
+#! a derived class loader stays under the limits of its Program, and its copies end with the Program
+sub detached_case(string root) {
+    Program p = new_empty_program(get_policy(root, ("ending",)));
+    object policy = p.callFunction("capture_policy");
+    result("detached limit", sprintf("held %d; another refused", MaxOutstandingCopies),
+        p.callFunction("detached_limit", root + "/ending"));
+    string copy = ClasspathLookupProbe::lastKeptCopy();
+    result("detached held", True, is_dir(copy));
+    delete p;
+    result("detached removed", False, is_dir(copy));
+    result("detached new copy", "refused", ClasspathLookupProbe::detachedCopy());
+    result("detached new guard", "refused", ClasspathLookupProbe::copyWithNewGuard(policy, root + "/ending"));
+}
+
+#! an error while a copy is removed does not stop the removal of the others or lose a charge
+sub removal_error_case(string root) {
+    foreach string mode in ("close", "abort", "program") {
+        Program p = new_empty_program(get_policy(root, ("ending",)));
+        result("removal-error " + mode, "clean", p.callFunction("end_with_error", root + "/ending", mode));
+    }
+}
+
+#! a compile whose Program ends while its classpath is made, or while the compiler runs
+sub compile_end_case(string root) {
+    list<string> homes = ();
+    if (ENV.KOTLIN_HOME) {
+        push homes, ENV.KOTLIN_HOME;
+    }
+    homes += ("/usr/share/qore/java/kotlin", "/opt/kotlin", "/opt/kotlinc", "/usr/share/kotlin", "/usr/lib/kotlin",
+        "/usr/local/kotlin");
+    *string home;
+    foreach string h in (homes) {
+        if (is_file(h + "/lib/kotlin-compiler.jar") && is_file(h + "/lib/kotlin-stdlib.jar")) {
+            home = h;
+            break;
+        }
+    }
+    if (!home) {
+        if (ENV.CI) {
+            throw "KOTLIN-MISSING", "the Kotlin compiler JAR is required in CI for this test";
+        }
+        printf("result: skipped: the Kotlin compiler JAR is not available\n");
+        return;
+    }
+    Program host(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+    host.loadModule("jni");
+    map host.issueModuleCmd("jni", "global-add-classpath " + home + "/lib/" + $1),
+        ("kotlin-compiler.jar", "kotlin-stdlib.jar");
+    string source = "class KEnd { fun f(x: pkg.Ok?) = x }\n";
+    foreach hash<auto> i in ({"label": "copy", "key": EntriesProp}, {"label": "compiler", "key": CompilerProp}) {
+        Program p = new_program(get_policy(root, ("allowed",)), root + "/allowed");
+        result("compile-end during " + i.label, "clean", p.callFunction("compile_ending", i.key, 1, source));
     }
 }
 
@@ -180,9 +256,11 @@ string root = ARGV[1];
 # these cases do not depend on the encoding of file names
 switch (case_name) {
     case "budget": budget_case(root); exit(0);
-    case "end-close": end_copy_case(root, "close", case_name); exit(0);
-    case "end-path": end_copy_case(root, "release", case_name); exit(0);
+    case "end-close": end_copy_case(root, case_name); exit(0);
     case "program-end": program_end_case(root); exit(0);
+    case "detached": detached_case(root); exit(0);
+    case "removal-error": removal_error_case(root); exit(0);
+    case "compile-end": compile_end_case(root); exit(0);
 }
 if (ClasspathLookupProbe::fileNameEncoding() != "UTF-8") {
     printf("result: skipped: the file names of the JVM are in %s\n", ClasspathLookupProbe::fileNameEncoding());

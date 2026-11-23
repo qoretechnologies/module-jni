@@ -365,7 +365,8 @@ class Outer {
     discovers script definitions on the classpath and runs their code, is turned off.  The copies that a Program has at
     one time are limited in number, files, bytes and directory entries visited, across all of its class loaders; a
     compile that would go over a limit fails, and the copies are removed when the compile ends, when their class
-    loader is closed, and when the Program ends.  The Kotlin compiler also uses
+    loader is closed, and when the Program ends.  Once the module's shutdown has started, closing a class loader does
+    nothing, so a copy of a compile that is still running is then removed only when that compile ends.  The Kotlin compiler also uses
     the host's %Qore and Kotlin jars and the entries that trusted code added.  A Kotlin script (\c kotlin_eval()) of such
     a caller is refused while a directory that restricted code added, directly or through a jar's manifest, is on its
     classpath, as the script compiler reads the files below it itself; use jars for that classpath.  The refusal

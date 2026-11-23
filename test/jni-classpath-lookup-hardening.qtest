@@ -46,15 +46,6 @@ string sub hold_chain(object loader, string dir, int len) {
 bool sub close_removes(object loader, string dir) {
     return ClasspathLookupProbe::closeRemovesCopies(loader, dir);
 }
-nothing sub hold_locations(object loader) {
-    ClasspathLookupProbe::holdLocations(loader);
-}
-string sub release_held(object loader) {
-    return ClasspathLookupProbe::releaseHeld(loader);
-}
-nothing sub close_held(object loader) {
-    ClasspathLookupProbe::closeHeld(loader);
-}
 string sub add_parent(object loader, string path) {
     return ClasspathLookupProbe::addParentPath(loader, path);
 }
@@ -86,11 +77,12 @@ object sub derived() {
         addTestCase("the outstanding compiler copies are limited", \copyCapTest());
         addTestCase("the compiler limits apply across a class loader chain", \copyChainTest());
         addTestCase("closing a class loader removes its copies", \copyCloseTest());
-        addTestCase("only reachable code releases compiler copies", \copyReleaseOtherTest());
         addTestCase("a compiler copy applies every policy of nested entries", \copyNestedTest());
         addTestCase("a class from a later trusted entry with no local file", \laterServedUrlTest());
         addTestCase("a copy ended by closing its class loader while it is made", \copyEndedByCloseTest());
-        addTestCase("a copy cannot be ended by a path while it is made", \copyEndedByPathTest());
+        addTestCase("derived loaders keep the Program's copy budget", \copyDetachedBudgetTest());
+        addTestCase("a failed removal of a copy still returns its charges", \copyRemovalErrorTest());
+        addTestCase("a compile whose Program ends while it runs", \compileProgramEndTest());
         addTestCase("the end of a Program ends the copies of its class loaders", \copyProgramEndTest());
         addTestCase("the file name encoding is fixed at startup", \charsetTest());
         addTestCase("a real path that the file name encoding cannot represent", \lossyNameTest());
@@ -246,6 +238,8 @@ object sub derived() {
     copyTargetTest() {
         Program p = restricted();
         assertFalse(ClasspathLookupProbe::hasCallerPathCopy());
+        # a copy is ended only through the handle of its compilation, its class loader or its Program
+        assertFalse(ClasspathLookupProbe::hasReleaseByPath());
         assertEq("ok", ClasspathLookupProbe::checkCopy(p.callFunction("own_loader"), root + "/allowed", "pkg/Ok.class",
             "denied/Hidden.class", "g.txt"));
     }
@@ -294,18 +288,6 @@ object sub derived() {
         assertTrue(p.callFunction("close_removes", p.callFunction("own_loader"), root + "/allowed"));
     }
 
-    #! only code that can reach a class loader's Program releases its copies
-    copyReleaseOtherTest() {
-        Program owner = restricted();
-        object loader = owner.callFunction("own_loader");
-        owner.callFunction("hold_locations", loader);
-        Program other = newProgram(getPolicy());
-        assertRegex("^refused", other.callFunction("release_held", loader));
-        assertTrue(ClasspathLookupProbe::heldExist());
-        owner.callFunction("close_held", loader);
-        assertFalse(ClasspathLookupProbe::heldExist());
-    }
-
     #! a compiler copy applies every policy of nested entries
     copyNestedTest() {
         Program outer = newProgram(getPolicy());
@@ -339,9 +321,19 @@ object sub derived() {
         runChildCase("end-close", True);
     }
 
-    #! a copy cannot be ended by a path while it is being made
-    copyEndedByPathTest() {
-        runChildCase("end-path", True);
+    #! a derived class loader stays under the limits of its Program, and its copies end with the Program
+    copyDetachedBudgetTest() {
+        runChildCase("detached", True);
+    }
+
+    #! an error while a copy is removed does not stop the removal of the others or lose a charge
+    copyRemovalErrorTest() {
+        runChildCase("removal-error", True);
+    }
+
+    #! a compile whose Program ends while it runs fails cleanly and leaves nothing
+    compileProgramEndTest() {
+        runChildCase("compile-end", True);
     }
 
     #! the end of a Program ends the copies of its derived class loaders, and a new Program has a full budget
@@ -368,7 +360,7 @@ object sub derived() {
             int rc;
             string out = backquote(cmd, \rc);
             if (*string why = (out =~ x/^result: skipped: (.*)$/m)[0]) {
-                reason = sprintf("%s: %s", locale, why);
+                reason = locale ? sprintf("no UTF-8 locale is available: %s: %s", locale, why) : why;
                 continue;
             }
             assertEq(0, rc, out);
@@ -377,7 +369,7 @@ object sub derived() {
             map assertRegex(": OK$", $1, $1), lines;
             return;
         }
-        testSkip("no UTF-8 locale is available: " + reason);
+        testSkip(reason);
     }
 
     private static string shellQuote(string arg) {

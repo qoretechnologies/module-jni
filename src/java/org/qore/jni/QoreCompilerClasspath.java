@@ -12,6 +12,7 @@ import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -59,8 +60,34 @@ public final class QoreCompilerClasspath implements AutoCloseable {
     //! Removes the private copies of this classpath; closing it again has no effect
     @Override
     public void close() {
+        endAll(copies, false);
+    }
+
+    //! Ends each copy, also after one of them fails; the first failure is raised afterwards, with the others suppressed
+    /** @param abort true for the thread that makes the copies, which removes them; false for a release
+    */
+    static void endAll(Iterable<Copy> copies, boolean abort) {
+        Throwable first = null;
         for (Copy copy : copies) {
-            copy.release();
+            try {
+                if (abort) {
+                    copy.abort();
+                } else {
+                    copy.release();
+                }
+            } catch (RuntimeException | Error e) {
+                if (first == null) {
+                    first = e;
+                } else if (e != first) {
+                    first.addSuppressed(e);
+                }
+            }
+        }
+        if (first instanceof Error) {
+            throw (Error) first;
+        }
+        if (first != null) {
+            throw (RuntimeException) first;
         }
     }
 
@@ -75,9 +102,7 @@ public final class QoreCompilerClasspath implements AutoCloseable {
 
     //! Called by the thread that makes the classpath when it fails: removes every copy
     void abort() {
-        for (Copy copy : copies) {
-            copy.abort();
-        }
+        endAll(copies, true);
     }
 
     void addLocation(File location) {
@@ -90,8 +115,9 @@ public final class QoreCompilerClasspath implements AutoCloseable {
 
     //! What the copies of one Program use, and the copies that are live
     /** One object is shared by the class loader of a Program and the class loaders derived from it, so that the limits
-        hold across them, and the end of the Program ends all of their copies.  It belongs to the Program's class
-        loader, so it cannot be confused with another Program.
+        hold across them, and the end of the Program ends all of their copies.  Derived loaders keep the Program's copy
+        budget also when their own Program pointer is cleared.  It belongs to the Program's class loader, so it cannot
+        be confused with another Program.
     */
     static final class Budget {
         //! what the live copies use; guarded by this object
@@ -133,9 +159,7 @@ public final class QoreCompilerClasspath implements AutoCloseable {
                 closed = true;
                 current = live.toArray(new Copy[0]);
             }
-            for (Copy copy : current) {
-                copy.release();
-            }
+            endAll(Arrays.asList(current), false);
         }
 
         //! Returns true if the Program has ended
@@ -274,18 +298,26 @@ public final class QoreCompilerClasspath implements AutoCloseable {
         }
 
         //! Removes the directory and returns the charges; runs once, after the transition to DONE
+        /** The charges are returned and the copy is forgotten also if removing the directory raises an error
+        */
         private void remove() {
-            if (root != null) {
-                deleteTree(root);
-            }
-            synchronized (budget) {
-                for (int i = 0; i < KINDS; ++i) {
-                    budget.used[i] -= charged[i];
-                    charged[i] = 0;
+            try {
+                if (root != null) {
+                    deleteTree(root);
                 }
-                budget.live.remove(this);
+            } finally {
+                try {
+                    synchronized (budget) {
+                        for (int i = 0; i < KINDS; ++i) {
+                            budget.used[i] -= charged[i];
+                            charged[i] = 0;
+                        }
+                        budget.live.remove(this);
+                    }
+                } finally {
+                    owner.forgetCopy(this);
+                }
             }
-            owner.forgetCopy(this);
         }
 
         //! Deletes what it can of a directory tree, without following links; never throws

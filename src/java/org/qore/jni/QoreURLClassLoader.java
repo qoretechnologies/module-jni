@@ -126,8 +126,12 @@ public class QoreURLClassLoader extends URLClassLoader {
     */
     private volatile boolean inherits_program = false;
 
-    //! what the compiler copies of the Program use, and the live copies; shared and replaced with pgm_ptr
+    //! what the compiler copies of the Program use, and the live copies; derived class loaders keep it
     private volatile QoreCompilerClasspath.Budget copy_budget = new QoreCompilerClasspath.Budget();
+
+    //! true if the end of this class loader's Program ends copy_budget; false for a derived class loader; guarded by
+    //! ptr_lock
+    private boolean owns_budget = true;
 
     //! true while pgm_ptr is the holder of the parent class loader; guarded by ptr_lock
     private boolean shared_ptr = false;
@@ -315,6 +319,7 @@ public class QoreURLClassLoader extends URLClassLoader {
                 origin_ptr = parent.origin_ptr != 0L ? parent.origin_ptr : parent.pgm_ptr.get();
             }
             shared_ptr = true;
+            owns_budget = false;
         }
         inherits_program = parent.inherits_program;
         // set the current classloader as the thread context classloader
@@ -650,7 +655,8 @@ public class QoreURLClassLoader extends URLClassLoader {
     }
 
     //! Opens the classpath of one compilation for a restricted caller: this class loader and its parents
-    /** The classpath directories that restricted code added are replaced by copies of the files that their policies
+    /** Internal to the module, for its compilers; public only because they are in another package, and not an API for
+        other code.  The classpath directories that restricted code added are replaced by copies of the files that their policies
         allow, in private directories; close the result when the compilation ends, also if it fails.  For code that
         cannot reach the Program of a class loader, the entries of restricted code of that class loader are left out and
         nothing is copied.
@@ -1894,20 +1900,27 @@ public class QoreURLClassLoader extends URLClassLoader {
         that require a valid Qore Program.
     */
     void clearProgramPtrIntern() {
-        // the class loader that owns the Program's holder ends the copies of the Program, also those of the class
-        // loaders derived from it; a derived class loader ends only its own
+        // the class loader that owns the Program's budget ends the copies of the Program, also those of the class
+        // loaders derived from it; a derived class loader ends only its own, and keeps the budget
         QoreCompilerClasspath.Budget program_budget = null;
         synchronized (ptr_lock) {
-            if (!shared_ptr) {
+            if (owns_budget) {
                 program_budget = copy_budget;
             }
         }
-        endCompilerCopies();
-        if (program_budget != null) {
-            program_budget.closeAll();
+        // the pointer is cleared also if the removal of a copy raises an error
+        try {
+            try {
+                endCompilerCopies();
+            } finally {
+                if (program_budget != null) {
+                    program_budget.closeAll();
+                }
+            }
+        } finally {
+            setPtrIntern(0, true);
+            sharedDynamicClassLoaders.entrySet().removeIf(entry -> entry.getValue() == this);
         }
-        setPtrIntern(0, true);
-        sharedDynamicClassLoaders.entrySet().removeIf(entry -> entry.getValue() == this);
     }
 
     //! Returns the program pointer from the current thread's classloader context
@@ -1944,21 +1957,22 @@ public class QoreURLClassLoader extends URLClassLoader {
     */
     private void setPtrIntern(long ptr, boolean cleared) {
         synchronized (ptr_lock) {
+            long previous_origin = origin_ptr;
             if (origin_ptr == 0L && ptr != 0L) {
                 origin_ptr = ptr;
             }
             if (shared_ptr) {
                 pgm_ptr = new AtomicLong(ptr);
                 pgm_cleared = new AtomicBoolean(cleared);
-                copy_budget = new QoreCompilerClasspath.Budget();
                 shared_ptr = false;
             } else {
                 pgm_ptr.set(ptr);
                 pgm_cleared.set(cleared);
-                // a new Program for this class loader starts with a budget of its own
-                if (ptr != 0L && copy_budget.isClosed()) {
-                    copy_budget = new QoreCompilerClasspath.Budget();
-                }
+            }
+            // only a new Program has a budget of its own: clearing the pointer keeps the budget of the Program
+            if (ptr != 0L && (ptr != previous_origin || copy_budget.isClosed())) {
+                copy_budget = new QoreCompilerClasspath.Budget();
+                owns_budget = true;
             }
         }
     }

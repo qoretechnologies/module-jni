@@ -354,6 +354,11 @@ string sub kotlin_compile(string src) {
     jarTest() {
         Program p = restricted("jars/app.jar");
         assertAllFound(p, "jarpkg.InJar", "jarpkg/r.txt", "jar");
+        # a jar with a manifest Class-Path attribute is refused on a JDK whose handling of it has not been verified
+        if (!ClasspathLookupProbe::manifestClassPathVerified()) {
+            assertThrows("JNI-CLASSPATH-ERROR", \restricted(), "jars/ref.jar");
+            return;
+        }
         p = restricted("jars/ref.jar");
         assertAllFound(p, ("jarpkg.InJar", "okm.ViaManifest"), ("jarpkg/r.txt", "okm/ViaManifest.class"), "manifest");
         assertNoneFound(p, "denied.ManifestHidden", "denied/ManifestHidden.class", "manifest directory");

@@ -354,9 +354,7 @@ final class QoreClasspathGuard {
     //! Ends every copy of this class loader, and refuses new ones: the class loader is closed
     void closeCopies() {
         closed = true;
-        for (QoreCompilerClasspath.Copy copy : copies) {
-            copy.release();
-        }
+        QoreCompilerClasspath.endAll(copies, false);
     }
 
     //! Copies the allowed class and module files below a checked directory

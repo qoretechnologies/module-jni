@@ -187,13 +187,238 @@ public class ClasspathLookupProbe {
         }
     }
 
+    //! An error that a test makes the removal of a compiler copy raise
+    private static final class InjectedError extends Error {
+        private static final long serialVersionUID = 1L;
+    }
+
+    //! a class loader of a Program whose own pointer was cleared
+    private static QoreURLClassLoader detached;
+
+    //! Holds as many copies as possible on a derived class loader with a cleared pointer, then tries another loader
+    /** @return "held <n>; another <ok|refused>"
+    */
+    public static String detachedLimit(QoreURLClassLoader parent, String dir) throws Exception {
+        Object[] context = QoreURLClassLoader.saveContext();
+        try {
+            detached = QoreURLClassLoader.createDerived(parent);
+            detached.clearProgramPtr();
+            detached.addPath(dir);
+            int held = 0;
+            try {
+                while (held < 64) {
+                    kept.add(checkedLocations(detached, null));
+                    ++held;
+                }
+            } catch (java.lang.reflect.InvocationTargetException e) {
+                // the limit has been reached
+            }
+            QoreURLClassLoader other = QoreURLClassLoader.createDerived(parent);
+            other.addPath(dir);
+            String another;
+            try {
+                releaseLocations(other, checkedLocations(other, null));
+                another = "ok";
+            } catch (java.lang.reflect.InvocationTargetException e) {
+                another = "refused";
+            }
+            return "held " + held + "; another " + another;
+        } finally {
+            QoreURLClassLoader.restoreContext(context);
+        }
+    }
+
+    //! Returns the path of the last copy that is kept
+    public static String lastKeptCopy() {
+        for (File location : kept.get(kept.size() - 1)) {
+            if (isCopy(location)) {
+                return location.getPath();
+            }
+        }
+        throw new IllegalStateException("no copy");
+    }
+
+    //! Tries to make a copy on the class loader of detachedLimit(); returns "ok" or "refused"
+    public static String detachedCopy() throws Exception {
+        try {
+            releaseLocations(detached, checkedLocations(detached, null));
+            return "ok";
+        } catch (java.lang.reflect.InvocationTargetException e) {
+            return "refused";
+        }
+    }
+
+    //! Tries to make a copy with a guard that is created now, under \a policy, on a child of detachedLimit()'s loader
+    public static String copyWithNewGuard(QoreSandbox.Policy policy, String dir) throws Exception {
+        Object[] context = QoreURLClassLoader.saveContext();
+        try {
+            QoreURLClassLoader loader = QoreURLClassLoader.createDerived(detached);
+            String added = addPathUnder(policy, loader, dir);
+            if (!added.equals("ok")) {
+                return added;
+            }
+            try {
+                releaseLocations(loader, checkedLocations(loader, null));
+                return "ok";
+            } catch (java.lang.reflect.InvocationTargetException e) {
+                return "refused";
+            }
+        } finally {
+            QoreURLClassLoader.restoreContext(context);
+        }
+    }
+
+    //! Ends two copies whose removal raises an error; returns "clean" or what is wrong
+    /** @param mode "close" for the handle, "abort" for the failure path of the handle, "program" for the Program's end
+    */
+    public static String endCopiesWithError(QoreURLClassLoader parent, String dir, String mode) throws Exception {
+        Object[] context = QoreURLClassLoader.saveContext();
+        try {
+            QoreURLClassLoader first = QoreURLClassLoader.createDerived(parent);
+            first.addPath(dir);
+            QoreURLClassLoader second = QoreURLClassLoader.createDerived(first);
+            second.addPath(dir);
+            Object handle = QoreURLClassLoader.class.getMethod("openCompilerClasspath").invoke(second);
+            java.lang.reflect.Field copiesField = handle.getClass().getDeclaredField("copies");
+            copiesField.setAccessible(true);
+            List<?> copies = new ArrayList<>((List<?>) copiesField.get(handle));
+            if (copies.size() != 2) {
+                return "expected two copies, found " + copies.size();
+            }
+            Class<?> copyClass = copies.get(0).getClass();
+            java.lang.reflect.Field rootField = copyClass.getDeclaredField("root");
+            rootField.setAccessible(true);
+            java.lang.reflect.Field budgetField = copyClass.getDeclaredField("budget");
+            budgetField.setAccessible(true);
+            Object budget = budgetField.get(copies.get(0));
+            java.util.concurrent.atomic.AtomicInteger attempts = new java.util.concurrent.atomic.AtomicInteger();
+            ArrayList<Path> roots = new ArrayList<>();
+            for (Object copy : copies) {
+                roots.add((Path) rootField.get(copy));
+                rootField.set(copy, java.lang.reflect.Proxy.newProxyInstance(Path.class.getClassLoader(),
+                    new Class<?>[] {Path.class}, (proxy, method, args) -> {
+                        attempts.incrementAndGet();
+                        throw new InjectedError();
+                    }));
+            }
+            boolean raised = false;
+            try {
+                switch (mode) {
+                    case "close":
+                        handle.getClass().getMethod("close").invoke(handle);
+                        break;
+                    case "abort": {
+                        java.lang.reflect.Method abort = handle.getClass().getDeclaredMethod("abort");
+                        abort.setAccessible(true);
+                        abort.invoke(handle);
+                        break;
+                    }
+                    default:
+                        parent.clearProgramPtr();
+                        break;
+                }
+            } catch (java.lang.reflect.InvocationTargetException e) {
+                raised = e.getCause() instanceof InjectedError;
+            } catch (InjectedError e) {
+                raised = true;
+            }
+            for (Path root : roots) {
+                deleteTree(root);
+            }
+            if (!raised) {
+                return "the error was not raised";
+            }
+            if (attempts.get() != 2) {
+                return "removed " + attempts.get() + " of 2 copies";
+            }
+            java.lang.reflect.Field liveField = budget.getClass().getDeclaredField("live");
+            liveField.setAccessible(true);
+            java.lang.reflect.Field usedField = budget.getClass().getDeclaredField("used");
+            usedField.setAccessible(true);
+            synchronized (budget) {
+                if (!((java.util.Set<?>) liveField.get(budget)).isEmpty()) {
+                    return "a copy is still live";
+                }
+                for (long used : (long[]) usedField.get(budget)) {
+                    if (used != 0) {
+                        return "a charge was not returned";
+                    }
+                }
+            }
+            if (mode.equals("program") && parent.getPtr() != 0) {
+                return "the Program pointer was not cleared";
+            }
+            return "clean";
+        } finally {
+            QoreURLClassLoader.restoreContext(context);
+        }
+    }
+
+    //! Deletes a directory tree of a test
+    private static void deleteTree(Path path) throws IOException {
+        if (!Files.exists(path, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+            return;
+        }
+        try (Stream<Path> walk = Files.walk(path)) {
+            List<Path> entries = new ArrayList<>();
+            walk.forEach(entries::add);
+            Collections.reverse(entries);
+            for (Path entry : entries) {
+                Files.delete(entry);
+            }
+        }
+    }
+
+    //! Compiles Kotlin while the Program of the class loader ends at the given read of a system property
+    /** @return "clean" if the compile returned or raised its own exception, the hook ran and nothing is left
+    */
+    public static String compileWhileEnding(QoreURLClassLoader loader, String key, int at, String source)
+            throws Exception {
+        Class<?> cls = loader.loadClass("org.qore.jni.compiler.QoreKotlinCompiler");
+        Object compiler = cls.getConstructor(QoreURLClassLoader.class, List.class).newInstance(loader, null);
+        boolean[] fired = {false};
+        java.util.Properties saved = System.getProperties();
+        System.setProperties(new ReadHook(saved, key, at, () -> {
+            fired[0] = true;
+            loader.clearProgramPtr();
+        }));
+        String outcome;
+        try {
+            cls.getMethod("compile", java.util.Map.class).invoke(compiler, java.util.Map.of("KEnd", source));
+            outcome = "compiled";
+        } catch (java.lang.reflect.InvocationTargetException e) {
+            outcome = e.getCause().getClass().getSimpleName();
+        } finally {
+            System.setProperties(saved);
+        }
+        cls.getMethod("close").invoke(compiler);
+        if (!fired[0]) {
+            return "the Program was not ended during the compile";
+        }
+        int left = copyDirectories() + countTemp("qore-kotlin-*");
+        if (left != 0) {
+            return "left " + left + " directories";
+        }
+        return outcome.equals("compiled") || outcome.equals("QoreKotlinCompilerException") ? "clean" : outcome;
+    }
+
+    //! Returns the number of entries of the JVM's temporary directory that match a pattern
+    private static int countTemp(String pattern) throws IOException {
+        int rv = 0;
+        try (java.nio.file.DirectoryStream<Path> entries = Files.newDirectoryStream(
+                Path.of(System.getProperty("java.io.tmpdir")), pattern)) {
+            for (Path entry : entries) {
+                ++rv;
+            }
+        }
+        return rv;
+    }
+
     //! Makes a compiler copy, ending it from the copying thread at a given step; returns "clean" or what is left
     /** The limit of the entries visited is set to \a limit, the number of entries of \a dir, so that anything that a
         copy that was ended leaves charged makes the next copy fail.
-
-        @param trigger "close" to close the class loader, "release" to release by path
     */
-    public static String endCopyDuringMake(QoreURLClassLoader parent, String dir, String trigger, int at, int limit)
+    public static String endCopyDuringMake(QoreURLClassLoader parent, String dir, int at, int limit)
             throws Exception {
         final String prop = "qore.jni.compiler.maxEntries";
         QoreURLClassLoader loader = QoreURLClassLoader.createDerived(parent);
@@ -203,18 +428,8 @@ public class ClasspathLookupProbe {
         List<File> got = null;
         System.setProperties(new ReadHook(saved, prop, at, () -> {
             try {
-                if (trigger.equals("close")) {
-                    loader.close();
-                } else if (hasReleaseByPath()) {
-                    try (java.nio.file.DirectoryStream<Path> entries = Files.newDirectoryStream(
-                            Path.of(System.getProperty("java.io.tmpdir")), "qore-classpath-*")) {
-                        for (Path entry : entries) {
-                            QoreURLClassLoader.class.getMethod("releaseCompilerCopies", List.class).invoke(loader,
-                                List.of(entry.resolve("cp0").toFile()));
-                        }
-                    }
-                }
-            } catch (Exception e) {
+                loader.close();
+            } catch (IOException e) {
                 throw new IllegalStateException(e);
             }
         }));
@@ -393,44 +608,6 @@ public class ClasspathLookupProbe {
         return rv;
     }
 
-    //! the compiler locations that holdLocations() holds
-    private static volatile List<File> heldLocations;
-
-    //! Holds the compiler locations of a class loader, for releaseHeld()
-    public static void holdLocations(QoreURLClassLoader loader) throws Exception {
-        heldLocations = checkedLocations(loader, null);
-    }
-
-    //! Tries to release the held locations; returns "released" or the refusal
-    public static String releaseHeld(QoreURLClassLoader loader) {
-        if (!hasReleaseByPath()) {
-            return "refused: a compiler classpath is released only with its handle";
-        }
-        try {
-            QoreURLClassLoader.class.getMethod("releaseCompilerCopies", List.class).invoke(loader, heldLocations);
-            return "released";
-        } catch (java.lang.reflect.InvocationTargetException e) {
-            return "refused: " + e.getCause().getClass().getSimpleName();
-        } catch (Exception e) {
-            return "refused: " + e.getClass().getSimpleName();
-        }
-    }
-
-    //! Releases the held locations as their owner
-    public static void closeHeld(QoreURLClassLoader loader) throws Exception {
-        releaseLocations(loader, heldLocations);
-    }
-
-    //! Returns true if every held location exists
-    public static boolean heldExist() {
-        for (File location : heldLocations) {
-            if (!location.exists()) {
-                return false;
-            }
-        }
-        return !heldLocations.isEmpty();
-    }
-
     //! Checks the copy of a class loader's classpath directory; returns "ok" or what is wrong with it
     public static String checkCopy(QoreURLClassLoader loader, String original, String allowedFile, String deniedFile,
             String otherFile) throws Exception {
@@ -532,6 +709,14 @@ public class ClasspathLookupProbe {
         } else {
             System.setProperty(name, value);
         }
+    }
+
+    //! Returns true if the module has verified its handling of manifest Class-Path attributes for the running JDK
+    public static boolean manifestClassPathVerified() throws Exception {
+        java.lang.reflect.Method verified = QoreURLClassLoader.class.getDeclaredMethod("isVerifiedClassPathJdk",
+            int.class);
+        verified.setAccessible(true);
+        return (boolean) verified.invoke(null, Runtime.version().feature());
     }
 
     //! Returns the encoding of file names in the JVM
