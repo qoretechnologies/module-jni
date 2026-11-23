@@ -38,6 +38,7 @@
 
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace jni {
 
@@ -69,12 +70,21 @@ public:
     */
     DLLLOCAL bool maskText(QoreString& text) const override;
 
+    //! Records a URL that the connection connects with (in UTF-8), which is masked from then on
+    /** the URLs that the connection used are kept, as a Java connection opened with one stays open when the \c url
+        option is changed; at most the last 16 are kept
+    */
+    DLLLOCAL void addUsedUrl(const std::string& used);
+
     //! the \c url option of the connection, in UTF-8
     std::string url;
 
 private:
     //! the datasource of the connection, which gives the database name and the password
     const Datasource* ds;
+
+    //! the URLs that the connection connected with, in UTF-8
+    std::vector<std::string> used_urls;
 };
 
 class QoreJdbcConnection {

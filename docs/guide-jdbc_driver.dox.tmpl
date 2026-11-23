@@ -193,7 +193,8 @@ try {
     - the URL (the @ref jdbc_option_url "url option", or the database name if there is no \c url option, as the
       connection uses them, with and without the \c jdbc: prefix), which is replaced with its
       <tt>jdbc:</tt><em>subprotocol</em><tt>:</tt> prefix followed by \c "****" (ex: \c "jdbc:postgresql:****"); a
-      database name that the \c url option overrides (ex: a placeholder such as \c "ignored") is not masked
+      database name that the \c url option overrides (ex: a placeholder such as \c "ignored") is not masked; the
+      URLs that the connection was opened with are masked also after the \c url option is changed
     - the password of the datasource, which the driver gets as its \c password property
     - the credentials in the URL, also in their percent-decoded forms, wherever the driver names them (ex: in a
       normalized form of the URL): the password of the user info (<tt>//user:</tt><em>password</em><tt>\@host</tt>),
@@ -202,12 +203,14 @@ try {
       <tt>password=</tt><em>value</em>, <tt>password={</tt><em>value</em><tt>}</tt>), each replaced with \c "****"
 
     The values are masked in the messages of the Java exceptions, not in their class names.  Letters are matched in
-    any case; text without these values is not changed, and the code of the exception is kept.  The argument of such an exception, the driver's Java exception (see @ref jdbc_sql_errors), would give the
-    values in its message, its string form (which \c AbstractConnection::ping() gives), its causes, the next
-    exceptions of an \c SQLException and the exceptions that they suppressed; when the message of one of them names
-    one of the values, the argument is a \c java.sql.SQLException with the masked message and the SQLState and vendor
-    error code of the driver's exception (without its causes, next exceptions, suppressed exceptions and subclass), or,
-    if the driver's exception is not an \c SQLException, the exception has no argument.
+    any case; text without these values is not changed, and the code of the exception is kept.
+
+    The argument of such an exception, the driver's Java exception (see @ref jdbc_sql_errors), would give the values
+    in its message, its string form (which \c AbstractConnection::ping() gives), its causes, the next exceptions of
+    an \c SQLException and the exceptions that they suppressed; when the message of one of them names one of the
+    values, the argument is a \c java.sql.SQLException with the masked message and the SQLState and vendor error code
+    of the driver's exception (without its causes, next exceptions, suppressed exceptions and subclass), or, if the
+    driver's exception is not an \c SQLException, the exception has no argument.
 
     @note a value of less than 6 bytes (ex: a short password) is masked only where it is not next to an ASCII letter
     or digit, so that it is not masked in the words that contain it (a password \c "p" is not masked in

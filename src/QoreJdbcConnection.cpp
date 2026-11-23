@@ -234,6 +234,16 @@ static bool jdbc_match_at(const char* text, size_t len, size_t pos, const std::s
     return true;
 }
 
+void QoreJdbcSecretMasker::addUsedUrl(const std::string& used) {
+    if (used.empty() || std::find(used_urls.begin(), used_urls.end(), used) != used_urls.end()) {
+        return;
+    }
+    if (used_urls.size() == 16) {
+        used_urls.erase(used_urls.begin());
+    }
+    used_urls.push_back(used);
+}
+
 bool QoreJdbcSecretMasker::maskText(QoreString& text) const {
     if (text.empty()) {
         return false;
@@ -245,6 +255,10 @@ bool QoreJdbcSecretMasker::maskText(QoreString& text) const {
         jdbc_add_url_secrets(secrets, url);
     } else {
         jdbc_add_url_secrets(secrets, ds_utf8(ds, ds->getDBNameStr()));
+    }
+    // the URLs that the connection used, which an open Java connection can still name
+    for (const std::string& used : used_urls) {
+        jdbc_add_url_secrets(secrets, used);
     }
     // the password of the datasource, which is passed to the driver as a property
     {
@@ -537,6 +551,10 @@ int QoreJdbcConnection::connect(Env& env, ExceptionSink* xsink) {
     }
     // the url option is in UTF-8, and the database name in the datasource's encoding (see ds_string())
     std::string url = !str.rfind("jdbc:", 0) ? str : "jdbc:" + str;
+
+    // the URL is masked in the text of the Java exceptions of the connection also after the url option changes
+    // (qore#7344)
+    masker->addUsedUrl(db.empty() ? ds_utf8(ds, str) : str);
 
     printd(5, "QoreJdbcConnection::connect() using URL '%s' (jpc: %p: %x)\n", url.c_str(), jpc,
         env.callIntMethod(jpc->getClassLoader(), jni::Globals::methodObjectHashCode, nullptr));
