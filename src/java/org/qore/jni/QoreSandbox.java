@@ -388,7 +388,7 @@ public final class QoreSandbox {
             + "access does not allow");
     }
 
-    //! Checks a classpath for a compiler and returns the files to give it, with symbolic links resolved
+    //! Checks a classpath for a compiler and returns the files to give it
     /** For a caller that a filesystem policy restricts, the classpath is resolved as for the \c add-classpath module
         command: each entry, the files that a wildcard selects, and the jars and directories that manifest
         \c Class-Path attributes name, and the policy is applied to each.  For a directory, the policy is applied to the
@@ -418,13 +418,16 @@ public final class QoreSandbox {
         if (classpath == null) {
             throw argumentError0("classpath must not be null");
         }
-        if (!restrictsFilesystem()) {
-            if (restrictsNetwork()) {
+        // read once, so that the branch taken and the check that is made use the same restrictions
+        boolean filesystem = restrictsFilesystem();
+        boolean network = restrictsNetwork();
+        if (!filesystem) {
+            if (network) {
                 QoreURLClassLoader.checkClasspathLocations(classpath);
             }
             return QoreURLClassLoader.classpathFiles(classpath);
         }
-        QoreURLClassLoader.ResolvedClasspath rc = checkedClasspath(classpath);
+        QoreURLClassLoader.ResolvedClasspath rc = checkedClasspath(classpath, filesystem, network);
         if (rc.hasAmbiguousManifestEntry()) {
             throw argumentError0("a jar of the classpath has a manifest Class-Path entry that a compiler could resolve "
                 + "differently from the sandbox filesystem policy check");
@@ -471,8 +474,13 @@ public final class QoreSandbox {
         if (classpath == null) {
             throw argumentError0("classpath must not be null");
         }
-        QoreURLClassLoader.ResolvedClasspath rc = resolveClasspath(classpath, 0, restrictsFilesystem(),
-            restrictsNetwork());
+        return checkedClasspath(classpath, restrictsFilesystem(), restrictsNetwork());
+    }
+
+    //! Resolves and checks a classpath as checkedClasspath(String) does, for restrictions that the caller has read
+    private static QoreURLClassLoader.ResolvedClasspath checkedClasspath(String classpath, boolean filesystem,
+            boolean network) {
+        QoreURLClassLoader.ResolvedClasspath rc = resolveClasspath(classpath, 0, filesystem, network);
         // the elements grow as they are checked: a manifest is read only after its jar has been allowed
         for (int i = 0; i < rc.size(); ++i) {
             checkNamed(rc.encodedPath(i), rc.givenEntry(i), READ);

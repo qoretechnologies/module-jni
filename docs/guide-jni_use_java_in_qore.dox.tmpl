@@ -540,10 +540,12 @@ public class Fetcher {
       builds that were tested have no jar index support to enable), the whole classpath is refused with
       \c JNI-CLASSPATH-ERROR, naming the file.  A caller whose filesystem access is restricted needs a manifest
       entry whose path can be checked exactly; a caller whose sandbox restricts only the network cannot use an entry
-      that names another location, or a path that does not exist (unless it has the form of a directory) or cannot
-      be read, as its location cannot be confirmed.  Its Java classpath calls are otherwise those of a caller with no
-      sandbox, so a refusal there can leave the earlier entries of the classpath added.  A caller whose sandbox
-      restricts neither is not affected.  The class
+      that names another location, or one that cannot be read, as its location cannot be confirmed.  For such a
+      caller, a manifest entry or a path given to \c addPathOrig(), \c addURL() or a compiler that does not exist is
+      refused as well, except for a file URL in the form of a directory, which only \c addURL() and a manifest entry
+      can give; \c addPath(), \c addParentPath() and \c addWildcard() leave out a top-level entry that does not exist.
+      Its Java classpath calls are otherwise those of a caller with no sandbox, so a refusal there can leave the
+      earlier entries of the classpath added.  A caller whose sandbox restricts neither is not affected.  The class
       loader still follows the manifests itself, so the classpath that is used is the one that was given, and every
       jar and directory that it opens is one that was checked.  That resolution follows the JDK's class loader, and
       it has been verified for JDK feature versions 21 and 25; on any other JDK version, a classpath with a jar that

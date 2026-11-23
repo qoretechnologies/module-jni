@@ -647,6 +647,16 @@ list<string> sub compiler_classpath_paths(string classpath) {
         Program p = getPermissiveProgram(False);
         assertRegex("^refused: .*" + UncheckedLocation, p.callFunction("java_add", "addURLString", url));
         assertNothingRead(p, "an entry inside an archive");
+
+        # an archive named in the form of a directory inside a jar URL, whose manifest names another location
+        x = newDir();
+        ClasspathUrlProbe::writeMarkerJar(x + "/dep.jar", Allowed);
+        ClasspathUrlProbe::writeManifestJar(x + "/main.jar", "file://example.invalid"
+            + ClasspathUrlProbe::encodedPath(x) + "/dep.jar");
+        url = "jar:file:" + ClasspathUrlProbe::encodedPath(x) + "/main.jar/!/";
+        p = getPermissiveProgram(False);
+        assertRegex("^refused: .*" + UncheckedLocation, p.callFunction("java_add", "addURLString", url));
+        assertNothingRead(p, "an archive in the form of a directory");
     }
 
     networkNestedRoutesTest() {

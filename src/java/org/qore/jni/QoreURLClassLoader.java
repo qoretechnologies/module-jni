@@ -491,7 +491,8 @@ public class QoreURLClassLoader extends URLClassLoader {
     //! Checks that a URL and the manifest Class-Path entries that it reaches name no other location
     /** For a caller whose sandbox restricts the network but not the filesystem; nothing at another location is opened.
         An entry that the class loader ignores is not refused.  Every local entry is confirmed when it is checked: a
-        directory, or a path in the form of a directory, has no manifest; a regular file is read, and one that is not
+        directory, or a file URL in the form of a directory, has no manifest (a \c jar: URL in that form is refused, as
+        the class loader opens it as an archive); a regular file is read, and one that is not
         an archive has no entries; any other path could become an archive that the class loader opens later, so it is
         refused.  This follows the resolution of the JDK's class loader, so a manifest Class-Path attribute is refused
         on a JDK version that has not been verified for it, as for a filesystem policy.  A file that is replaced after
@@ -597,7 +598,8 @@ public class QoreURLClassLoader extends URLClassLoader {
     }
 
     //! Returns the local file URL of a class loader URL, or null if it names another location
-    /** @throw JNI-SANDBOX-ERROR a \c jar: URL names a path inside an archive, whose location is not checked
+    /** @throw JNI-SANDBOX-ERROR a \c jar: URL names a path inside an archive, or names its archive in the form of a
+        directory, which the class loader opens as an archive although the form of the path says that it has no manifest
     */
     @SuppressWarnings("deprecation")
     private static URL localFileUrl(URL url) {
@@ -612,13 +614,18 @@ public class QoreURLClassLoader extends URLClassLoader {
             } catch (MalformedURLException e) {
                 return null;
             }
+            if (file.getFile().endsWith("/")) {
+                throw QoreSandbox.classpathLocationUncheckedError("a jar URL that names its archive in the form of a "
+                    + "directory");
+            }
         }
         return "file".equals(file.getProtocol()) && hasLocalAuthority(file) ? file : null;
     }
 
     //! Returns the manifest Class-Path attribute of what a local file URL names, or null if it can have none
     /** A path in the form of a directory, an existing directory and a regular file that is not an archive have none.
-        A jar index is not read here: the JDK 21 and 25 builds that were tested have no jar index support to enable.
+        A jar index is not read here: the JDK 21 and 25 builds that were tested have no jar index support to enable, and
+        so no setting to read; this does not cover another build before Java 22 that follows a jar index.
 
         @throw JNI-SANDBOX-ERROR the path does not exist and is not in the form of a directory, or it cannot be read
     */
