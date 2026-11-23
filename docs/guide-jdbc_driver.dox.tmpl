@@ -445,9 +445,11 @@ foreach hash<auto> column in (result.schemaV2()) {
     for example in the safe URL and the information of a \c db:// connection.
 
     <b>A sensitive database name:</b> without the \c url option, the database name is the JDBC URL, which can hold
-    credentials as well, so the driver declares \c DBI_CAP_SENSITIVE_DBNAME (with %Qore 3.0 or later): the database
-    name is masked where %Qore shows the connection values of a datasource, for example in the safe URL and the
-    information of a \c db:// connection (see \c mask_datasource_dbname()).
+    credentials as well, so the driver declares \c DBI_CAP_SENSITIVE_DBNAME (with %Qore 3.0 or later): once the
+    driver is loaded, the database name is always masked where %Qore shows the connection values of a datasource,
+    for example in the safe URL and the information of a \c db:// connection (the \c show_db forms of
+    \c mask_datasource()); before the driver is loaded, %Qore masks a database name with \c "=", \c ";", \c "://"
+    or \c "@", as a JDBC URL with credentials has.
 
     <b>The code that chose the URL:</b> the \c url option and the database name choose the destination of a
     connection and can carry driver properties that make a JDBC driver instantiate classes (ex: a socket factory

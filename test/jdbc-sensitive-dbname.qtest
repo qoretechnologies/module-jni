@@ -36,9 +36,13 @@ class JdbcSensitiveDbNameTest inherits QUnit::Test {
 
     maskedDbName() {
 %ifdef QORE_HAVE_DBI_SENSITIVE_DBNAME
-        # the driver is loaded by the call: the database name is masked because the driver declares it sensitive
+        # the driver is loaded by the call: the database name is masked because the driver declares it sensitive,
+        # also a database name that the character rule of the masked forms would show
         dbi_get_driver_capabilities("jdbc");
-        assertEq("****", mask_datasource_dbname("jdbc", Db));
+        hash<auto> show = {"show_db": True, "show_options": True};
+        assertEq("****", mask_datasource_hash({"type": "jdbc", "db": Db}, show).db);
+        assertEq("****", mask_datasource_hash({"type": "jdbc", "db": "jdbc:sqlite:/tmp/db"}, show).db);
+        assertEq("****", mask_datasource_hash({"type": "jdbc", "db": "plaindb"}, show).db);
         # a Datasource does not show it in its masked description either
         Datasource ds({"type": "jdbc", "db": Db});
         assertFalse(ds.getMaskedDescription().find(Secret) >= 0);
