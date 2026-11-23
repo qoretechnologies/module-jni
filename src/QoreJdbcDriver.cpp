@@ -49,8 +49,12 @@ static std::shared_ptr<const JavaExceptionTextMasker> jdbc_masker(const QoreJdbc
 }
 
 static int jdbc_open(Datasource* ds, ExceptionSink* xsink) {
+    // the secrets of the connection are masked in the text of the Java exceptions of the operation, also of those
+    // converted here (qore#7344)
+    std::shared_ptr<QoreJdbcSecretMasker> masker = std::make_shared<QoreJdbcSecretMasker>(ds);
+    JavaExceptionMaskHelper mask_helper(masker);
     try {
-        std::unique_ptr<QoreJdbcConnection> conn(new QoreJdbcConnection(ds, xsink));
+        std::unique_ptr<QoreJdbcConnection> conn(new QoreJdbcConnection(ds, masker, xsink));
         if (*xsink) {
             return -1;
         }

@@ -323,11 +323,12 @@ bool QoreJdbcSecretMasker::maskText(QoreString& text) const {
     return true;
 }
 
-QoreJdbcConnection::QoreJdbcConnection(Datasource* ds, ExceptionSink* xsink) : ds(ds),
-        masker(std::make_shared<QoreJdbcSecretMasker>(ds)) {
+QoreJdbcConnection::QoreJdbcConnection(Datasource* ds, std::shared_ptr<QoreJdbcSecretMasker> masker,
+        ExceptionSink* xsink) : ds(ds), masker(std::move(masker)) {
+    assert(this->masker);
     assert(pgm);
-    // the secrets of the connection are masked in the text of the Java exceptions raised while it is opened (qore#7344)
-    JavaExceptionMaskHelper mask_helper(masker);
+    // the secrets of the connection are masked in the text of the Java exceptions raised while it is opened by the
+    // helper of the caller, jdbc_open(), which shares the masker (qore#7344)
     // before the options are processed: the classpath option loads jars and instantiates the JDBC drivers in them
     if (checkSandbox(xsink)) {
         return;

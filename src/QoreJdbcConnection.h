@@ -90,7 +90,13 @@ private:
 
 class QoreJdbcConnection {
 public:
-    DLLLOCAL QoreJdbcConnection(Datasource* d, ExceptionSink* xsink);
+    //! Opens the connection
+    /** @param d the datasource
+        @param masker the masker of the secrets of the connection, which the caller can share to mask the text of the
+        Java exceptions that it converts (qore#7344)
+        @param xsink exception sink
+    */
+    DLLLOCAL QoreJdbcConnection(Datasource* d, std::shared_ptr<QoreJdbcSecretMasker> masker, ExceptionSink* xsink);
     DLLLOCAL ~QoreJdbcConnection();
 
     //! Returns the masker of the secrets of the connection (qore#7344)
