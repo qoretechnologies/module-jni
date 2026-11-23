@@ -453,7 +453,8 @@ public class QoreURLClassLoader extends URLClassLoader {
 
     //! Adds a URL that the class loader has made from a path that it was given
     private void addURLIntern(URL url) {
-        if (locationChecked.get() != null) {
+        // createUrl() returns null for a path that cannot be a URL, which adds nothing
+        if (url != null && locationChecked.get() != null) {
             checkClasspathLocation(url);
         }
         super.addURL(url);
@@ -489,10 +490,14 @@ public class QoreURLClassLoader extends URLClassLoader {
 
     //! Checks that a URL and the manifest Class-Path entries that it reaches name no other location
     /** For a caller whose sandbox restricts the network but not the filesystem; nothing at another location is opened.
-        An entry that the class loader ignores or cannot open is not refused.
+        An entry that the class loader ignores is not refused.  Every local entry is confirmed when it is checked: a
+        directory, or a path in the form of a directory, has no manifest; a regular file is read, and one that is not
+        an archive has no entries; any other path could become an archive that the class loader opens later, so it is
+        refused.  This follows the resolution of the JDK's class loader, so a manifest Class-Path attribute is refused
+        on a JDK version that has not been verified for it, as for a filesystem policy.  A file that is replaced after
+        it has been checked is not covered.
 
-        @throw JNI-SANDBOX-ERROR the URL or an entry names another location, or the manifests name too many entries to
-        check
+        @throw JNI-SANDBOX-ERROR the URL or an entry names another location, or its location cannot be confirmed
     */
     @SuppressWarnings("deprecation")
     private static void checkClasspathLocation(URL url) {
@@ -509,13 +514,19 @@ public class QoreURLClassLoader extends URLClassLoader {
         while (!pending.isEmpty()) {
             URL base = pending.poll();
             String classpath = manifestClassPath(base);
-            if (classpath == null) {
+            if (classpath == null || !new StringTokenizer(classpath).hasMoreTokens()) {
                 continue;
+            }
+            int feature = Runtime.version().feature();
+            if (!isVerifiedClassPathJdk(feature)) {
+                throw QoreSandbox.classpathLocationUncheckedError("a manifest Class-Path attribute on an unverified "
+                    + "JDK version " + feature);
             }
             for (StringTokenizer st = new StringTokenizer(classpath); st.hasMoreTokens();) {
                 String token = st.nextToken();
                 if (++entries > MAX_MANIFEST_ENTRIES) {
-                    throw QoreSandbox.classpathLocationError();
+                    throw QoreSandbox.classpathLocationUncheckedError("the manifests name more than "
+                        + MAX_MANIFEST_ENTRIES + " entries");
                 }
                 URL entry;
                 try {
@@ -540,13 +551,15 @@ public class QoreURLClassLoader extends URLClassLoader {
     }
 
     //! Returns the local file URL of a class loader URL, or null if it names another location
+    /** @throw JNI-SANDBOX-ERROR a \c jar: URL names a path inside an archive, whose location is not checked
+    */
     @SuppressWarnings("deprecation")
     private static URL localFileUrl(URL url) {
         URL file = url;
         if ("jar".equals(url.getProtocol())) {
             String spec = url.getFile();
             if (!spec.endsWith("!/")) {
-                return null;
+                throw QoreSandbox.classpathLocationUncheckedError("a jar URL that names a path inside an archive");
             }
             try {
                 file = new URL(spec.substring(0, spec.length() - 2));
@@ -557,8 +570,11 @@ public class QoreURLClassLoader extends URLClassLoader {
         return "file".equals(file.getProtocol()) && hasLocalAuthority(file) ? file : null;
     }
 
-    //! Returns the manifest Class-Path attribute of the archive that a file URL names, or null if it has none
-    /** Also null for a directory and for a file that the class loader could not read as an archive
+    //! Returns the manifest Class-Path attribute of what a local file URL names, or null if it can have none
+    /** A path in the form of a directory, an existing directory and a regular file that is not an archive have none.
+        The class loader of the JDK versions that the module runs on reads no jar index.
+
+        @throw JNI-SANDBOX-ERROR the path does not exist and is not in the form of a directory, or it cannot be read
     */
     private static String manifestClassPath(URL url) {
         String file = url.getFile();
@@ -567,19 +583,37 @@ public class QoreURLClassLoader extends URLClassLoader {
         }
         String path = decodeUrlPath(file);
         if (path == null || path.indexOf('\0') != -1) {
-            return null;
+            throw QoreSandbox.classpathLocationUncheckedError("its path cannot be decoded");
         }
         File archive = new File(path);
-        // a file that is not a regular file is not opened, as reading it may not return (ex: a FIFO)
-        if (!archive.isFile()) {
+        java.nio.file.attribute.BasicFileAttributes attrs;
+        try {
+            attrs = Files.readAttributes(archive.toPath(), java.nio.file.attribute.BasicFileAttributes.class);
+        } catch (IOException | RuntimeException e) {
+            throw QoreSandbox.classpathLocationUncheckedError("it does not exist or cannot be read");
+        }
+        if (attrs.isDirectory()) {
             return null;
         }
-        try (JarFile jf = new JarFile(archive, true, ZipFile.OPEN_READ, JarFile.runtimeVersion())) {
-            Manifest man = jf.getManifest();
-            Attributes attrs = man == null ? null : man.getMainAttributes();
-            return attrs == null ? null : attrs.getValue(Attributes.Name.CLASS_PATH);
-        } catch (IOException | RuntimeException e) {
+        // not opened, as reading it may not return (ex: a FIFO)
+        if (!attrs.isRegularFile()) {
+            throw QoreSandbox.classpathLocationUncheckedError("it is not a regular file");
+        }
+        JarFile opened;
+        try {
+            opened = new JarFile(archive, true, ZipFile.OPEN_READ, JarFile.runtimeVersion());
+        } catch (java.util.zip.ZipException e) {
+            // not an archive, which the class loader cannot open either
             return null;
+        } catch (IOException | RuntimeException e) {
+            throw QoreSandbox.classpathLocationUncheckedError("it cannot be read");
+        }
+        try (JarFile jf = opened) {
+            Manifest man = jf.getManifest();
+            Attributes main = man == null ? null : man.getMainAttributes();
+            return main == null ? null : main.getValue(Attributes.Name.CLASS_PATH);
+        } catch (IOException | RuntimeException e) {
+            throw QoreSandbox.classpathLocationUncheckedError("its manifest cannot be read");
         }
     }
 

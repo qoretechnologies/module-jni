@@ -10,6 +10,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.net.URI;
@@ -19,6 +20,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
@@ -97,6 +99,29 @@ public class ClasspathUrlProbe {
             j.putNextEntry(new JarEntry(MARKER_CLASS + ".class"));
             j.write(cls);
             j.closeEntry();
+        }
+    }
+
+    //! Adds an archive by a route as add() does, with no JDK version counted as verified for the duration of the call
+    public static String addOnUnverifiedJdk(ClassLoader loader, String route, String jar) throws Exception {
+        Field field = QoreURLClassLoader.class.getDeclaredField("VERIFIED_CLASS_PATH_JDK_FEATURES");
+        field.setAccessible(true);
+        int[] features = (int[])field.get(null);
+        int[] saved = features.clone();
+        Arrays.fill(features, -1);
+        try {
+            return add(loader, route, jar);
+        } finally {
+            System.arraycopy(saved, 0, features, 0, saved.length);
+        }
+    }
+
+    //! Calls QoreSandbox.checkCompilerClasspath(); returns "ok: <number of files>" or "refused: <exception>"
+    public static String compilerClasspath(String classpath) {
+        try {
+            return "ok: " + QoreSandbox.checkCompilerClasspath(classpath).size();
+        } catch (RuntimeException e) {
+            return "refused: " + e;
         }
     }
 

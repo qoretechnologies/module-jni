@@ -376,6 +376,12 @@ public final class QoreSandbox {
         return p != null ? p.restrictsNetwork() : restrictsNetwork0(0);
     }
 
+    //! Returns the exception for a classpath entry whose location a network policy needs but that cannot be confirmed
+    static RuntimeException classpathLocationUncheckedError(String reason) {
+        return argumentError0("a classpath entry cannot be checked for another location, as a sandbox that restricts "
+            + "network access requires: " + reason);
+    }
+
     //! Returns the exception for a classpath that names a location that a network policy does not allow
     static RuntimeException classpathLocationError() {
         return argumentError0("a classpath entry names another location, which a sandbox that restricts network "
@@ -451,8 +457,8 @@ public final class QoreSandbox {
         if (classpath == null) {
             throw argumentError0("classpath must not be null");
         }
-        // only for a caller whose filesystem access is restricted, for which an exact path has no other location
-        QoreURLClassLoader.ResolvedClasspath rc = resolveClasspath(classpath, 0, true, false);
+        QoreURLClassLoader.ResolvedClasspath rc = resolveClasspath(classpath, 0, restrictsFilesystem(),
+            restrictsNetwork());
         // the elements grow as they are checked: a manifest is read only after its jar has been allowed
         for (int i = 0; i < rc.size(); ++i) {
             checkNamed(rc.encodedPath(i), rc.givenEntry(i), READ);
