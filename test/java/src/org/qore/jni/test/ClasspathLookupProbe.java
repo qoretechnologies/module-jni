@@ -1252,7 +1252,9 @@ public class ClasspathLookupProbe {
     //! Blocks the private parent with a root that cannot be removed, and checks how it recovers or keeps refusing
     /** @param scenario "after-release": the leftover goes after the last release; "parent-removed": the whole parent is
         removed; "stays": a parent that holds the leftover refuses, in acquire() too, and logs once; "not-intact": an empty
-        parent that does not verify refuses; "in-flight": no recovery while a copy is held; "newroot-check": a compile
+        parent that does not verify refuses; "in-flight": no recovery while a copy is held; "in-flight-empty" and
+        "in-flight-removed": no recovery while a copy is counted that has no root yet, with the parent empty or removed,
+        and recovery once it is released; "newroot-check": a compile
         that is past acquire() makes no root; "discard-verifies": a refused root is not removed from an unverified parent
         @return "clean", or what is wrong
     */
@@ -1281,10 +1283,18 @@ public class ClasspathLookupProbe {
         provider.fail = false;
         provider.wrapDerived = true;
         boolean heldOpen = true;
+        boolean counted = false;
         java.io.PrintStream savedOut = System.out;
         java.io.ByteArrayOutputStream captured = new java.io.ByteArrayOutputStream();
         System.setOut(new java.io.PrintStream(captured, true));
         try {
+            if (scenario.startsWith("in-flight-")) {
+                // a copy that is counted and has no root yet
+                if (acquire.invoke(null) != parent) {
+                    return "the counted copy is in another parent";
+                }
+                counted = true;
+            }
             if (scenario.equals("discard-verifies")) {
                 // nothing fails but the verification of the parent
                 ownerField.set(parent, otherUser(savedOwner));
@@ -1371,6 +1381,24 @@ public class ClasspathLookupProbe {
                     heldOpen = false;
                     return copyWorks(open, loader, parent, false);
                 }
+                case "in-flight-empty":
+                case "in-flight-removed": {
+                    close.invoke(held);
+                    heldOpen = false;
+                    Files.delete(leftover);
+                    if (scenario.equals("in-flight-removed")) {
+                        Files.delete(real);
+                    } else if (countTree(real) != 1) {
+                        return "the parent is not empty";
+                    }
+                    rv = openRefused(open, loader, (String) parentStatic("BLOCKED_REFUSAL").get(null));
+                    if (rv != null) {
+                        return "with a counted copy: " + rv;
+                    }
+                    counted = false;
+                    release.invoke(parent);
+                    return copyWorks(open, loader, parent, false);
+                }
                 case "newroot-check": {
                     int left = countTree(real);
                     rv = refused(newRoot, parent, (String) parentStatic("BLOCKED_REFUSAL").get(null));
@@ -1394,6 +1422,9 @@ public class ClasspathLookupProbe {
             }
             if (heldOpen) {
                 close.invoke(held);
+            }
+            if (counted) {
+                release.invoke(parent);
             }
             removeTestTree(real);
             java.lang.reflect.Field current = parentStatic("current");

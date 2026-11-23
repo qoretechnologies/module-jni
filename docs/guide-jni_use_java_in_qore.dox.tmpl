@@ -377,8 +377,8 @@ class Outer {
     or by root that is not writable by group or others or that has the sticky bit; no user name is needed, and a compile
     is also refused if a UID cannot be read, which includes a Java runtime image without the \c jdk.security.auth
     module, or if a new copy would have another UID than its private directory.  The removal of such a refused copy is
-    attempted; if it cannot be removed, it stays inside the private directory, and compiles that need a copy are
-    refused, with an error of their own that is logged once.  Once no copy is in flight, the next compile recovers if
+    attempted; if it cannot be removed, it stays inside the private directory, and while that directory is the
+    current one, compiles that need a copy are refused, with an error of their own that is logged once.  Once no copy is in flight, the next compile recovers if
     that directory is gone or is verified and empty; a leftover that never goes means refusal until the process
     restarts.  Compiles that make no copy are not affected.  Only on a platform without
     POSIX file attributes can this not be checked, and a copy is made.  Its parent directories and ACLs are not judged.

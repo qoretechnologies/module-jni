@@ -306,8 +306,8 @@ sub tmpdir_owner_case(string root, string tmp) {
 
 #! a private directory that takes no more copies recovers once it is empty or gone, and refuses until then
 sub blocked_case(string root) {
-    foreach string scenario in ("after-release", "parent-removed", "stays", "not-intact", "in-flight", "newroot-check",
-            "discard-verifies") {
+    foreach string scenario in ("after-release", "parent-removed", "stays", "not-intact", "in-flight", "in-flight-empty",
+            "in-flight-removed", "newroot-check", "discard-verifies") {
         Program p = new_program(get_policy(root, ("ending",)), root + "/ending");
         result("blocked " + scenario, "clean", p.callFunction("blocked_recovery", scenario));
     }

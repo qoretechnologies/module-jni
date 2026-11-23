@@ -623,7 +623,7 @@ public final class QoreCompilerClasspath implements AutoCloseable {
 
         //! Returns true if this directory verifies and has no entries
         /** Through the opened and verified directory where there is a secure directory stream.  Elsewhere the directory
-            is verified by name and then listed, which needs no access to the temporary directory.
+            is verified by name and then listed, which needs no read access to the temporary directory.
         */
         private boolean isVerifiedEmpty() {
             if (!isIntact()) {
@@ -708,7 +708,8 @@ public final class QoreCompilerClasspath implements AutoCloseable {
 
         //! Creates the root of a new copy, which must have the UID recorded for this directory
         /** The check, the creation, the check of its UID and its discard are made under LOCK, so no root is created in a
-            directory after it is blocked.  A root is empty here, so no content is copied or removed under the lock.
+            directory after it is blocked.  No content is copied under the lock.  The discard of a just-created root is
+            recursive, and can only run long if a process of the same user fills that root.
 
             @throw IOException it could not be created, this directory holds a refused root, or it has another UID or its
             UID cannot be read, in which case its removal is attempted

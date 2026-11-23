@@ -140,12 +140,13 @@ are `static_assert`ed to match) and calls `QoreSandboxManager::checkFilesystemAc
   `jdk.security.auth` module.  A new parent and the root of each new copy must have the expected UID, so a process
   whose effective UID differs, or changed before this copy's root is created, makes no copy under another identity.
   The removal of a refused root is attempted through the verified parent.  A root that cannot be removed stays inside
-  the 0700 parent, keeps that parent in place, and blocks it: compiles that need a copy are refused with their own
-  error, with no path, and the block is logged once.  The check, creation, UID check and discard of a root are made
-  under one lock, with no content copied or tree removed under it, so a parent holds at most one such root.  With no
+  the 0700 parent, keeps that parent in place, and blocks it: while it is the current directory, compiles that need a
+  copy are refused with their own error, with no path, and the block is logged once.  The check, creation, UID check and discard of a root are made
+  under one lock, so a parent holds at most one such root.  No content is copied under it; the discard of a just-created
+  root is recursive, and can only run long if a process of the same user fills that root.  With no
   copy in flight, the next copy recovers: a parent that no longer exists is replaced, and one that verifies and is empty
   is used again (emptiness is read through the opened, verified directory; without a secure directory stream, the
-  parent is verified by name and then listed, which needs no access to the temporary directory).  A leftover that never
+  parent is verified by name and then listed, which needs no read access to the temporary directory).  A leftover that never
   goes means refusal until the process restarts.  Trusted and permissive compiles make no
   copy and are not affected.  Only where the platform has no POSIX attributes at all are the mode and owner not checked:
   a copy is made, and a retry stays fail-closed as above.  The directories above it and ACLs are not judged.  Code in the same JVM is not
