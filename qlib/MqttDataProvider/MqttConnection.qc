@@ -28,6 +28,13 @@ public namespace MqttDataProvider {
 /** supports the options from @ref MqttDataProvider::ConstructorOptions
 */
 public class MqttConnection inherits ConnectionProvider::AbstractConnectionWithInfo {
+    #! Returns the functional domains of the connection's clients (qoretechnologies/qore#7096)
+    /** The clients connect to an MQTT broker, also those of BusyLightConnection
+    */
+    private final int getConnectionDomainsImpl() {
+        return DOM_NETWORK;
+    }
+
     public {
         #! Connection entry info
         const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("MqttDataProvider",

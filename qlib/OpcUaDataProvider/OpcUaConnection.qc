@@ -28,6 +28,13 @@ public namespace OpcUaDataProvider {
 /** supports the options from @ref OpcUaDataProvider::ConstructorOptions
 */
 public class OpcUaConnection inherits ConnectionProvider::AbstractConnectionWithInfo {
+    #! Returns the functional domains of the connection's clients (qoretechnologies/qore#7096)
+    /** The clients connect to an OPC UA server
+    */
+    private final int getConnectionDomainsImpl() {
+        return DOM_NETWORK;
+    }
+
     public {
         #! Connection entry info
         const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("OpcUaDataProvider",

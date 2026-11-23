@@ -26,6 +26,13 @@
 public namespace JdbcDataProvider {
 #! Class for JDBC database connections
 public class JdbcConnection inherits ConnectionProvider::AbstractConnectionWithInfo {
+    #! Returns the functional domains of the connection's clients (qoretechnologies/qore#7096)
+    /** The clients open a database and load the driver classes of the \c classpath option from the file system
+    */
+    private final int getConnectionDomainsImpl() {
+        return DOM_DATABASE | DOM_FILESYSTEM;
+    }
+
     public {
         #! Connection entry info
         const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("JdbcDataProvider",

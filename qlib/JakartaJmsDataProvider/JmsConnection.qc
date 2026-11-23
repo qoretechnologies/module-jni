@@ -28,6 +28,14 @@ public namespace JakartaJmsDataProvider {
 /** supports the options from @ref JakartaJmsDataProvider::JmsDataProvider::ConstructorOptions
 */
 public class JmsConnection inherits ConnectionProvider::AbstractConnectionWithInfo {
+    #! Returns the functional domains of the connection's clients (qoretechnologies/qore#7096)
+    /** The clients connect to a JMS broker and load the provider classes of the \c provider_classpath option from
+        the file system
+    */
+    private final int getConnectionDomainsImpl() {
+        return DOM_NETWORK | DOM_FILESYSTEM;
+    }
+
     public {
         #! Connection entry info
         const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("JakartaJmsDataProvider",

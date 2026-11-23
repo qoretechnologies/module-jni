@@ -1,0 +1,235 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%requires qore >= 3.0
+%prepend-module-path "${SCRIPT_DIR}/../build"
+%prepend-module-path "${SCRIPT_DIR}/../qlib"
+%requires QUnit
+%requires ConnectionProvider
+%requires JdbcDataProvider
+%requires FlywayDataProvider
+%requires JakartaJmsDataProvider
+%requires KafkaDataProvider
+%requires MqttDataProvider
+%requires BusyLightDataProvider
+%requires OpcUaDataProvider
+%requires CamelDataProvider
+%exec-class ConnectionDomainsTest
+
+#! The connection classes declare the functional domains of their clients (qoretechnologies/qore#7096)
+/** Code restricted from a domain that a connection's clients use cannot create the connection, by any constructor or
+    by deserialization (ConnectionProvider 3.1, qore#7052).  A connection class that does not declare its domains is
+    treated as using all of the I/O domains (\c NETWORK, \c FILESYSTEM and \c DATABASE), so each class declares its
+    own, as a \c final method, so that code restricted only from the other domains can create the connection, and so
+    that a subclass cannot change them.
+
+    No class of this repository creates a connection in the methods of an object that the host lends, so connections
+    that are created there are not tested here.
+*/
+class ConnectionDomainsTest inherits QUnit::Test {
+    private {
+        #! the parse option that restricts code from each domain
+        const DomainOptions = {
+            "NETWORK": PO_NO_NETWORK,
+            "FILESYSTEM": PO_NO_FILESYSTEM,
+            "DATABASE": PO_NO_DATABASE,
+        };
+
+        #! the connections: class, URL, options and the domains that the class declares
+        const Connections = {
+            "JdbcConnection": {
+                "cls": "JdbcDataProvider::JdbcConnection",
+                "url": "jdbc-dp://db",
+                "opts": {"url": "jdbc:h2:mem:x", "user": "u", "password": "p"},
+                "domains": ("DATABASE", "FILESYSTEM",),
+            },
+            "FlywayConnection": {
+                "cls": "FlywayDataProvider::FlywayConnection",
+                "url": "flyway://db",
+                "opts": {"url": "jdbc:h2:mem:x", "user": "u", "password": "p"},
+                "domains": ("DATABASE", "FILESYSTEM",),
+            },
+            "JmsConnection": {
+                "cls": "JakartaJmsDataProvider::JmsConnection",
+                "url": "jms://127.0.0.1:1",
+                "opts": {"connection_factory_class": "x.Y"},
+                "domains": ("NETWORK", "FILESYSTEM",),
+            },
+            "KafkaConnection": {
+                "cls": "KafkaDataProvider::KafkaConnection",
+                "url": "kafka://127.0.0.1:1",
+                "opts": NOTHING,
+                "domains": ("NETWORK", "FILESYSTEM",),
+            },
+            "MqttConnection": {
+                "cls": "MqttDataProvider::MqttConnection",
+                "url": "mqtt://127.0.0.1:1",
+                "opts": NOTHING,
+                "domains": ("NETWORK",),
+            },
+            "BusyLightConnection": {
+                "cls": "BusyLightDataProvider::BusyLightConnection",
+                "url": "bltcp://127.0.0.1:1",
+                "opts": NOTHING,
+                "domains": ("NETWORK",),
+            },
+            "OpcUaConnection": {
+                "cls": "OpcUaDataProvider::OpcUaConnection",
+                "url": "opcua://127.0.0.1:1",
+                "opts": NOTHING,
+                "domains": ("NETWORK",),
+            },
+            "CamelConnection": {
+                "cls": "CamelDataProvider::CamelConnection",
+                "url": "camel://ctx",
+                "opts": NOTHING,
+                "domains": ("NETWORK", "FILESYSTEM", "DATABASE",),
+            },
+        };
+
+        #! the functions of the restricted Programs
+        const Src = "%modern\n"
+            "%requires JdbcDataProvider\n"
+            "%requires FlywayDataProvider\n"
+            "%requires JakartaJmsDataProvider\n"
+            "%requires KafkaDataProvider\n"
+            "%requires MqttDataProvider\n"
+            "%requires BusyLightDataProvider\n"
+            "%requires OpcUaDataProvider\n"
+            "%requires CamelDataProvider\n"
+            "string sub make(string cls, string url, *hash<auto> opts) { try { create_object(cls, \"c\", \"d\", url, "
+            "{\"monitor\": False}, opts ?? {}); return \"created\"; } catch (hash<ExceptionInfo> ex) { "
+            "return ex.err + \": \" + ex.desc; } }\n"
+            "string sub make_hash(string cls, string url, *hash<auto> opts) { try { create_object(cls, {\"name\": "
+            "\"c\", \"desc\": \"d\", \"url\": url, \"opts\": opts ?? {}}, {\"monitor\": False}); return \"created\"; } "
+            "catch (hash<ExceptionInfo> ex) { return ex.err + \": \" + ex.desc; } }\n"
+            "string sub deserialize(binary data) { try { Serializable::deserialize(data); return \"created\"; } "
+            "catch (hash<ExceptionInfo> ex) { return ex.err + \": \" + ex.desc; } }\n"
+            "string sub lent(object c) { try { return c.getType(); } "
+            "catch (hash<ExceptionInfo> ex) { return ex.err + \": \" + ex.desc; } }\n";
+    }
+
+    constructor() : QUnit::Test("ConnectionDomainsTest", "1.0", \ARGV) {
+        addTestCase("code restricted from a declared domain cannot create the connection", \testDeclaredDomains());
+        addTestCase("code restricted only from other domains creates the connection", \testOtherDomains());
+        addTestCase("code restricted from a declared domain cannot deserialize the connection", \testDeserialize());
+        addTestCase("unrestricted code creates the connection", \testUnrestricted());
+        addTestCase("a connection that the host lends is used by restricted code", \testLent());
+        addTestCase("a subclass cannot change the domains of a connection class", \testFinal());
+        set_return_value(main());
+    }
+
+    #! code restricted from any domain that a connection class declares cannot create the connection
+    testDeclaredDomains() {
+        foreach hash<auto> i in (Connections.pairIterator()) {
+            foreach string dom in (i.value.domains) {
+                Program p = getProgram(DomainOptions{dom});
+                string err = sprintf("^PERMISSION-DENIED: code restricted from the %s functional domain cannot create "
+                    "connection \"c\"", dom);
+                assertRegex(err, p.callFunction("make", i.value.cls, i.value.url, i.value.opts),
+                    sprintf("%s, %s", i.key, dom));
+                assertRegex(err, p.callFunction("make_hash", i.value.cls, i.value.url, i.value.opts),
+                    sprintf("%s from a configuration, %s", i.key, dom));
+            }
+        }
+    }
+
+    #! code restricted only from the domains that a connection class does not declare creates the connection
+    testOtherDomains() {
+        int checked = 0;
+        foreach hash<auto> i in (Connections.pairIterator()) {
+            foreach string dom in (keys DomainOptions) {
+                if (i.value.domains.contains(dom)) {
+                    continue;
+                }
+                Program p = getProgram(DomainOptions{dom});
+                assertEq("created", p.callFunction("make", i.value.cls, i.value.url, i.value.opts),
+                    sprintf("%s, %s", i.key, dom));
+                assertEq("created", p.callFunction("make_hash", i.value.cls, i.value.url, i.value.opts),
+                    sprintf("%s from a configuration, %s", i.key, dom));
+                ++checked;
+            }
+        }
+        # at least one class declares fewer than all of the domains
+        assertTrue(checked > 0);
+    }
+
+    #! code restricted from a declared domain cannot deserialize a connection that the host serialized
+    testDeserialize() {
+        foreach hash<auto> i in (Connections.pairIterator()) {
+            object c = create_object(i.value.cls, "c", "d", i.value.url, {"monitor": False}, i.value.opts ?? {});
+            binary data = c.serialize();
+            foreach string dom in (keys DomainOptions) {
+                Program p = getProgram(DomainOptions{dom});
+                string rv = p.callFunction("deserialize", data);
+                if (i.value.domains.contains(dom)) {
+                    assertRegex(sprintf("^PERMISSION-DENIED: code restricted from the %s functional domain cannot "
+                        "create connection \"c\"", dom), rv, sprintf("%s, %s", i.key, dom));
+                } else {
+                    assertEq("created", rv, sprintf("%s, %s", i.key, dom));
+                }
+            }
+            # the host deserializes it
+            assertEq(i.value.cls.split("::").last(), Serializable::deserialize(data).className(), i.key);
+        }
+    }
+
+    #! unrestricted code creates every connection
+    testUnrestricted() {
+        Program p = getProgram(0);
+        foreach hash<auto> i in (Connections.pairIterator()) {
+            assertEq("created", p.callFunction("make", i.value.cls, i.value.url, i.value.opts), i.key);
+            assertEq("created", p.callFunction("make_hash", i.value.cls, i.value.url, i.value.opts), i.key);
+        }
+    }
+
+    #! a connection that the host created is a capability that restricted code uses
+    testLent() {
+        foreach hash<auto> i in (Connections.pairIterator()) {
+            object c = create_object(i.value.cls, "c", "d", i.value.url, {"monitor": False}, i.value.opts ?? {});
+            foreach string dom in (i.value.domains) {
+                Program p = getProgram(DomainOptions{dom});
+                assertEq(c.getType(), p.callFunction("lent", c), sprintf("%s, %s", i.key, dom));
+            }
+        }
+    }
+
+    #! the domains are declared final: a subclass that declares no domain cannot be parsed
+    testFinal() {
+        foreach hash<auto> i in (Connections.pairIterator()) {
+            Program p(PO_NEW_STYLE | DomainOptions{i.value.domains[0]});
+            string result;
+            try {
+                p.parse(sprintf("%%modern\n%s\nclass X inherits %s {\n"
+                    "    private int getConnectionDomainsImpl() { return 0; }\n}\n", RequireLines, i.value.cls),
+                    "override");
+                result = "parsed";
+            } catch (hash<ExceptionInfo> ex) {
+                result = ex.err + ": " + ex.desc;
+            }
+            assertRegex("^PARSE-EXCEPTION: .*getConnectionDomainsImpl", result, i.key);
+        }
+    }
+
+    #! returns a Program restricted by the given parse options, with the functions of the test
+    private Program getProgram(int po) {
+        Program p(PO_NEW_STYLE | po);
+        p.parse(Src, "conn");
+        return p;
+    }
+}
+
+#! the modules that the Programs of the test load
+const RequireLines = "%requires JdbcDataProvider\n"
+    "%requires FlywayDataProvider\n"
+    "%requires JakartaJmsDataProvider\n"
+    "%requires KafkaDataProvider\n"
+    "%requires MqttDataProvider\n"
+    "%requires BusyLightDataProvider\n"
+    "%requires OpcUaDataProvider\n"
+    "%requires CamelDataProvider\n";

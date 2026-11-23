@@ -6,6 +6,10 @@
 
     @section jni_3_0_0 jni Module Version 3.0.0
 
+    - The connection classes of the data provider modules declare the functional domains of their clients, so code
+      restricted only from other domains can create them; Camel connections use all of them, and JDBC connections
+      declare \c FILESYSTEM because their \c classpath option loads driver jars from the file system, unlike the
+      core's \c DatasourceConnection, which loads no files (qore#7096)
     - <b>Security</b>: the @ref jnijdbc_driverguide "jdbc driver" masks the URL of a datasource, its password and
       the credentials in the URL in the text of the Java exceptions that it raises for an operation on the datasource
       and in their argument (ex: \c "No suitable driver found for jdbc:postgresql:****"), as a JDBC driver can name
