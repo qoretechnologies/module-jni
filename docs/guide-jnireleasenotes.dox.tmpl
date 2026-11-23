@@ -6,9 +6,35 @@
 
     @section jni_3_0_0 jni Module Version 3.0.0
 
+    - <b>Security</b>: for a caller that a sandbox filesystem policy restricts, a manifest \c Class-Path entry whose
+      path cannot be checked exactly is refused with \c JNI-CLASSPATH-ERROR, on every JDK version, and nothing of the
+      classpath is added.  For a caller whose sandbox restricts only the network, an entry that names another
+      location, or whose location cannot be confirmed, is refused, also when Java code adds the classpath, which is
+      otherwise added as for a caller with no sandbox; a caller whose sandbox restricts neither is not affected
+      (qore#7349, qore#7195)
     - A child process created with \c fork() could wait forever when it ended, if another thread of the parent held
       one of the module's locks on the child's exit path or the global context Program at the time of the fork, as that
       thread does not exist in the child.  The module's cleanup in a child no longer waits for that state (qore#7192)
+    - <b>Security</b>: Kotlin compiler source and class names are validated as Java binary names before anything is
+      written, the files that the compiler makes for them stay in its private temporary directory, and the names of
+      the classes that it produces are validated.  Java compiler options, and classpaths added to a compiler or a class
+      loader from Java, are checked against the filesystem policy of a caller that one restricts, the locations that a
+      compiler takes from them are the files that were checked, and the Java compiler loads no extensions from its
+      classpath for such a caller.  The Java compiler checks each file that it finds below a directory of its
+      classpath; the class loader and the Kotlin compiler do not (qore#7276): do not put a directory that contains
+      content the policy denies on the classpath of restricted code.  The Kotlin compiler also uses the host's Qore and
+      Kotlin jars and the entries of parent class loaders.  A compiler that trusted code creates is not restricted
+      when it is handed to restricted code, and a file that changes between its check and its use is not covered.
+      These checks are defense in depth (qore#7195)
+    - <b>Behavior change</b> (qore#7195): a Kotlin compile with a source or class name that is not a Java binary name
+      is refused.  For a caller that a sandbox filesystem policy restricts, a Java compiler option that is neither known
+      to name no file nor a classpath or output directory that the policy allows is refused, and annotation processing
+      is off; callers with no filesystem policy are unchanged.  An archive with a manifest \c Class-Path attribute is
+      not given to a compiler for such a caller, and a classpath option that names a regular file that is not an
+      archive is refused.  Under a filesystem policy, a wildcard classpath entry that selects a link whose missing
+      target the policy denies now refuses the whole classpath, also for the \c add-classpath module command.
+      \c QoreSandbox.restrictsFilesystem() and
+      \c QoreSandbox.checkCompilerClasspath() are new
     - <b>Security</b>: class loader operations are now checked against the class loader that they change, and the
       process-wide registry of shared dynamic classes can no longer be changed by code that a sandbox governs, nor can
       that code define a class in a registered owner that it cannot reach.  Operations that change the state of a class
@@ -111,10 +137,11 @@
       against the policy; they are now resolved as the class loader resolves them, recursively and each once, and
       checked as their real paths (with symbolic links resolved) together with the classpath's own entries; if the
       policy denies any of them, or one cannot be checked (ex: a jar that is not a regular file, or, before Java 22, a
-      jar with a jar index), the whole classpath is refused with \c JNI-CLASSPATH-ERROR, naming the file, and nothing
+      jar with a jar index, refused as a defense for other builds, as the JDK 21 builds that were tested have no jar
+      index support to enable), the whole classpath is refused with \c JNI-CLASSPATH-ERROR, naming the file, and nothing
       is added.  The class loader still follows the manifests, so the classpath that is used is unchanged.  The
-      resolution has been verified for JDK feature version 25; on any other JDK version, a governed classpath with a
-      jar that has a manifest \c Class-Path attribute is refused with \c JNI-CLASSPATH-ERROR, naming the reason (a
+      resolution has been verified for JDK feature versions 21 and 25; on any other JDK version, a governed classpath
+      with a jar that has a manifest \c Class-Path attribute is refused with \c JNI-CLASSPATH-ERROR, naming the reason (a
       classpath whose jars have no \c Class-Path attribute is not affected).  The \c add-classpath and
       \c add-relative-classpath module commands and the \c classpath option of the \c jdbc driver are affected; with
       no filesystem policy, classpaths are added as before (qore#6822, see @ref jni_sandbox)

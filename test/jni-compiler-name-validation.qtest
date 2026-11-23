@@ -1,0 +1,1297 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../build"
+%requires QUnit
+%requires FsUtil
+%requires Util
+%requires jni
+%module-cmd(jni) add-relative-classpath ../build/qore-jni-compiler.jar
+%module-cmd(jni) import org.qore.jni.compiler.QoreCompilerPolicy
+%module-cmd(jni) import org.qore.jni.compiler.QoreJavaCompiler
+%module-cmd(jni) import java.nio.file.Paths
+%module-cmd(jni) import java.lang.System
+%module-cmd(jni) import java.lang.Runtime
+%module-cmd(jni) add-relative-classpath qore-jni-test.jar
+%module-cmd(jni) import org.qore.jni.test.ClassLoaderAccessProbe
+
+%exec-class JniCompilerNameValidationTest
+
+#! Compiler source and class names are validated, and compiler options are checked against the sandbox policy
+/** Every path in this test is below a scratch directory that is the current directory of the process, and is named
+    through \c /proc/self/cwd, so that nothing can be written outside of it.
+*/
+class JniCompilerNameValidationTest inherits QUnit::Test {
+    public {
+        #! the code of the Programs under test
+        const ProgramSource = "%modern
+%requires jni
+%module-cmd(jni) import org.qore.jni.compiler.QoreJavaCompiler
+%module-cmd(jni) import java.nio.file.Paths
+%module-cmd(jni) import org.qore.jni.test.ClassLoaderAccessProbe
+
+public class NameTestBase {
+    string hello(string n) {
+        return \"hello \" + n;
+    }
+}
+
+# adds a path to the classpath of the parent of a class loader derived from this Program's
+hash<auto> sub java_add_parent(string path) {
+    object derived = ClassLoaderAccessProbe::newDerived(get_class_loader());
+    string rv = ClassLoaderAccessProbe::addParentPath(derived, path);
+    return {\"rv\": rv, \"has\": ClassLoaderAccessProbe::parentHasPath(derived, path)};
+}
+
+string sub add_orig(string path) {
+    return ClassLoaderAccessProbe::addPathOrig(get_class_loader(), path);
+}
+
+object sub own_loader() {
+    return get_class_loader();
+}
+
+string sub add_url(object loader, string path) {
+    return ClassLoaderAccessProbe::addUrlTo(loader, path);
+}
+
+bool sub can_load(string name) {
+    try {
+        get_class_loader().loadClass(name);
+        return True;
+    } catch (hash<ExceptionInfo> ex) {
+        return False;
+    }
+}
+
+# opens a datasource with a driver that does not exist, so that no database is contacted
+hash<auto> sub jdbc_open(string classpath) {
+    try {
+        Datasource ds({\"type\": \"jdbc\", \"user\": \"u\", \"pass\": \"p\", \"db\": \"jdbc:qore-none://x\",
+            \"options\": {\"classpath\": classpath}});
+        ds.open();
+        return {\"ok\": True};
+    } catch (hash<ExceptionInfo> ex) {
+        return {\"ok\": False, \"err\": ex.err, \"desc\": ex.desc};
+    }
+}
+
+hash<auto> sub module_add_classpath(string path) {
+    try {
+        Program::issueModuleCmd(\"jni\", \"add-classpath \" + path);
+        return {\"ok\": True};
+    } catch (hash<ExceptionInfo> ex) {
+        return {\"ok\": False, \"err\": ex.err, \"desc\": ex.desc};
+    }
+}
+
+# the messages of the compiler for a compilation that failed
+string sub diagnostics(hash<ExceptionInfo> ex) {
+    if (ex.arg.typeCode() != NT_OBJECT || ex.arg.className() != \"QoreJavaCompilerException\") {
+        return \"\";
+    }
+    return (foldl $1 + \"; \" + $2, ex.arg.getDiagnosticMessages()) ?? \"\";
+}
+
+hash<auto> sub java_add_classpath(string how, string path, string name, string src) {
+    try {
+        # the compiler takes the class loader's classpath when it is created
+        if (how == \"loader\") {
+            get_class_loader().addPath(path);
+        } else if (how == \"wildcard\") {
+            get_class_loader().addWildcard(Paths::get(path).toFile(), \"*.jar\");
+        }
+        QoreJavaCompiler compiler(get_class_loader(), NOTHING);
+        on_exit compiler.close();
+        if (how == \"compiler\") {
+            compiler.addClassPath(path);
+        }
+        compiler.compile(name, src);
+        return {\"ok\": True};
+    } catch (hash<ExceptionInfo> ex) {
+        return {\"ok\": False, \"err\": ex.err, \"desc\": ex.desc, \"diag\": diagnostics(ex)};
+    }
+}
+
+hash<auto> sub java_compile(softlist<string> opts, string name, string src) {
+    try {
+        QoreJavaCompiler compiler(get_class_loader(), opts);
+        on_exit compiler.close();
+        compiler.compile(name, src);
+        return {\"ok\": True};
+    } catch (hash<ExceptionInfo> ex) {
+        return {\"ok\": False, \"err\": ex.err, \"desc\": ex.desc, \"diag\": diagnostics(ex)};
+    }
+}
+";
+
+        #! the Kotlin part of the code of the Programs under test
+        const KotlinSource = "%module-cmd(jni) import org.qore.jni.compiler.QoreKotlinCompiler
+
+%module-cmd(jni) import java.lang.Class
+%module-cmd(jni) import java.lang.reflect.Method
+
+# calls the Kotlin compiler's private path resolution for a directory that the test prepared
+string sub kotlin_contained(string dir, string name) {
+    QoreKotlinCompiler kc(get_class_loader(), NOTHING);
+    on_exit kc.close();
+    Class str = Class::forName(\"java.lang.String\");
+    Class path = Class::forName(\"java.nio.file.Path\");
+    Class kcls = Class::forName(\"org.qore.jni.compiler.QoreKotlinCompiler\", True, get_class_loader());
+    Method m = kcls.getDeclaredMethod(\"containedPath\", (path, str, str));
+    m.setAccessible(True);
+    try {
+        return m.invoke(NOTHING, (Paths::get(dir), name, \".class\")).toString();
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.desc;
+    }
+}
+
+hash<auto> sub kotlin_with_path(string path, string name, string src) {
+    try {
+        get_class_loader().addPath(path);
+        QoreKotlinCompiler compiler(get_class_loader(), NOTHING);
+        on_exit compiler.close();
+        hash<auto> sources;
+        sources{name} = src;
+        compiler.compile(sources);
+        return {\"ok\": True};
+    } catch (hash<ExceptionInfo> ex) {
+        return {\"ok\": False, \"err\": ex.err, \"desc\": ex.desc};
+    }
+}
+
+hash<auto> sub kotlin_compile(hash<auto> sources, *hash<auto> injected, *softlist<string> pending,
+        *softlist<string> bases) {
+    try {
+        QoreKotlinCompiler compiler(get_class_loader(), NOTHING);
+        on_exit compiler.close();
+        map compiler.injectClass($1, <cafebabe>), pending;
+        map compiler.addBaseClass($1), bases;
+        hash<auto> classes = compiler.compile(sources, injected);
+        return {\"ok\": True, \"classes\": classes};
+    } catch (hash<ExceptionInfo> ex) {
+        return {\"ok\": False, \"err\": ex.err, \"desc\": ex.desc};
+    }
+}
+";
+
+        #! manifest Class-Path entries with URL syntax, which are refused for a compiler; none names an existing file
+        const AmbiguousManifestEntries = ("a%2Eb", "file:a", "a#b", "a?b", "./a", "b/../a", "//b/a", "//b/c/");
+
+        #! the JDK feature versions on which the cases that follow a manifest Class-Path can run
+        /** Deliberately not read from the product (QoreURLClassLoader.VERIFIED_CLASS_PATH_JDK_FEATURES).  On any other
+            JDK such a classpath is refused, which test/jni-classpath-manifest-sandbox.qtest asserts on every JDK.
+        */
+        const ManifestCheckedJdkFeatures = (21, 25);
+
+        #! a compiler service that records that it was instantiated
+        const ServiceFixtureSource = "public class %s implements com.sun.source.util.Plugin {
+    public %s() { System.setProperty(\"qore.test.compiler-service\", \"1\"); }
+    @Override public String getName() { return \"%s\"; }
+    @Override public void init(com.sun.source.util.JavacTask t, String... a) { }
+    @Override public boolean autoStart() { return true; }
+}
+";
+
+        #! the refusal of a class name
+        const NameError = "invalid class name for compilation";
+        #! the refusal of a compiler option
+        const OptionError = "Java compiler option is not allowed";
+    }
+
+    private {
+        #! the scratch directory, which is the current directory during the tests
+        string scratch;
+        #! the directory that the process started in
+        string start_dir;
+        #! the absolute path of the directory of this test
+        string script_dir;
+        #! the prefix of the paths in the scratch directory, through the current directory of the process
+        string confined;
+        #! the Kotlin jars, if any
+        *list<string> kotlin_jars;
+        #! a counter for unique class names
+        int counter = 0;
+    }
+
+    constructor() : QUnit::Test("jni compiler name validation", "1.0") {
+        addTestCase("binary name forms", \binaryNameTest());
+        addTestCase("the file of a name stays in its directory", \containedTest());
+        addTestCase("Kotlin source names are validated", \kotlinSourceNameTest());
+        addTestCase("Kotlin injected class names are validated", \kotlinInjectedNameTest());
+        addTestCase("Kotlin stub names are validated", \kotlinStubNameTest());
+        addTestCase("legitimate Kotlin names compile", \kotlinLegitimateTest());
+        addTestCase("Kotlin with qore base classes in a restricted Program", \kotlinQoreBaseTest());
+        addTestCase("Java options under a filesystem policy", \javaOptionsRestrictedTest());
+        addTestCase("Java classpath option under a filesystem policy", \javaClasspathTest());
+        addTestCase("Java options without a filesystem policy", \javaOptionsUnrestrictedTest());
+        addTestCase("the parent classpath is checked", \parentClasspathTest());
+        addTestCase("the compiler reads the classpath that was checked", \checkedClasspathTest());
+        addTestCase("a refusal says nothing about a denied file", \deniedSpecialFileTest());
+        addTestCase("annotation processors do not run for restricted code", \processorTest());
+        addTestCase("Kotlin output stays in its directory", \kotlinOutputTest());
+        addTestCase("Java threads with an unknown caller", \javaThreadTest());
+        addTestCase("every class loader route applies the policy", \loaderRoutesTest());
+        addTestCase("Kotlin reads only the files that were checked", \kotlinLocationsTest());
+        addTestCase("archives with a manifest classpath are not given to a compiler", \archiveManifestTest());
+        addTestCase("a module command says nothing about a denied file", \moduleDeniedSpecialTest());
+        addTestCase("compiler output names", \outputNamesTest());
+        addTestCase("a trusted Kotlin compile after a tenant used Java", \kotlinAfterGovernedTest());
+        addTestCase("a restricted compile has only its checked locations", \noLocationsTest());
+        addTestCase("a restricted compile loads no services from its classpath", \compilerServiceTest());
+        addTestCase("a denial does not name a resolved path", \deniedTargetTest());
+        addTestCase("a classpath file that is not an archive", \nonArchiveClasspathTest());
+        addTestCase("a wildcard match that cannot be resolved is checked", \unresolvedWildcardTest());
+        addTestCase("the Java compiler checks the files below a directory", \directoryFilesTest());
+        addTestCase("a manifest entry with the form of a directory", \manifestDirectoryFormTest());
+        addTestCase("a manifest directory entry with another host", \manifestOtherHostTest());
+        addTestCase("a sandbox that restricts only the network compiles", \networkOnlyCompileTest());
+        addTestCase("a wildcard link to an archive with another name", \wildcardLinkedArchiveTest());
+        addTestCase("a special file on a classpath, whatever its name", \specialFileTest());
+        addTestCase("an allowed output directory gets no file", \outputDirectoryTest());
+        addTestCase("a special file with no filesystem restriction", \unrestrictedSpecialFileTest());
+
+        start_dir = getcwd();
+        # absolute, as the current directory changes
+        script_dir = realpath(get_script_dir());
+        scratch = sprintf("%s/jni-compiler-names-%s", tmp_location(), get_random_string(12));
+        mkdir(scratch, 0700);
+        chdir(scratch);
+        confined = "/proc/self/cwd/";
+        kotlin_jars = getKotlinJars();
+        on_exit {
+            chdir(start_dir);
+            remove_tree(scratch);
+        }
+        set_return_value(main());
+    }
+
+    binaryNameTest() {
+        foreach string name in (("A", "a.b.C", "a.b.C$D", "Outer$Inner$1", "FileKt", "com.example.FileKt",
+            "_x", "$y", "Größe", "пакет.Класс", "a-b.package-info", "a b", "\U0001d400x")) {
+            assertTrue(QoreCompilerPolicy::isValidBinaryName(name), name);
+        }
+        foreach string name in (("", ".", "..", ".a", "a.", "a..b", "/a", "a/b", "a\\b", "a;b", "a[b", "a]b", "a<b",
+            "a>b", "a:b", "a\tb", "a\nb")) {
+            assertFalse(QoreCompilerPolicy::isValidBinaryName(name), sprintf("%y", name));
+        }
+    }
+
+    containedTest() {
+        string base = realpath(scratch) + "/contained";
+        string outside = realpath(scratch) + "/contained-outside";
+        mkdir(base, 0700);
+        mkdir(outside, 0700);
+
+        # the name is resolved without using the filesystem
+        string file = QoreCompilerPolicy::resolveUnder(Paths::get(base), "a.b.C$D", ".class").toString();
+        assertEq(base + "/a/b/C$D.class", file);
+        assertFalse(is_dir(base + "/a"));
+        assertThrows("JNI-ERROR", NameError, sub () {
+            QoreCompilerPolicy::resolveUnder(Paths::get(base), confined + "x", ".class");
+        });
+
+        checkKotlin();
+        symlink(outside, base + "/link");
+        symlink(outside + "/absent", base + "/dangling.class");
+        Program p = getProgram(True, NOTHING, NOTHING, False);
+        assertEq(base + "/a/b/C.class", p.callFunction("kotlin_contained", base, "a.b.C"));
+        # a link to another directory, as a directory of the name or below it, and a dangling link as the file
+        foreach string name in ("link.Escaped", "link.deep.Escaped", "dangling") {
+            assertRegex("symbolic link", p.callFunction("kotlin_contained", base, name), name);
+        }
+        assertEq((), glob(outside + "/*") ?? ());
+    }
+
+    kotlinSourceNameTest() {
+        checkKotlin();
+        Program p = getProgram(True);
+        foreach string name in (badNames("source")) {
+            hash<auto> rv = p.callFunction("kotlin_compile", {name: "class KProbe"});
+            assertRefused(rv, name);
+        }
+        assertNothingWritten("source");
+    }
+
+    kotlinInjectedNameTest() {
+        checkKotlin();
+        Program p = getProgram(True);
+        foreach string name in (badNames("injected")) {
+            hash<auto> rv = p.callFunction("kotlin_compile", {"KProbe": "class KProbe"}, {name: <cafebabe>});
+            assertRefused(rv, name);
+        }
+        assertNothingWritten("injected");
+    }
+
+    kotlinStubNameTest() {
+        checkKotlin();
+        Program p = getProgram(True);
+        foreach string name in ("qore." + confined + "stub", "qore.a/b", "qore..a", "qore.a.") {
+            hash<auto> rv = p.callFunction("kotlin_compile", {"KProbe": "class KProbe"}, NOTHING, name);
+            assertRefused(rv, name);
+        }
+        assertNothingWritten("stub");
+    }
+
+    kotlinLegitimateTest() {
+        checkKotlin();
+        Program p = getProgram(True);
+
+        # the default package, with a nested class
+        hash<auto> rv = p.callFunction("kotlin_compile", {"KOuter": "class KOuter { class Inner }"});
+        assertTrue(rv.ok, rv.desc);
+        assertTrue(rv.classes.hasKey("KOuter"));
+        assertTrue(rv.classes.hasKey("KOuter$Inner"));
+
+        # a package-qualified name
+        rv = p.callFunction("kotlin_compile", {"com.example.KPkg": "package com.example\nclass KPkg"});
+        assertTrue(rv.ok, rv.desc);
+        assertTrue(rv.classes.hasKey("KPkg"));
+
+        # a file facade
+        rv = p.callFunction("kotlin_compile", {"com.example.Util": "package com.example\nfun util() = 1\n"});
+        assertTrue(rv.ok, rv.desc);
+        assertTrue(rv.classes.hasKey("UtilKt"));
+
+        # a Unicode identifier
+        rv = p.callFunction("kotlin_compile", {"Größe": "class Größe"});
+        if (Jni::java::lang::System::getProperty("sun.jnu.encoding") =~ /utf-?8/i) {
+            assertTrue(rv.ok, rv.desc);
+            assertTrue(rv.classes.hasKey("Größe"));
+        } else {
+            # the JVM's file name encoding cannot represent the name: refused with a clear error
+            assertFalse(rv.ok);
+            assertRegex("cannot be a file name", rv.desc);
+        }
+
+        # an injected class with a package and a nested class is used by the compile
+        rv = p.callFunction("kotlin_compile", {"dep.InjDep": "package dep\nclass InjDep { class Nested }"});
+        assertTrue(rv.ok, rv.desc);
+        hash<auto> injected = {
+            "dep.InjDep": rv.classes.InjDep,
+            "dep.InjDep$Nested": rv.classes."InjDep$Nested",
+        };
+        rv = p.callFunction("kotlin_compile", {"KUser": "class KUser { val d: dep.InjDep.Nested? = null }"}, injected);
+        assertTrue(rv.ok, rv.desc);
+        assertTrue(rv.classes.hasKey("KUser"));
+    }
+
+    kotlinQoreBaseTest() {
+        checkKotlin();
+        Program p = getProgram(True);
+        hash<auto> rv = p.callFunction("kotlin_compile", {
+            "KChild": "import qore.NameTestBase\nclass KChild : NameTestBase() { fun greet() = hello(\"k\") }",
+        }, NOTHING, NOTHING, "qore.NameTestBase");
+        assertTrue(rv.ok, rv.desc);
+        assertTrue(rv.classes.hasKey("KChild"));
+    }
+
+    javaOptionsRestrictedTest() {
+        Program p = getProgram(False);
+        string dir = confined + "java-opts";
+
+        # options that name no file
+        foreach list<string> opts in ((
+                ("-g",), ("-g:none",), ("-nowarn",), ("-parameters",), ("-Xlint:unchecked", "-Xlint:deprecation"),
+                ("-Xdiags:verbose",), ("-encoding", "UTF-8"), ("--release", "21"), ("--release=21",),
+                ("-proc:none",),
+            )) {
+            hash<auto> rv = compileJava(p, opts);
+            assertTrue(rv.ok, sprintf("%y: %y", opts, rv.desc));
+        }
+
+        # options that could name a file are refused
+        foreach list<string> opts in ((
+                ("-sourcepath", dir), ("--source-path", dir), ("--source-path=" + dir,), ("-processorpath", dir),
+                ("--processor-path", dir), ("--module-path", dir), ("-p", dir), ("--system", dir),
+                ("--patch-module", "java.base=" + dir), ("-processor", "NoSuchProcessor"), ("-Xplugin:NoPlugin",),
+                ("-Xstdout", dir), ("@" + dir,), ("-Akey=value",), ("-unknown",), ("-proc:full",), ("-proc:only",),
+            )) {
+            hash<auto> rv = compileJava(p, opts);
+            assertFalse(rv.ok, sprintf("%y", opts));
+            assertRegex(OptionError, rv.desc);
+            # the refusal does not repeat the path
+            assertNRegex("java-opts", rv.desc);
+        }
+
+        # a value is not taken for an option, and an option needs its value
+        hash<auto> rv = compileJava(p, "-encoding");
+        assertFalse(rv.ok);
+        assertRegex("has no value", rv.desc);
+
+        # output directories are checked against the policy
+        foreach string opt in ("-d", "-s", "-h") {
+            foreach string value in (dir, "java-opts") {
+                rv = compileJava(p, (opt, value));
+                assertFalse(rv.ok, opt + " " + value);
+                assertEq("FILESYSTEM-ACCESS-DENIED", rv.err, opt + " " + value);
+                # the denial names the path as it was given, and not the directory that it is relative to
+                assertEq(True, rv.desc.find("'" + value + "'") >= 0, rv.desc);
+                assertEq(-1, rv.desc.find(start_dir + DirSep), rv.desc);
+            }
+        }
+        assertFalse(is_dir("java-opts"));
+    }
+
+    parentClasspathTest() {
+        string dir = realpath(scratch) + "/parent-cp";
+        mkdir(dir, 0700);
+
+        Program p = getProgram(False);
+        hash<auto> rv = p.callFunction("java_add_parent", dir);
+        assertRegex("^refused: .*FILESYSTEM-ACCESS-DENIED", rv.rv, rv.rv);
+        assertFalse(rv.has);
+
+        # a path that the policy allows is added
+        p = getProgram(False, dir);
+        rv = p.callFunction("java_add_parent", dir);
+        assertEq("ok: added", rv.rv);
+        assertTrue(rv.has);
+    }
+
+    checkedClasspathTest() {
+        assertManifestCheckedJdk();
+        string root = realpath(scratch) + "/manifest";
+        mkdir(root, 0700);
+        mkdir(root + "/real", 0700);
+        mkdir(root + "/link", 0700);
+
+        # a jar reached through a link names a jar beside it: the file that was checked is the one beside its real path
+        string checked = getName("CheckedDep");
+        string other = getName("OtherDep");
+        ClassLoaderAccessProbe::writeJar(root + "/real/main.jar", "dep.jar", NOTHING, NOTHING);
+        ClassLoaderAccessProbe::writeJar(root + "/real/dep.jar", NOTHING, checked, compileClass(checked));
+        ClassLoaderAccessProbe::writeJar(root + "/link/dep.jar", NOTHING, other, compileClass(other));
+        symlink(root + "/real/main.jar", root + "/link/main.jar");
+
+        Program p = getProgram(False, root + "/real");
+        string user = getName("ManifestUser");
+        hash<auto> rv = p.callFunction("java_compile", ("-cp", root + "/link/main.jar"), user,
+            sprintf("public class %s { %s d; }", user, other));
+        assertFalse(rv.ok, "a jar beside the link is not read");
+        user = getName("ManifestUser");
+        rv = p.callFunction("java_compile", ("-cp", root + "/link/main.jar"), user,
+            sprintf("public class %s { %s d; }", user, checked));
+        assertTrue(rv.ok, rv.desc);
+
+        # manifest entries that a compiler could resolve differently from the check
+        foreach string entry in (AmbiguousManifestEntries.iterator()) {
+            string jar = sprintf("%s/real/entry%d.jar", root, ++counter);
+            ClassLoaderAccessProbe::writeJar(jar, entry, NOTHING, NOTHING);
+            user = getName("ManifestUser");
+            rv = p.callFunction("java_compile", ("-cp", jar), user, sprintf("public class %s { }", user));
+            assertFalse(rv.ok, entry);
+            # refused as ambiguous, or by the policy if the path that the entry names is checked first
+            assertRegex("manifest Class-Path entry|not allowed by the sandbox", rv.desc, entry);
+        }
+
+        # a directory with a character that URL decoding would change is read as itself
+        string plus = root + "/a+b";
+        string space = root + "/a b";
+        mkdir(plus, 0700);
+        mkdir(space, 0700);
+        string hidden = getName("HiddenDep");
+        File f();
+        f.open2(space + "/" + hidden + ".class", O_CREAT | O_WRONLY | O_TRUNC, 0600);
+        f.write(compileClass(hidden));
+        f.close();
+        p = getProgram(False, plus);
+        user = getName("PlusUser");
+        rv = p.callFunction("java_add_classpath", "loader", plus, user,
+            sprintf("public class %s { %s d; }", user, hidden));
+        assertFalse(rv.ok, "the directory that URL decoding names is not read");
+
+        # a classpath with no file that exists is an empty classpath, and not the current directory
+        string local = getName("LocalDep");
+        f = new File();
+        f.open2(scratch + "/" + local + ".class", O_CREAT | O_WRONLY | O_TRUNC, 0600);
+        f.write(compileClass(local));
+        f.close();
+        p = getProgram(False, root + "/real");
+        user = getName("EmptyCpUser");
+        rv = p.callFunction("java_compile", ("-cp", root + "/real/absent"), user,
+            sprintf("public class %s { %s d; }", user, local));
+        assertFalse(rv.ok, "the current directory is not read");
+    }
+
+    deniedSpecialFileTest() {
+        string dir = realpath(scratch) + "/special";
+        mkdir(dir, 0700);
+        string fifo = dir + "/special.jar";
+        mkfifo(fifo);
+        Program p = getProgram(False);
+        string user = getName("SpecialUser");
+        hash<auto> rv = p.callFunction("java_compile", ("-cp", fifo), user, sprintf("public class %s { }", user));
+        assertFalse(rv.ok);
+        assertEq("FILESYSTEM-ACCESS-DENIED", rv.err, rv.desc);
+        assertNRegex("not a regular file", rv.desc);
+    }
+
+    processorTest() {
+        string dir = realpath(scratch) + "/processor";
+        mkdir(dir, 0700);
+        mkdir(dir + "/META-INF", 0700);
+        mkdir(dir + "/META-INF/services", 0700);
+        string name = getName("DiscoveredProcessor");
+        string src = sprintf("import java.util.*; import javax.annotation.processing.*; import javax.lang.model.*;
+import javax.lang.model.element.*;
+@SupportedAnnotationTypes(\"*\")
+public class %s extends AbstractProcessor {
+    @Override public SourceVersion getSupportedSourceVersion() { return SourceVersion.latest(); }
+    @Override public synchronized void init(ProcessingEnvironment e) {
+        super.init(e);
+        try { new java.io.FileOutputStream(\"/proc/self/cwd/processor-ran\").close(); }
+        catch (Exception x) { throw new RuntimeException(x); }
+    }
+    @Override public boolean process(Set<? extends TypeElement> a, RoundEnvironment r) { return false; }
+}
+", name);
+        File f();
+        f.open2(dir + "/" + name + ".class", O_CREAT | O_WRONLY | O_TRUNC, 0600);
+        f.write(compileClass(name, src));
+        f.close();
+        f = new File();
+        f.open2(dir + "/META-INF/services/javax.annotation.processing.Processor", O_CREAT | O_WRONLY | O_TRUNC, 0600);
+        f.write(name + "\n");
+        f.close();
+
+        # restricted code, with no options and with options: the processor on its classpath does not run
+        Program p = getProgram(False, dir);
+        string user = getName("ProcessorUser");
+        hash<auto> rv = p.callFunction("java_add_classpath", "loader", dir, user,
+            sprintf("public class %s { }", user));
+        assertTrue(rv.ok, rv.desc);
+        assertFalse(is_file("processor-ran"), "no options");
+        # JDK 23 and later do not discover processors without this option
+        user = getName("ProcessorUser");
+        rv = p.callFunction("java_compile", ("-proc:full",), user, sprintf("public class %s { }", user));
+        assertFalse(rv.ok);
+        assertRegex(OptionError, rv.desc);
+        assertFalse(is_file("processor-ran"), "the option that enables discovery");
+        p = getProgram(False, dir);
+        user = getName("ProcessorUser");
+        rv = p.callFunction("java_compile", ("-cp", dir), user, sprintf("public class %s { }", user));
+        assertTrue(rv.ok, rv.desc);
+        assertFalse(is_file("processor-ran"), "a classpath option");
+
+        # the control: for trusted code, the same processor runs
+        p = getProgram(False, NOTHING, NOTHING, False);
+        user = getName("ProcessorUser");
+        rv = p.callFunction("java_add_classpath", "loader", dir, user, sprintf("public class %s { }", user));
+        assertTrue(rv.ok, rv.desc);
+        user = getName("ProcessorUser");
+        rv = p.callFunction("java_compile", ("-proc:full",), user, sprintf("public class %s { }", user));
+        assertTrue(rv.ok, rv.desc);
+        assertTrue(is_file("processor-ran"), "the processor runs for trusted code");
+    }
+
+    kotlinOutputTest() {
+        checkKotlin();
+        # the temporary directory of the compiler is deep below the root, so that a relative path stays below it
+        string root = realpath(scratch) + "/kotlin-output";
+        string tmp = root + "/l1/l2/l3/l4/l5/l6/l7/tmp";
+        mkdir(root, 0700);
+        string path = root;
+        foreach string part in ("l1", "l2", "l3", "l4", "l5", "l6", "l7", "tmp") {
+            path += "/" + part;
+            mkdir(path, 0700);
+        }
+        hash<string, string> out = runChild("output", tmp, kotlin_jars);
+        # whatever the compiler makes of them, no file is left outside of its directory
+        assertEq(4, out.size(), sprintf("%y", out));
+        assertEq("", trim(backquote(sprintf("find %s -type f", shellQuote(root)))));
+    }
+
+    loaderRoutesTest() {
+        string dir = realpath(scratch) + "/routes";
+        mkdir(dir, 0700);
+        Program p = getProgram(False);
+        assertRegex("^refused: .*FILESYSTEM-ACCESS-DENIED", p.callFunction("add_orig", dir));
+        # a subclass of the Program's class loader adds a URL: the Program is reached, and the policy refuses the path
+        object loader = ClassLoaderAccessProbe::newUrlLoaderFor(p.callFunction("own_loader"));
+        assertRegex("^refused: .*FILESYSTEM-ACCESS-DENIED", p.callFunction("add_url", loader, dir));
+        assertFalse(ClassLoaderAccessProbe::parentHasPath(ClassLoaderAccessProbe::newDerived(loader), dir));
+        # the same methods for a path that the policy allows
+        p = getProgram(False, dir);
+        assertEq("ok: added", p.callFunction("add_orig", dir));
+        loader = ClassLoaderAccessProbe::newUrlLoaderFor(p.callFunction("own_loader"));
+        assertEq("ok: added", p.callFunction("add_url", loader, dir));
+        assertTrue(ClassLoaderAccessProbe::parentHasPath(ClassLoaderAccessProbe::newDerived(loader), dir));
+    }
+
+    noLocationsTest() {
+        # a class in the current directory of a process whose restricted compile has no classpath
+        string dir = realpath(scratch) + "/no-locations";
+        mkdir(dir, 0700);
+        writeClass(dir + "/CurrentDirFixture.class", "CurrentDirFixture");
+        hash<string, string> out = runChild("no-locations", NOTHING, NOTHING, dir);
+        assertEq("refused", out.restricted);
+        # the control: the fixture is found for trusted code
+        assertEq("compiled", out.trusted);
+    }
+
+    compilerServiceTest() {
+        string dir = realpath(scratch) + "/compiler-service";
+        mkdir(dir, 0700);
+        mkdir(dir + "/META-INF", 0700);
+        mkdir(dir + "/META-INF/services", 0700);
+        string name = getName("ServiceFixture");
+        string src = sprintf(ServiceFixtureSource, name, name, name);
+        File f();
+        f.open2(dir + "/" + name + ".class", O_CREAT | O_WRONLY | O_TRUNC, 0600);
+        f.write(compileClass(name, src));
+        f.close();
+        f = new File();
+        f.open2(dir + "/META-INF/services/com.sun.source.util.Plugin", O_CREAT | O_WRONLY | O_TRUNC, 0600);
+        f.write(name + "\n");
+        f.close();
+
+        Program p = getProgram(False, dir);
+        string user = getName("ServiceUser");
+        hash<auto> rv = p.callFunction("java_add_classpath", "loader", dir, user, sprintf("public class %s { }", user));
+        assertTrue(rv.ok, rv.desc);
+        assertEq(NOTHING, Jni::java::lang::System::getProperty("qore.test.compiler-service"),
+            "not loaded for restricted code");
+
+        # the control: for trusted code, the same service is loaded
+        p = getProgram(False, NOTHING, NOTHING, False);
+        user = getName("ServiceUser");
+        rv = p.callFunction("java_add_classpath", "loader", dir, user, sprintf("public class %s { }", user));
+        assertTrue(rv.ok, rv.desc);
+        assertEq("1", Jni::java::lang::System::getProperty("qore.test.compiler-service"), "loaded for trusted code");
+    }
+
+    nonArchiveClasspathTest() {
+        string dir = realpath(scratch) + "/non-archive";
+        mkdir(dir, 0700);
+        ClassLoaderAccessProbe::writeJar(dir + "/classes.dat", "other.jar", NOTHING, NOTHING);
+        Program p = getProgram(False, dir);
+        string user = getName("NonArchiveUser");
+        hash<auto> rv = p.callFunction("java_compile", ("-cp", dir + "/classes.dat"), user,
+            sprintf("public class %s { }", user));
+        assertFalse(rv.ok);
+        assertRegex("does not have a .jar or .zip name", rv.desc);
+
+        # the same for a link with an archive name to such a file
+        symlink("classes.dat", dir + "/linked.jar");
+        user = getName("NonArchiveUser");
+        rv = getProgram(False, dir).callFunction("java_compile", ("-cp", dir + "/linked.jar"), user,
+            sprintf("public class %s { }", user));
+        assertFalse(rv.ok);
+        assertRegex("does not have a .jar or .zip name", rv.desc);
+    }
+
+    specialFileTest() {
+        string dir = realpath(scratch) + "/special-names";
+        mkdir(dir, 0700);
+        # never opened: each form is refused before anything could block on it
+        mkfifo(dir + "/entry.data");
+        symlink("entry.data", dir + "/linked.jar");
+        foreach string entry in ("entry.data", "linked.jar") {
+            string path = dir + "/" + entry;
+            string user = getName("SpecialNameUser");
+            hash<auto> rv = getProgram(False, dir).callFunction("java_compile", ("-cp", path), user,
+                sprintf("public class %s { }", user));
+            assertFalse(rv.ok, entry);
+            assertRegex("not a regular file", rv.desc, entry);
+            rv = getProgram(False, dir).callFunction("module_add_classpath", path);
+            assertFalse(rv.ok, entry);
+            assertEq("JNI-CLASSPATH-ERROR", rv.err, entry);
+            assertRegex("not a regular file", rv.desc, entry);
+        }
+    }
+
+    outputDirectoryTest() {
+        string root = realpath(scratch) + "/output-directories";
+        string dir = root + "/allowed";
+        mkdir(root, 0700);
+        mkdir(dir, 0700);
+        # the compiler's file manager has no location for native headers, and annotation processing is off for this
+        # caller, so neither option makes a file, in the directory or beside it
+        foreach string opt in ("-h", "-s") {
+            hash<auto> rv = compileJava(getProgram(False, dir, NOTHING, True, NOTHING,
+                QSEC_READ | QSEC_WRITE | QSEC_CREATE), (opt, dir));
+            assertTrue(rv.ok, opt + ": " + rv.desc);
+            assertEq("", trim(backquote(sprintf("find %s -mindepth 1 ! -path %s", shellQuote(root), shellQuote(dir)))),
+                opt);
+        }
+    }
+
+    unrestrictedSpecialFileTest() {
+        string dir = realpath(scratch) + "/unrestricted-special";
+        mkdir(dir, 0700);
+        string dep = getName("UnrestrictedDep");
+        ClassLoaderAccessProbe::writeJar(dir + "/plain.jar", NOTHING, dep, compileClass(dep));
+        # never opened: it is left out, and the rest of the classpath is used
+        mkfifo(dir + "/entry.data");
+        string classpath = dir + "/plain.jar:" + dir + "/entry.data";
+
+        # a sandbox that does not restrict the filesystem, as for trusted code with interrupts or limits only
+        Program p = getProgram(False, NOTHING, True);
+        assertFalse(p.callFunction("can_load", dep), "the class is not available before the classpath is added");
+        hash<auto> rv = p.callFunction("module_add_classpath", classpath);
+        assertTrue(rv.ok, rv.desc);
+        assertTrue(p.callFunction("can_load", dep), "the rest of the classpath is added");
+
+        # the classpath option of a datasource: the driver that does not exist is the only error
+        rv = getProgram(False, NOTHING, True).callFunction("jdbc_open", classpath);
+        assertEq("JNI-ERROR", rv.err, rv.desc);
+        assertRegex("No suitable driver", rv.desc);
+        assertNRegex("not a regular file", rv.desc);
+
+        # the control: a sandbox that restricts the filesystem refuses the same classpath
+        rv = getProgram(False, dir).callFunction("module_add_classpath", classpath);
+        assertFalse(rv.ok);
+        assertEq("JNI-CLASSPATH-ERROR", rv.err, rv.desc);
+        assertRegex("not a regular file", rv.desc);
+    }
+
+    unresolvedWildcardTest() {
+        string root = realpath(scratch) + "/unresolved";
+        foreach string d in (root, root + "/allowed", root + "/other") {
+            mkdir(d, 0700);
+        }
+        # a match whose target does not exist is checked as a target that exists is
+        symlink(root + "/other/absent.jar", root + "/allowed/entry.jar");
+        Program p = getProgram(False, root + "/allowed");
+        string user = getName("UnresolvedUser");
+        hash<auto> rv = p.callFunction("java_add_classpath", "loader", root + "/allowed/*.jar", user,
+            sprintf("public class %s { }", user));
+        assertFalse(rv.ok);
+        assertEq("FILESYSTEM-ACCESS-DENIED", rv.err, rv.desc);
+        assertNRegex("absent", rv.desc);
+        assertRegex("'" + root + "/allowed/\\*\\.jar'", rv.desc);
+
+        # with the target's directory allowed as well, nothing is refused, and nothing is added for the entry
+        p = getProgram(False, root);
+        user = getName("UnresolvedUser");
+        rv = p.callFunction("java_add_classpath", "loader", root + "/allowed/*.jar", user,
+            sprintf("public class %s { }", user));
+        assertTrue(rv.ok, rv.desc);
+    }
+
+    directoryFilesTest() {
+        string root = realpath(scratch) + "/directory-files";
+        foreach string d in (root, root + "/allowed", root + "/allowed/inner", root + "/other", root + "/other/linked") {
+            mkdir(d, 0700);
+        }
+        symlink(root + "/other/linked", root + "/allowed/linked");
+        File f();
+        f.open2(root + "/allowed/inner/InnerDep.class", O_CREAT | O_WRONLY | O_TRUNC, 0600);
+        f.write(compileClass("inner.InnerDep", "package inner; public class InnerDep { }"));
+        f.close();
+        f = new File();
+        f.open2(root + "/other/linked/LinkedDep.class", O_CREAT | O_WRONLY | O_TRUNC, 0600);
+        f.write(compileClass("linked.LinkedDep", "package linked; public class LinkedDep { }"));
+        f.close();
+
+        foreach hash<auto> i in (("cls": "inner.InnerDep", "denied": root + "/allowed/inner"),
+                ("cls": "linked.LinkedDep", "denied": NOTHING)) {
+            string body = sprintf("%s d;", i.cls);
+            # the compiler does not see the package of a file that the policy denies
+            string expected = sprintf("package %s does not exist", i.cls.split(".")[0]);
+            string user = getName("DirectoryUser");
+            hash<auto> rv = getProgram(False, root + "/allowed", NOTHING, True, i.denied).callFunction("java_add_classpath",
+                "loader", root + "/allowed", user, sprintf("public class %s { %s }", user, body));
+            assertFalse(rv.ok, i.cls + " through the class loader's location");
+            assertRegex(expected, rv.diag, i.cls + " through the class loader's location");
+            user = getName("DirectoryUser");
+            rv = getProgram(False, root + "/allowed", NOTHING, True, i.denied).callFunction("java_compile",
+                ("-cp", root + "/allowed"), user, sprintf("public class %s { %s }", user, body));
+            assertFalse(rv.ok, i.cls + " through a classpath option");
+            assertRegex(expected, rv.diag, i.cls + " through a classpath option");
+            # the control: for trusted code, the same class is found
+            user = getName("DirectoryUser");
+            rv = getProgram(False, NOTHING, NOTHING, False).callFunction("java_compile", ("-cp", root + "/allowed"),
+                user, sprintf("public class %s { %s }", user, body));
+            assertTrue(rv.ok, i.cls + ": " + rv.desc);
+        }
+
+        # a file that the policy allows below the directory is found
+        f = new File();
+        f.open2(root + "/allowed/PlainDep.class", O_CREAT | O_WRONLY | O_TRUNC, 0600);
+        f.write(compileClass("PlainDep"));
+        f.close();
+        string user = getName("DirectoryUser");
+        hash<auto> rv = getProgram(False, root + "/allowed", NOTHING, True, root + "/allowed/inner")
+            .callFunction("java_compile", ("-cp", root + "/allowed"), user,
+                sprintf("public class %s { PlainDep d; }", user));
+        assertTrue(rv.ok, rv.desc);
+    }
+
+    deniedTargetTest() {
+        string root = realpath(scratch) + "/denied-target";
+        mkdir(root, 0700);
+        mkdir(root + "/private-target", 0700);
+        symlink(root + "/private-target", root + "/entry");
+        Program p = getProgram(False);
+        foreach hash<auto> rv in (p.callFunction("module_add_classpath", root + "/entry"),
+                p.callFunction("java_compile", ("-cp", root + "/entry"), getName("TargetUser"), "public class X { }")) {
+            assertFalse(rv.ok);
+            assertEq("FILESYSTEM-ACCESS-DENIED", rv.err, rv.desc);
+            assertNRegex("private-target", rv.desc);
+            # the entry as the caller gave it
+            assertEq(True, rv.desc.find("'" + root + "/entry'") >= 0, rv.desc);
+        }
+
+        # a path that cannot be resolved in a denied directory gets the same denial as any other path there
+        symlink("cycle", root + "/private-target/cycle");
+        string path = root + "/private-target/cycle/file";
+        foreach hash<auto> rv in (p.callFunction("module_add_classpath", path),
+                p.callFunction("java_compile", ("-cp", path), getName("TargetUser"), "public class X { }")) {
+            assertFalse(rv.ok);
+            assertEq("FILESYSTEM-ACCESS-DENIED", rv.err, rv.desc);
+        }
+    }
+
+    #! these cases follow a manifest Class-Path, so they need a JDK on which that is checked, and say so if it is not
+    private assertManifestCheckedJdk() {
+        int feature = Jni::java::lang::Runtime::version().feature();
+        assertTrue(inlist(feature, ManifestCheckedJdkFeatures), sprintf("JDK %d is not one on which manifest "
+            "Class-Path checking has been verified (%y): verify it before adding it", feature,
+            ManifestCheckedJdkFeatures));
+    }
+
+    #! a caller whose sandbox restricts only the network compiles as a caller with no sandbox
+    networkOnlyCompileTest() {
+        string dir = realpath(scratch) + "/network-only-compile";
+        mkdir(dir, 0700);
+        string dep = getName("NetworkOnlyDep");
+        writeClass(dir + "/" + dep + ".class", dep);
+        Program p = getProgram(False, NOTHING, True, True, NOTHING, QSEC_READ, False);
+        string user = getName("NetworkOnlyUser");
+        hash<auto> rv = p.callFunction("java_compile", (), user, sprintf("public class %s { }", user));
+        assertTrue(rv.ok, rv.desc);
+        # a classpath option is not refused, as it is for a caller whose filesystem access is restricted
+        user = getName("NetworkOnlyUser");
+        rv = p.callFunction("java_compile", ("-cp", dir), user, sprintf("public class %s { %s d; }", user, dep));
+        assertTrue(rv.ok, rv.desc);
+    }
+
+    #! an entry with another authority is refused on every JDK; one that names the local host is followed
+    /** This case assumes a caller whose filesystem access is restricted, as the sandbox of getProgram() is; a caller
+        whose sandbox restricts only the network is tested in test/jni-classpath-url-path.qtest
+    */
+    manifestOtherHostTest() {
+        assertManifestCheckedJdk();
+        string dir = realpath(scratch) + "/manifest-other-host";
+        mkdir(dir, 0700);
+        mkdir(dir + "/classes", 0700);
+        string dep = getName("OtherHostDep");
+        writeClass(dir + "/classes/" + dep + ".class", dep);
+
+        foreach string prefix in ("file://example.invalid", "//example.invalid", "file://127.0.0.1",
+                "file://example.invalid:2121", "file://user@example.invalid", "file://~") {
+            string jar = sprintf("%s/other%d.jar", dir, ++counter);
+            ClassLoaderAccessProbe::writeJar(jar, prefix + dir + "/classes/", NOTHING, NOTHING);
+            Program p = getProgram(False, dir);
+            hash<auto> rv = p.callFunction("module_add_classpath", jar);
+            assertFalse(rv.ok, prefix);
+            assertEq("JNI-CLASSPATH-ERROR", rv.err, prefix);
+            assertRegex("cannot be checked exactly", rv.desc, prefix);
+            assertFalse(p.callFunction("can_load", dep), prefix);
+        }
+
+        foreach string prefix in ("file://", "file://localhost", "file://LocalHost") {
+            string jar = sprintf("%s/local%d.jar", dir, ++counter);
+            ClassLoaderAccessProbe::writeJar(jar, prefix + dir + "/classes/", NOTHING, NOTHING);
+            Program p = getProgram(False, dir);
+            hash<auto> rv = p.callFunction("module_add_classpath", jar);
+            assertTrue(rv.ok, prefix + ": " + rv.desc);
+            assertTrue(p.callFunction("can_load", dep), prefix);
+        }
+
+        # an archive entry with another authority is refused as well
+        string jar_dep = getName("OtherHostJarDep");
+        ClassLoaderAccessProbe::writeJar(dir + "/dep.jar", NOTHING, jar_dep, compileClass(jar_dep));
+        string jar = sprintf("%s/other%d.jar", dir, ++counter);
+        ClassLoaderAccessProbe::writeJar(jar, "file://example.invalid" + dir + "/dep.jar", NOTHING, NOTHING);
+        Program p = getProgram(False, dir);
+        hash<auto> rv = p.callFunction("module_add_classpath", jar);
+        assertFalse(rv.ok);
+        assertEq("JNI-CLASSPATH-ERROR", rv.err);
+        assertRegex("cannot be checked exactly", rv.desc);
+        assertFalse(p.callFunction("can_load", jar_dep));
+    }
+
+    manifestDirectoryFormTest() {
+        assertManifestCheckedJdk();
+        string dir = realpath(scratch) + "/manifest-directory-form";
+        mkdir(dir, 0700);
+        mkdir(dir + "/classes", 0700);
+        string dep = getName("DirectoryFormDep");
+        writeClass(dir + "/classes/" + dep + ".class", dep);
+        ClassLoaderAccessProbe::writeJar(dir + "/named.jar", NOTHING, NOTHING, NOTHING);
+
+        # an entry with the form of a directory that names a file is refused for a compiler
+        ClassLoaderAccessProbe::writeJar(dir + "/file-form.jar", "named.jar/", NOTHING, NOTHING);
+        Program p = getProgram(False, dir);
+        string user = getName("DirectoryFormUser");
+        hash<auto> rv = p.callFunction("java_compile", ("-cp", dir + "/file-form.jar"), user,
+            sprintf("public class %s { }", user));
+        assertFalse(rv.ok);
+        assertRegex("manifest Class-Path entry", rv.desc);
+
+        # the same in the manifest of a jar that another manifest names, and for a link to a file
+        ClassLoaderAccessProbe::writeJar(dir + "/nested-form.jar", "file-form.jar", NOTHING, NOTHING);
+        symlink("named.jar", dir + "/named-link");
+        ClassLoaderAccessProbe::writeJar(dir + "/link-form.jar", "named-link/", NOTHING, NOTHING);
+        foreach string jar in ("nested-form.jar", "link-form.jar") {
+            user = getName("DirectoryFormUser");
+            rv = getProgram(False, dir).callFunction("java_compile", ("-cp", dir + "/" + jar), user,
+                sprintf("public class %s { }", user));
+            assertFalse(rv.ok, jar);
+            assertRegex("manifest Class-Path entry", rv.desc, jar);
+        }
+
+        # an entry that names a directory is followed
+        ClassLoaderAccessProbe::writeJar(dir + "/dir-form.jar", "classes/", NOTHING, NOTHING);
+        user = getName("DirectoryFormUser");
+        rv = getProgram(False, dir).callFunction("java_compile", ("-cp", dir + "/dir-form.jar"), user,
+            sprintf("public class %s { %s d; }", user, dep));
+        assertTrue(rv.ok, rv.desc);
+    }
+
+    wildcardLinkedArchiveTest() {
+        string dir = realpath(scratch) + "/wildcard-linked-archive";
+        mkdir(dir, 0700);
+        string dep = getName("LinkedArchiveDep");
+        # the file has no archive name, and a link with one selects it; its manifest is checked as a jar's
+        ClassLoaderAccessProbe::writeJar(dir + "/content.bin", NOTHING, dep, compileClass(dep));
+        symlink("content.bin", dir + "/selected.jar");
+        Program p = getProgram(False, dir);
+        string user = getName("LinkedArchiveUser");
+        hash<auto> rv = p.callFunction("java_compile", ("-cp", dir + "/*"), user,
+            sprintf("public class %s { %s d; }", user, dep));
+        assertTrue(rv.ok, rv.desc);
+    }
+
+    kotlinLocationsTest() {
+        checkKotlin();
+        string root = realpath(scratch) + "/kotlin-locations";
+        mkdir(root, 0700);
+
+        # a checked path with the separator of a jar URL in it: the file before the separator is not read
+        string hidden = getName("HiddenKotlinDep");
+        mkdir(root + "/a", 0700);
+        writeClass(root + "/a/" + hidden + ".class", hidden);
+        mkdir(root + "/a!", 0700);
+        ClassLoaderAccessProbe::writeJar(root + "/a!/x.jar", NOTHING, NOTHING, NOTHING);
+        Program p = getProgram(True, root + "/a!");
+        string name = getName("KLocUser");
+        hash<auto> rv = p.callFunction("kotlin_with_path", root + "/a!/x.jar", name,
+            sprintf("class %s { val d: %s? = null }", name, hidden));
+        assertFalse(rv.ok, "the directory before the separator is not read");
+
+        # a real path with the path separator of a classpath in it is refused
+        string inner = root + "/x:" + root + "/den";
+        assertEq(0, system(sprintf("mkdir -p %s", shellQuote(inner))));
+        symlink(inner, root + "/lnk");
+        p = getProgram(True, root + "/x:" + root);
+        name = getName("KLocUser");
+        rv = p.callFunction("kotlin_with_path", root + "/lnk", name, sprintf("class %s", name));
+        assertFalse(rv.ok);
+        assertRegex("path separator", rv.desc);
+    }
+
+    archiveManifestTest() {
+        string root = realpath(scratch) + "/archive-manifest";
+        string allowed = root + "/allowed";
+        string denied = root + "/denied";
+        foreach string d in (root, allowed, denied, denied + "/inner") {
+            mkdir(d, 0700);
+        }
+        symlink(denied + "/inner", allowed + "/sub");
+        string hidden = getName("HiddenArchiveDep");
+        ClassLoaderAccessProbe::writeJar(denied + "/dep.jar", NOTHING, hidden, compileClass(hidden));
+        ClassLoaderAccessProbe::writeJar(allowed + "/dep.jar", NOTHING, NOTHING, NOTHING);
+        foreach string archive in ("main.JAR", "main.zip") {
+            ClassLoaderAccessProbe::writeJar(allowed + "/" + archive, "sub/../dep.jar", NOTHING, NOTHING);
+            Program p = getProgram(False, allowed);
+            string user = getName("ArchiveUser");
+            hash<auto> rv = p.callFunction("java_add_classpath", "loader", allowed + "/" + archive, user,
+                sprintf("public class %s { %s d; }", user, hidden));
+            assertFalse(rv.ok, archive);
+        }
+    }
+
+    moduleDeniedSpecialTest() {
+        string dir = realpath(scratch) + "/module-special";
+        mkdir(dir, 0700);
+        string fifo = dir + "/special.jar";
+        mkfifo(fifo);
+        Program p = getProgram(False);
+        hash<auto> rv = p.callFunction("module_add_classpath", fifo);
+        assertFalse(rv.ok);
+        assertEq("FILESYSTEM-ACCESS-DENIED", rv.err, rv.desc);
+        assertNRegex("not a regular file", rv.desc);
+    }
+
+    outputNamesTest() {
+        assertEq("a.b.C$D", QoreCompilerPolicy::outputClassName("a/b/C$D.class"));
+        assertEq("C", QoreCompilerPolicy::outputClassName("C.class"));
+        foreach string entry in ("/a.class", "../a.class", "a/../b.class", "a//b.class", "a/b/.class", ".class", "a.txt",
+            "a\\b.class", "a:b.class") {
+            assertThrows("JNI-ERROR", "invalid compiler output", \QoreCompilerPolicy::outputClassName(), entry);
+        }
+    }
+
+    kotlinAfterGovernedTest() {
+        checkKotlin();
+        hash<string, string> out = runChild("kotlin-after", NOTHING, kotlin_jars);
+        assertEq("compiled", out."host compile");
+    }
+
+    #! writes the class file of a new class
+    private writeClass(string path, string name) {
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC, 0600);
+        f.write(compileClass(name));
+        f.close();
+    }
+
+    javaThreadTest() {
+        # before code that a sandbox governs has used Java: a thread of the trusted host
+        hash<string, string> out = runChild("thread-before");
+        assertEq("ok: false", out.thread);
+        assertEq("ok: false", out.captured);
+
+        # after: the caller of a Java thread is not known, unless the policy is captured
+        out = runChild("thread-after");
+        map assertRegex("^refused: .*JNI-SANDBOX-ERROR", out{$1}, $1), ("tenant thread", "host thread");
+        assertEq("ok: true", out."tenant captured");
+        assertEq("ok: false", out."host captured");
+
+        # the strict policy applies from the start
+        out = runChild("thread-strict");
+        assertRegex("^refused: .*JNI-SANDBOX-ERROR", out."host thread");
+        assertEq("ok: false", out."host captured");
+    }
+
+    #! runs the child process and returns its results
+    private hash<string, string> runChild(string mode, *string tmp, *list<string> args, *string cwd) {
+        string env = tmp ? sprintf("QORE_JNI_JVM_ARGS=%s ", shellQuote("-Djava.io.tmpdir=" + tmp)) : "";
+        if (cwd) {
+            env = sprintf("cd %s && %s", shellQuote(cwd), env);
+        }
+        string cmd = sprintf("%s%s -b --enable-debug %s %s", env, shellQuote(QORE_ARGV[0]),
+            shellQuote(script_dir + "/jni-compiler-name-validation-child.q"), mode);
+        map cmd += " " + shellQuote($1), args;
+        int rc;
+        string text = backquote(cmd + " 2>&1", \rc);
+        assertEq(0, rc, mode + ": " + text);
+        hash<string, string> rv();
+        foreach string line in (text.split("\n")) {
+            *list<*string> m = line =~ x/^result: ([^:]+): (.*)$/;
+            if (m) {
+                rv{m[0]} = m[1];
+            }
+        }
+        return rv;
+    }
+
+    #! returns a string as one word of a shell command
+    private static string shellQuote(string arg) {
+        return "'" + replace(arg, "'", "'\\''") + "'";
+    }
+
+    #! returns the byte code of a class in the default package
+    private binary compileClass(string name, *string src) {
+        QoreJavaCompiler compiler(get_class_loader(), ("-proc:none",));
+        on_exit compiler.close();
+        hash<auto> out = compiler.compile({name: src ?? sprintf("public class %s { }", name)}, NOTHING);
+        return out{name}.file.openInputStream().readAllBytes();
+    }
+
+    javaClasspathTest() {
+        string dir = scratch + "/cp";
+        mkdir(dir, 0700);
+        string dep = getName("CpDep");
+        {
+            QoreJavaCompiler compiler(get_class_loader(), NOTHING);
+            on_exit compiler.close();
+            hash<auto> out = compiler.compile({dep: sprintf("public class %s { }", dep)}, NOTHING);
+            File f();
+            f.open2(dir + "/" + dep + ".class", O_CREAT | O_WRONLY | O_TRUNC, 0600);
+            f.write(out{dep}.file.openInputStream().readAllBytes());
+        }
+        string user = getName("CpUser");
+        string src = sprintf("public class %s { %s d; }", user, dep);
+
+        # denied by the policy: the class is not read
+        Program p = getProgram(False);
+        hash<auto> rv = p.callFunction("java_compile", ("-cp", confined + "cp"), user, src);
+        assertFalse(rv.ok);
+        assertEq("FILESYSTEM-ACCESS-DENIED", rv.err);
+        rv = p.callFunction("java_compile", ("--class-path=" + confined + "cp",), user, src);
+        assertFalse(rv.ok);
+        assertEq("FILESYSTEM-ACCESS-DENIED", rv.err);
+        rv = p.callFunction("java_compile", ("-cp", confined + "cp/*"), user, src);
+        assertFalse(rv.ok);
+        assertEq("FILESYSTEM-ACCESS-DENIED", rv.err);
+
+        # a classpath that the compiler would read differently from the check is refused, also if the policy allows
+        # the directory
+        foreach string value in ("", ":", dir + ":", ":" + dir, dir + "::" + dir, dir + ";" + dir, dir + "/*.jar",
+                dir + "*", "*" + dir) {
+            Program fp = getProgram(False, realpath(dir));
+            rv = fp.callFunction("java_compile", ("-cp", value), user, src);
+            assertFalse(rv.ok, sprintf("%y", value));
+            assertRegex("form that cannot be checked", rv.desc, sprintf("%y", value));
+        }
+
+        # a classpath added to the compiler or to the class loader is checked in the same way
+        foreach string how in ("compiler", "loader", "wildcard") {
+            p = getProgram(False);
+            rv = p.callFunction("java_add_classpath", how, confined + "cp", user, src);
+            assertFalse(rv.ok, how);
+            assertEq("FILESYSTEM-ACCESS-DENIED", rv.err, how);
+        }
+
+        # allowed by the policy, with the options that Qorus passes
+        p = getProgram(False, realpath(dir));
+        rv = p.callFunction("java_compile", ("-Xdiags:verbose", "-Xlint:unchecked", "-Xlint:deprecation", "-cp", dir),
+            user, src);
+        assertTrue(rv.ok, rv.desc);
+
+        # a classpath that the policy allows can be added to the compiler and to the class loader
+        foreach string how in ("compiler", "loader") {
+            p = getProgram(False, realpath(dir));
+            rv = p.callFunction("java_add_classpath", how, dir, user, src);
+            assertTrue(rv.ok, how + ": " + rv.desc);
+        }
+
+        # without a filesystem policy, the classpath is added as before
+        p = getProgram(False, NOTHING, True);
+        rv = p.callFunction("java_add_classpath", "loader", dir, user, src);
+        assertTrue(rv.ok, rv.desc);
+    }
+
+    javaOptionsUnrestrictedTest() {
+        string dir = scratch + "/cp-open";
+        mkdir(dir, 0700);
+        # a sandbox that allows all filesystem access, as for a trusted interface, and no sandbox
+        foreach Program p in (getProgram(False, NOTHING, True), getProgram(False, NOTHING, NOTHING, False)) {
+            hash<auto> rv = compileJava(p, ("-Xlint:unchecked", "-cp", dir, "-d", dir));
+            assertTrue(rv.ok, rv.desc);
+        }
+
+        # a sandbox that restricts the network and not the filesystem: the compiler options and classpaths are not
+        # restricted
+        Program p = getProgram(False, NOTHING, True, True, NOTHING, QSEC_READ, False);
+        hash<auto> rv = compileJava(p, ("-Xlint:unchecked", "-cp", dir, "-d", dir));
+        assertTrue(rv.ok, rv.desc);
+        string user = getName("NetworkRestrictedUser");
+        rv = p.callFunction("java_add_classpath", "loader", dir, user, sprintf("public class %s { }", user));
+        assertTrue(rv.ok, rv.desc);
+        # the control: this sandbox does restrict the network
+        rv = p.callFunction("jdbc_open", dir);
+        assertEq("NETWORK-ACCESS-DENIED", rv.err, rv.desc);
+    }
+
+    #! returns names that must be refused; none of them can leave the scratch directory
+    private list<string> badNames(string label) {
+        return (confined + label + "-escaped", "a/b", "a\\b", ".a", "a.", "a..b", "a;b", "a[b", "a:b", "");
+    }
+
+    #! asserts that a compile was refused for its name, and that the error does not repeat the name
+    private assertRefused(hash<auto> rv, string name) {
+        assertFalse(rv.ok, sprintf("%y", name));
+        assertRegex(NameError, rv.desc, sprintf("%y", name));
+        if (name.size() > 3) {
+            assertEq(-1, rv.desc.find(name), sprintf("%y", name));
+        }
+    }
+
+    #! asserts that a compile left no file for the label in the scratch directory
+    private assertNothingWritten(string label) {
+        assertEq((), glob(scratch + "/" + label + "*") ?? ());
+    }
+
+    #! compiles a new class
+    private hash<auto> compileJava(Program p, softlist<string> opts) {
+        string name = getName("JavaOptionProbe");
+        return p.callFunction("java_compile", opts, name, sprintf("public class %s { public native void n(); }", name));
+    }
+
+    #! returns a unique class name
+    private string getName(string prefix) {
+        return sprintf("%s%d", prefix, ++counter);
+    }
+
+    #! returns a Program; by default its sandbox denies filesystem access and allows uncontrolled APIs, as Java needs
+    /** @param kotlin if the Program compiles Kotlin
+        @param allowed_path a path that the filesystem policy allows reading
+        @param open if the sandbox allows all filesystem access
+        @param sandboxed if the Program has a sandbox
+        @param denied_path a path that the filesystem policy denies
+        @param allowed_mode the access that the policy allows to \a allowed_path
+        @param open_network if a sandbox that allows all filesystem access (\a open) also allows the network
+    */
+    private Program getProgram(bool kotlin, *string allowed_path, *bool open, bool sandboxed = True,
+            *string denied_path, int allowed_mode = QSEC_READ, bool open_network = True) {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.loadModule("jni");
+        string src = ProgramSource;
+        if (kotlin) {
+            map p.issueModuleCmd("jni", "global-add-classpath " + $1), kotlin_jars;
+            src += KotlinSource;
+        }
+        p.issueModuleCmd("jni", "add-classpath " + script_dir + "/../build/qore-jni-compiler.jar");
+        p.issueModuleCmd("jni", "add-classpath " + script_dir + "/qore-jni-test.jar");
+        p.parse(src, "name-validation");
+        if (sandboxed) {
+            SandboxManager sm();
+            sm.setUncontrolledApiPolicy(True);
+            sm.setFilesystemDefaultPolicy(open ?? False);
+            if (open && open_network) {
+                # restricts nothing, as a sandbox for interrupts or limits only
+                sm.setNetworkDefaultPolicy(True);
+            }
+            if (allowed_path) {
+                sm.addFilesystemAllowedPath(allowed_path, allowed_mode);
+            }
+            if (denied_path) {
+                sm.addFilesystemDeniedPath(denied_path);
+            }
+            p.setSandboxManager(sm);
+        }
+        return p;
+    }
+
+    #! skips a test that needs Kotlin, which is an error in CI, where the images have it
+    private checkKotlin() {
+        if (kotlin_jars) {
+            return;
+        }
+        if (ENV.CI) {
+            throw "KOTLIN-MISSING", "the Kotlin compiler is required in CI";
+        }
+        testSkip("Kotlin compiler JAR not available");
+    }
+
+    #! returns the Kotlin compiler and standard library JARs, if available
+    private static *list<string> getKotlinJars() {
+        list<string> homes = ();
+        if (ENV.KOTLIN_HOME) {
+            push homes, ENV.KOTLIN_HOME;
+        }
+        homes += ("/usr/share/qore/java/kotlin", "/opt/kotlin", "/opt/kotlinc", "/snap/kotlin/current",
+            "/usr/share/kotlin", "/usr/lib/kotlin", "/usr/local/kotlin", "/opt/local/share/java/kotlin");
+        if (ENV.HOME) {
+            push homes, ENV.HOME + "/.sdkman/candidates/kotlin/current";
+        }
+        homes += map dirname(dirname($1)), glob("/snap/kotlin/*/lib/kotlin-compiler.jar") ?? ();
+        foreach string home in (homes) {
+            string compiler = home + "/lib/kotlin-compiler.jar";
+            string stdlib = home + "/lib/kotlin-stdlib.jar";
+            if (is_file(compiler) && is_file(stdlib)) {
+                return (compiler, stdlib);
+            }
+        }
+    }
+}
