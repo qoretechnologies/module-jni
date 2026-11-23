@@ -535,11 +535,12 @@ public class Fetcher {
       checked in the same way, recursively and each once: each is checked as the file that the class loader opens for
       it (a relative entry resolved against the location of the jar that names it, as the class loader resolves it),
       with symbolic links resolved, before its own manifest is read.  If the policy denies any of them, or a
-      \c Class-Path entry cannot be checked (ex: it is not a file, a jar is not a regular file, a manifest cannot be
-      read, or, before Java 22, a jar has a jar index), the whole classpath is refused with \c JNI-CLASSPATH-ERROR,
-      naming the file.  The class loader still follows the manifests itself, so the classpath that is used is the one
-      that was given, and every file of it is one that was checked.  That resolution follows the JDK's class loader,
-      and it has been verified for JDK feature version 25; on any other JDK version, a classpath with a jar that has a
+      \c Class-Path entry cannot be checked (ex: it is not a file, it is a directory on another host, a jar is not a
+      regular file, a manifest cannot be read, or, before Java 22, a jar has a jar index), the whole classpath is
+      refused with \c JNI-CLASSPATH-ERROR, naming the file.  The class loader still follows the manifests itself, so
+      the classpath that is used is the one that was given, and every file of it is one that was checked.  That
+      resolution follows the JDK's class loader, and it has been verified for JDK feature versions 21 and 25; on any
+      other JDK version, a classpath with a jar that has a
       manifest \c Class-Path attribute is refused with \c JNI-CLASSPATH-ERROR, naming the reason, while a classpath
       whose jars have no \c Class-Path attribute is checked and added as usual.  A denial refuses the whole classpath:
       nothing of it is added.  The files that the class loader reads under a directory entry are not checked one by

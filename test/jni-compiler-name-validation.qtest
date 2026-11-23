@@ -14,6 +14,7 @@
 %module-cmd(jni) import org.qore.jni.compiler.QoreJavaCompiler
 %module-cmd(jni) import java.nio.file.Paths
 %module-cmd(jni) import java.lang.System
+%module-cmd(jni) import java.lang.Runtime
 %module-cmd(jni) add-relative-classpath qore-jni-test.jar
 %module-cmd(jni) import org.qore.jni.test.ClassLoaderAccessProbe
 
@@ -181,6 +182,12 @@ hash<auto> sub kotlin_compile(hash<auto> sources, *hash<auto> injected, *softlis
         #! manifest Class-Path entries with URL syntax, which are refused for a compiler; none names an existing file
         const AmbiguousManifestEntries = ("a%2Eb", "file:a", "a#b", "a?b", "./a", "b/../a", "//b/a", "//b/c/");
 
+        #! the JDK feature versions on which the cases that follow a manifest Class-Path can run
+        /** Deliberately not read from the product (QoreURLClassLoader.VERIFIED_CLASS_PATH_JDK_FEATURES).  On any other
+            JDK such a classpath is refused, which test/jni-classpath-manifest-sandbox.qtest asserts on every JDK.
+        */
+        const ManifestCheckedJdkFeatures = (21, 25);
+
         #! a compiler service that records that it was instantiated
         const ServiceFixtureSource = "public class %s implements com.sun.source.util.Plugin {
     public %s() { System.setProperty(\"qore.test.compiler-service\", \"1\"); }
@@ -241,6 +248,7 @@ hash<auto> sub kotlin_compile(hash<auto> sources, *hash<auto> injected, *softlis
         addTestCase("a wildcard match that cannot be resolved is checked", \unresolvedWildcardTest());
         addTestCase("the Java compiler checks the files below a directory", \directoryFilesTest());
         addTestCase("a manifest entry with the form of a directory", \manifestDirectoryFormTest());
+        addTestCase("a manifest directory entry with another host", \manifestOtherHostTest());
         addTestCase("a wildcard link to an archive with another name", \wildcardLinkedArchiveTest());
         addTestCase("a special file on a classpath, whatever its name", \specialFileTest());
         addTestCase("an allowed output directory gets no file", \outputDirectoryTest());
@@ -445,6 +453,7 @@ hash<auto> sub kotlin_compile(hash<auto> sources, *hash<auto> injected, *softlis
     }
 
     checkedClasspathTest() {
+        assertManifestCheckedJdk();
         string root = realpath(scratch) + "/manifest";
         mkdir(root, 0700);
         mkdir(root + "/real", 0700);
@@ -838,7 +847,57 @@ public class %s extends AbstractProcessor {
         }
     }
 
+    #! these cases follow a manifest Class-Path, so they need a JDK on which that is checked, and say so if it is not
+    private assertManifestCheckedJdk() {
+        int feature = Jni::java::lang::Runtime::version().feature();
+        assertTrue(inlist(feature, ManifestCheckedJdkFeatures), sprintf("JDK %d is not one on which manifest "
+            "Class-Path checking has been verified (%y): verify it before adding it", feature,
+            ManifestCheckedJdkFeatures));
+    }
+
+    #! a directory entry that names another host is refused on every JDK; one that names the local host is followed
+    manifestOtherHostTest() {
+        assertManifestCheckedJdk();
+        string dir = realpath(scratch) + "/manifest-other-host";
+        mkdir(dir, 0700);
+        mkdir(dir + "/classes", 0700);
+        string dep = getName("OtherHostDep");
+        writeClass(dir + "/classes/" + dep + ".class", dep);
+
+        foreach string prefix in ("file://example.invalid", "//example.invalid", "file://127.0.0.1",
+                "file://example.invalid:2121", "file://user@example.invalid") {
+            string jar = sprintf("%s/other%d.jar", dir, ++counter);
+            ClassLoaderAccessProbe::writeJar(jar, prefix + dir + "/classes/", NOTHING, NOTHING);
+            Program p = getProgram(False, dir);
+            hash<auto> rv = p.callFunction("module_add_classpath", jar);
+            assertFalse(rv.ok, prefix);
+            assertEq("JNI-CLASSPATH-ERROR", rv.err, prefix);
+            assertRegex("directory on another host", rv.desc, prefix);
+            assertFalse(p.callFunction("can_load", dep), prefix);
+        }
+
+        foreach string prefix in ("file://", "file://localhost", "file://LocalHost", "file://~") {
+            string jar = sprintf("%s/local%d.jar", dir, ++counter);
+            ClassLoaderAccessProbe::writeJar(jar, prefix + dir + "/classes/", NOTHING, NOTHING);
+            Program p = getProgram(False, dir);
+            hash<auto> rv = p.callFunction("module_add_classpath", jar);
+            assertTrue(rv.ok, prefix + ": " + rv.desc);
+            assertTrue(p.callFunction("can_load", dep), prefix);
+        }
+
+        # a jar entry with another host is not opened by the class loader, so it adds nothing
+        string jar_dep = getName("OtherHostJarDep");
+        ClassLoaderAccessProbe::writeJar(dir + "/dep.jar", NOTHING, jar_dep, compileClass(jar_dep));
+        string jar = sprintf("%s/other%d.jar", dir, ++counter);
+        ClassLoaderAccessProbe::writeJar(jar, "file://example.invalid" + dir + "/dep.jar", NOTHING, NOTHING);
+        Program p = getProgram(False, dir);
+        hash<auto> rv = p.callFunction("module_add_classpath", jar);
+        assertTrue(rv.ok, rv.desc);
+        assertFalse(p.callFunction("can_load", jar_dep));
+    }
+
     manifestDirectoryFormTest() {
+        assertManifestCheckedJdk();
         string dir = realpath(scratch) + "/manifest-directory-form";
         mkdir(dir, 0700);
         mkdir(dir + "/classes", 0700);

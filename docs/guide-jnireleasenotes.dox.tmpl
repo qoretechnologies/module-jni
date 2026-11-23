@@ -132,8 +132,10 @@
       checked as their real paths (with symbolic links resolved) together with the classpath's own entries; if the
       policy denies any of them, or one cannot be checked (ex: a jar that is not a regular file, or, before Java 22, a
       jar with a jar index), the whole classpath is refused with \c JNI-CLASSPATH-ERROR, naming the file, and nothing
-      is added.  The class loader still follows the manifests, so the classpath that is used is unchanged.  The
-      resolution has been verified for JDK feature version 25; on any other JDK version, a governed classpath with a
+      is added.  A directory entry that names another host is refused on every JDK version, as what is read through
+      it is not a local file that the policy can check (qore#7195).  The class loader still follows the manifests, so
+      the classpath that is used is unchanged.  The resolution has been verified for JDK feature versions 21 and 25;
+      on any other JDK version, a governed classpath with a
       jar that has a manifest \c Class-Path attribute is refused with \c JNI-CLASSPATH-ERROR, naming the reason (a
       classpath whose jars have no \c Class-Path attribute is not affected).  The \c add-classpath and
       \c add-relative-classpath module commands and the \c classpath option of the \c jdbc driver are affected; with

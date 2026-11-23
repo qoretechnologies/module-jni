@@ -22,7 +22,7 @@ const Pkg = "org.qore.jni.test.cpman.";
     must fail this test until the expectation is updated with it.  On any other JDK, a sandboxed classpath with a
     manifest Class-Path attribute is expected to be refused (qore#7204).
 */
-const VerifiedJdkFeatures = (25,);
+const VerifiedJdkFeatures = (21, 25);
 
 #! a sandboxed classpath that is expected to be refused on a JDK outside VerifiedJdkFeatures (qore#7204)
 hashdecl RefusedClasspath {

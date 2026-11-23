@@ -1877,10 +1877,15 @@ public class QoreURLClassLoader extends URLClassLoader {
     /** The sandbox check of a classpath resolves the manifest Class-Path attributes of its jars as the JDK's class
         loader resolves them (jdk.internal.loader.URLClassPath), so that every file that the class loader reaches is
         one that was checked; that resolution is internal to the JDK and may change in another version.  It has been
-        verified for these feature versions; on any other, a governed classpath with a jar that has a manifest
-        Class-Path attribute is refused (qore#6822).
+        verified for these feature versions, on their first and latest updates at the time: the parsing and resolution
+        of the attribute by the class loader and by the compiler's file manager was compared, and the files that each
+        reaches were compared with the files that this check resolves, for relative, absolute, directory, link, encoded
+        and URL entries and nested manifests.  The versions differ in how a malformed entry fails, which this check
+        refuses on all of them, and in whether a file URL with another host can be opened over the network, so a
+        directory entry with another host is refused on all of them (qore#7195).  On any other version, a governed
+        classpath with a jar that has a manifest Class-Path attribute is refused (qore#6822).
     */
-    static final int[] VERIFIED_CLASS_PATH_JDK_FEATURES = {25};
+    static final int[] VERIFIED_CLASS_PATH_JDK_FEATURES = {21, 25};
 
     //! Returns true if the class loader of the given JDK feature version has been verified for the sandbox check of
     //! manifest Class-Path attributes
@@ -2195,12 +2200,21 @@ public class QoreURLClassLoader extends URLClassLoader {
             seen.add(key);
             String file = url.getFile();
             boolean dir = file.endsWith("/");
-            if (!dir) {
-                // the class loader opens a jar URL with a host only if the host is the local one
-                String host = url.getHost();
-                if (host != null && !host.isEmpty() && !host.equalsIgnoreCase("localhost")) {
+            boolean other_host = entry_host != null && !entry_host.isEmpty()
+                && !entry_host.equalsIgnoreCase("localhost");
+            if (dir) {
+                // the class loader reads a directory entry as a local directory whatever its host, but the URLs of
+                // its resources keep the host, and whether the JDK opens those over the network depends on the JDK
+                // version and its configuration; that access is not one that a filesystem policy can check
+                if (other_host && !entry_host.equals("~")) {
+                    refuse(jar, referrer, "the manifest Class-Path entry '" + url + "' of the classpath jar '" + jar
+                        + "' names a directory on another host, which cannot be checked against the sandbox "
+                        + "filesystem policy");
                     return;
                 }
+            } else if (other_host) {
+                // the class loader opens a jar URL with a host only if the host is the local one
+                return;
             }
             String path = decodeUrlPath(file);
             if (path == null || path.indexOf('\0') != -1 || !new File(path).isAbsolute()) {
