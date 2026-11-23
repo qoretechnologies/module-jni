@@ -192,6 +192,59 @@ public:
     }
 };
 
+//! Masks the secrets in the text of the Java exceptions converted while it is set (qore#7344)
+/** The jdbc driver sets one for each operation on a datasource (see JavaExceptionMaskHelper), as a JDBC driver can
+    name the URL of the connection, which can hold credentials, in its exception messages
+*/
+class JavaExceptionTextMasker {
+public:
+    DLLLOCAL virtual ~JavaExceptionTextMasker() = default;
+
+    //! Replaces the secrets in a text in UTF-8 with their masked forms; returns true if a secret was replaced
+    DLLLOCAL virtual bool maskText(QoreString& text) const = 0;
+};
+
+//! Sets the masker of the Java exceptions converted in the current thread while it exists (qore#7344)
+class JavaExceptionMaskHelper {
+public:
+    //! Sets \a masker for the thread, which the helper keeps while it exists; a null masker leaves the masker of the
+    //! thread as it is
+    DLLLOCAL JavaExceptionMaskHelper(std::shared_ptr<const JavaExceptionTextMasker> masker) : masker(std::move(masker)),
+            prev(current) {
+        if (this->masker) {
+            current = this->masker.get();
+        }
+    }
+
+    DLLLOCAL ~JavaExceptionMaskHelper() {
+        current = prev;
+    }
+
+    //! Masks the text of a Java exception with the masker of the thread, if any; returns true if a secret was replaced
+    DLLLOCAL static bool mask(QoreString& text) {
+        return current ? current->maskText(text) : false;
+    }
+
+    //! Returns true if a masker is set for the thread
+    DLLLOCAL static bool active() {
+        return current != nullptr;
+    }
+
+    JavaExceptionMaskHelper(const JavaExceptionMaskHelper&) = delete;
+    JavaExceptionMaskHelper& operator=(const JavaExceptionMaskHelper&) = delete;
+
+private:
+    //! the masker that this helper set, which it keeps: the object that gave it can be deleted while the helper exists
+    //! (ex: a connection closed by a callback during an operation of the connection)
+    std::shared_ptr<const JavaExceptionTextMasker> masker;
+
+    //! the masker of the thread before this helper set it
+    const JavaExceptionTextMasker* prev;
+
+    //! the masker of the thread
+    DLLLOCAL static thread_local const JavaExceptionTextMasker* current;
+};
+
 /**
  * \brief A C++ exception representing a Java exception.
  */

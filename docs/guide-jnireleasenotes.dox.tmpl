@@ -6,6 +6,10 @@
 
     @section jni_3_0_0 jni Module Version 3.0.0
 
+    - <b>Security</b>: the @ref jnijdbc_driverguide "jdbc driver" masks the URL of a datasource, its password and
+      the credentials in the URL in the text of the Java exceptions that it raises for an operation on the datasource
+      and in their argument (ex: \c "No suitable driver found for jdbc:postgresql:****"), as a JDBC driver can name
+      the URL, which can hold credentials, in its messages (see @ref jdbc_exception_masking, qore#7344)
     - <b>Security</b>: for a caller that a sandbox filesystem policy restricts, a manifest \c Class-Path entry whose
       path cannot be checked exactly is refused with \c JNI-CLASSPATH-ERROR, on every JDK version, and nothing of the
       classpath is added.  For a caller whose sandbox restricts only the network, an entry that names another
