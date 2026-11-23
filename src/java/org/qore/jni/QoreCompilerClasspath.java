@@ -5,8 +5,10 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.file.DirectoryIteratorException;
 import java.nio.file.DirectoryStream;
 import java.nio.file.FileAlreadyExistsException;
+import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.NoSuchFileException;
@@ -15,11 +17,19 @@ import java.nio.file.SecureDirectoryStream;
 import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.BasicFileAttributeView;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.nio.file.attribute.PosixFileAttributeView;
+import java.nio.file.attribute.PosixFileAttributes;
+import java.nio.file.attribute.PosixFilePermission;
+import java.nio.file.attribute.UserPrincipal;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
 
 //! The classpath of one compilation for a caller that a filesystem policy restricts
 /** Made by QoreURLClassLoader.openCompilerClasspath() for the class loader and its parents, and closed when the
@@ -37,8 +47,6 @@ public final class QoreCompilerClasspath implements AutoCloseable {
     static final int MAX_ENTRIES = 200000;
     //! the most outstanding copies of a Program
     static final int MAX_COPIES = 32;
-    //! the deepest directory level that a removal descends to; deeper than any copy, whose depth is limited
-    private static final int MAX_REMOVE_DEPTH = 1024;
     //! a system property that can lower MAX_ENTRIES
     private static final String MAX_ENTRIES_PROP = "qore.jni.compiler.maxEntries";
 
@@ -191,11 +199,8 @@ public final class QoreCompilerClasspath implements AutoCloseable {
                 live.add(copy);
             }
             try {
-                // only its owner can use it
-                copy.root = Files.createTempDirectory("qore-classpath-");
-                // the identity of the directory: a later removal acts only on this directory
-                copy.rootKey = Files.readAttributes(copy.root, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS)
-                    .fileKey();
+                copy.parent = PrivateParent.acquire();
+                copy.root = copy.parent.newRoot();
             } catch (Throwable e) {
                 cleanup(e, copy::abort);
                 throw e;
@@ -228,11 +233,8 @@ public final class QoreCompilerClasspath implements AutoCloseable {
         makes the thread that is removing try again if that attempt fails.  Directories are only created below a root
         that exists and that this object owns, by the thread that owns it.
 
-        A retry only removes the directory it created: the identity of the root is recorded when it is created, and if
-        its name is missing or refers to anything else, the private directory is gone and that name is not touched.  The
-        entries are removed relative to the opened directory, without following links, where the platform has a secure
-        directory stream.  Where it does not, only the first removal walks the directory by path; a retry leaves the copy
-        charged.
+        A retry only removes the directory it created: every root is inside a PrivateParent, which is verified before
+        anything below it is removed.
     */
     static final class Copy {
         private static final int MAKING = 0;
@@ -250,10 +252,10 @@ public final class QoreCompilerClasspath implements AutoCloseable {
         private final long[] charged = new long[KINDS];
         //! the state; guarded by the budget
         private int state = MAKING;
-        //! the private directory; set before the copy is used
+        //! the private directory that holds the root; set before the root
+        private PrivateParent parent;
+        //! the private directory of this copy; set before the copy is used
         private Path root;
-        //! the identity of the private directory when it was created, or null if the platform has none
-        private Object rootKey;
         //! a release arrived during a removal; guarded by the budget
         private boolean retryRequested;
         //! the number of removals that have ended; guarded by the budget
@@ -345,8 +347,25 @@ public final class QoreCompilerClasspath implements AutoCloseable {
 
         //! Ends the copy: a copy being made is marked for the thread that makes it, any other is removed
         void release() {
+            end(false);
+        }
+
+        //! Called by the thread that makes the copy when it fails, also after a release marked it
+        void abort() {
+            end(true);
+        }
+
+        //! Moves the copy to REMOVING if it can be removed now, and removes its directory
+        /** What the copy uses is returned only if the directory is confirmed to be gone.  The removal runs on the one
+            thread that moved the copy to REMOVING, again for a release that arrives while an attempt fails.  A failed
+            removal never frees any of the budget.  The transition and the guarded removal are in this one frame, with
+            no call between them, so that the copy never stays in REMOVING, whatever is raised.
+
+            @param abort true for the thread that makes the copy
+        */
+        private void end(boolean abort) {
             synchronized (budget) {
-                if (state == MAKING) {
+                if (!abort && state == MAKING) {
                     state = ENDING;
                     return;
                 }
@@ -354,45 +373,35 @@ public final class QoreCompilerClasspath implements AutoCloseable {
                     retryRequested = true;
                     return;
                 }
-                if (state != READY && state != FAILED) {
+                if (state == DONE || (!abort && state == ENDING)) {
                     return;
                 }
                 state = REMOVING;
             }
-            remove();
-        }
-
-        //! Called by the thread that makes the copy when it fails, also after a release marked it
-        void abort() {
-            synchronized (budget) {
-                if (state == DONE) {
-                    return;
-                }
-                if (state == REMOVING) {
-                    retryRequested = true;
-                    return;
-                }
-                state = REMOVING;
-            }
-            remove();
-        }
-
-        //! Removes the directory; what the copy uses is returned only if the directory is confirmed to be gone
-        /** Runs on the one thread that moved the copy to REMOVING, again for a release that arrives while an attempt
-            fails.  A failed removal never frees any of the budget.
-        */
-        private void remove() {
             Throwable failure = null;
-            boolean again;
-            do {
-                boolean gone = false;
-                try {
-                    gone = removeOwnDirectory();
-                } catch (RuntimeException | Error e) {
-                    failure = combine(failure, e);
+            boolean settled = false;
+            try {
+                boolean again;
+                do {
+                    boolean gone = false;
+                    try {
+                        gone = removeOwnDirectory();
+                    } catch (RuntimeException | Error e) {
+                        failure = combine(failure, e);
+                    }
+                    again = finishRemoval(gone);
+                } while (again);
+                settled = true;
+            } finally {
+                if (!settled) {
+                    synchronized (budget) {
+                        if (state == REMOVING) {
+                            state = FAILED;
+                            retryRequested = false;
+                        }
+                    }
                 }
-                again = finishRemoval(gone);
-            } while (again);
+            }
             rethrow(failure);
         }
 
@@ -421,7 +430,13 @@ public final class QoreCompilerClasspath implements AutoCloseable {
                 }
             }
             if (gone) {
-                owner.forgetCopy(this);
+                try {
+                    owner.forgetCopy(this);
+                } finally {
+                    if (parent != null) {
+                        parent.release();
+                    }
+                }
             } else if (report) {
                 reportPersistentFailure();
             }
@@ -431,30 +446,15 @@ public final class QoreCompilerClasspath implements AutoCloseable {
         //! Reports once that a copy keeps failing to be removed; names no path, and never raises an error
         private static void reportPersistentFailure() {
             try {
-                QoreURLClassLoader.errorLog("a private compiler classpath copy could not be removed: it keeps its "
-                    + "share of the limits of its Program, and its removal is tried again when its class loader is "
-                    + "closed and when its Program ends");
+                QoreURLClassLoader.errorLog("a private compiler classpath copy could not be removed: it stays in the "
+                    + "JVM's temporary directory and keeps its share of the limits of its Program; closing its "
+                    + "classpath or class loader and the end of its Program try again");
             } catch (RuntimeException | Error e) {
                 // the state of the copy does not depend on the report
             }
         }
 
-        //! Returns true if the name of the root is missing or refers to something other than the directory created
-        /** Any other failure to tell means that the directory may still be there
-        */
-        private boolean rootIsGone() {
-            try {
-                BasicFileAttributes attrs = Files.readAttributes(root, BasicFileAttributes.class,
-                    LinkOption.NOFOLLOW_LINKS);
-                return rootKey != null && !rootKey.equals(attrs.fileKey());
-            } catch (NoSuchFileException e) {
-                return true;
-            } catch (IOException | RuntimeException e) {
-                return false;
-            }
-        }
-
-        //! Removes the directory that this copy created, and nothing else
+        //! Removes the directory of this copy from its private parent
         /** @return true if the directory is confirmed to be gone
         */
         private boolean removeOwnDirectory() {
@@ -465,74 +465,200 @@ public final class QoreCompilerClasspath implements AutoCloseable {
             synchronized (budget) {
                 retry = attempts > 0;
             }
-            if (rootIsGone()) {
-                return true;
+            return parent.removeEntry(root.getFileName(), retry);
+        }
+    }
+
+    //! The private directory of this JVM that holds the root of every copy
+    /** Other users cannot create, rename or replace anything below it, so a copy's root needs no identity of its own.
+        Before anything below it is removed, the directory is verified: not a link, a directory, owned by the JVM's
+        user, with mode 0700 and the file key that it had when it was created.  If that fails or cannot be determined,
+        nothing below it is touched and its copies stay charged.  The check and the removal act on one opened directory,
+        as the name of this directory is in the shared temporary directory, which need not be sticky.
+
+        Where the platform has no POSIX attributes or no secure directory stream, only the first removal of a copy walks
+        it by path, and a retry leaves it charged.  Code of the same JVM is not defended against.
+
+        It is removed when its last copy is gone, under the lock that a new copy takes, so a new copy never uses a
+        directory that is being removed; if the removal is not possible, the empty directory is used by the next copy.
+    */
+    static final class PrivateParent {
+        //! guards #current and the number of copies of each parent
+        private static final Object LOCK = new Object();
+        //! the only permissions of a verified directory
+        private static final Set<PosixFilePermission> OWNER_ONLY = Collections.unmodifiableSet(EnumSet.of(
+            PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE, PosixFilePermission.OWNER_EXECUTE));
+        //! the directory that new copies use; guarded by LOCK
+        private static PrivateParent current;
+
+        //! the absolute path of the directory
+        private Path path;
+        //! the owner of the directory, or null if the platform has no POSIX attributes
+        private UserPrincipal owner;
+        //! the identity of the directory when it was created, or null if the platform has none
+        private final Object key;
+        //! true if the directory can be fully verified
+        private final boolean posix;
+        //! the copies that have a root in this directory; guarded by LOCK
+        private int copies;
+
+        private PrivateParent(Path path) throws IOException {
+            this.path = path;
+            PosixFileAttributeView view = Files.getFileAttributeView(path, PosixFileAttributeView.class,
+                LinkOption.NOFOLLOW_LINKS);
+            if (view == null) {
+                key = Files.readAttributes(path, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS).fileKey();
+                posix = false;
+                return;
             }
-            // on a retry, a directory whose identity cannot be verified is not walked
-            if (retry && rootKey == null) {
-                return false;
+            PosixFileAttributes attrs = view.readAttributes();
+            UserPrincipal user = jvmUser();
+            if (!attrs.isDirectory() || !OWNER_ONLY.equals(attrs.permissions())
+                    || (user != null && !user.equals(attrs.owner()))) {
+                throw new IOException("the private directory of the compiler classpath could not be verified");
             }
-            try (DirectoryStream<Path> stream = Files.newDirectoryStream(root)) {
-                if (stream instanceof SecureDirectoryStream) {
-                    @SuppressWarnings("unchecked")
-                    SecureDirectoryStream<Path> secure = (SecureDirectoryStream<Path>) stream;
-                    Object opened = secure.getFileAttributeView(BasicFileAttributeView.class).readAttributes()
-                        .fileKey();
-                    // the name came to refer to another directory after it was checked: it is not touched
-                    if (rootKey != null && !rootKey.equals(opened)) {
-                        return true;
-                    }
-                    deleteEntries(secure, 0);
-                } else if (retry) {
-                    // no way to act relative to the verified directory: the copy stays charged
-                    return false;
-                } else {
-                    for (Path entry : stream) {
-                        deleteTree(entry);
-                    }
-                }
-            } catch (IOException | RuntimeException e) {
-                // what is left is found below
-            }
-            try {
-                if (!rootIsGone()) {
-                    Files.delete(root);
-                }
-            } catch (IOException | RuntimeException e) {
-                // what is left is found below
-            }
-            return rootIsGone();
+            owner = attrs.owner();
+            key = attrs.fileKey();
+            posix = key != null;
         }
 
-        //! Deletes the entries of an opened directory relative to it, without following links
-        /** A failure leaves the entry in place, for the caller to find, and the other entries are still tried
-        */
-        private static void deleteEntries(SecureDirectoryStream<Path> dir, int depth) {
-            for (Path entry : dir) {
-                Path name = entry.getFileName();
-                try {
-                    BasicFileAttributes attrs = dir.getFileAttributeView(name, BasicFileAttributeView.class,
-                        LinkOption.NOFOLLOW_LINKS).readAttributes();
-                    if (attrs.isDirectory()) {
-                        if (depth < MAX_REMOVE_DEPTH) {
-                            try (SecureDirectoryStream<Path> sub = dir.newDirectoryStream(name,
-                                    LinkOption.NOFOLLOW_LINKS)) {
-                                deleteEntries(sub, depth + 1);
-                            }
-                        }
-                        dir.deleteDirectory(name);
-                    } else {
-                        dir.deleteFile(name);
-                    }
-                } catch (IOException | RuntimeException e) {
-                    // the entry stays; the directory is then found not to be gone
+        //! Returns the user of this process, or null if it has no name that can be looked up
+        private static UserPrincipal jvmUser() {
+            try {
+                Optional<String> name = ProcessHandle.current().info().user();
+                return name.isPresent()
+                    ? FileSystems.getDefault().getUserPrincipalLookupService().lookupPrincipalByName(name.get())
+                    : null;
+            } catch (IOException | RuntimeException e) {
+                return null;
+            }
+        }
+
+        //! Returns the directory for a new copy, with the copy counted; a directory that fails verification is left
+        static PrivateParent acquire() throws IOException {
+            synchronized (LOCK) {
+                if (current == null || !current.isIntact()) {
+                    current = create();
+                }
+                ++current.copies;
+                return current;
+            }
+        }
+
+        //! Creates a new private directory
+        private static PrivateParent create() throws IOException {
+            Path dir = Files.createTempDirectory("qore-classpath-").toAbsolutePath();
+            try {
+                return new PrivateParent(dir);
+            } catch (Throwable e) {
+                cleanup(e, () -> removeEmpty(dir));
+                throw e;
+            }
+        }
+
+        //! Creates the root of a new copy
+        Path newRoot() throws IOException {
+            return Files.createTempDirectory(path, "qore-classpath-");
+        }
+
+        //! Called when a copy's root is gone: the last copy removes the directory
+        void release() {
+            synchronized (LOCK) {
+                if (--copies == 0 && isIntact() && removeEmpty(path) && current == this) {
+                    current = null;
                 }
             }
+        }
+
+        //! Returns true if the directory verifies by its name
+        private boolean isIntact() {
+            try {
+                if (posix) {
+                    return matches(Files.readAttributes(path, PosixFileAttributes.class, LinkOption.NOFOLLOW_LINKS));
+                }
+                BasicFileAttributes attrs = Files.readAttributes(path, BasicFileAttributes.class,
+                    LinkOption.NOFOLLOW_LINKS);
+                return attrs.isDirectory() && Objects.equals(key, attrs.fileKey());
+            } catch (IOException | RuntimeException e) {
+                return false;
+            }
+        }
+
+        //! Returns true if the attributes are those of this directory
+        private boolean matches(PosixFileAttributes attrs) {
+            return attrs.isDirectory() && !attrs.isSymbolicLink() && key.equals(attrs.fileKey())
+                && owner.equals(attrs.owner()) && OWNER_ONLY.equals(attrs.permissions());
+        }
+
+        //! Removes the only level of a copy's root below this directory, without following links
+        /** @param name the name of the root in this directory
+            @param retry true if a removal of this root has already failed
+            @return true if the root is confirmed to be gone; false if it may remain or nothing could be verified
+        */
+        boolean removeEntry(Path name, boolean retry) {
+            if (retry && !posix) {
+                return false;
+            }
+            if (!isIntact()) {
+                return false;
+            }
+            try {
+                if (posix) {
+                    try (DirectoryStream<Path> stream = Files.newDirectoryStream(path)) {
+                        if (stream instanceof SecureDirectoryStream) {
+                            @SuppressWarnings("unchecked")
+                            SecureDirectoryStream<Path> dir = (SecureDirectoryStream<Path>) stream;
+                            // the opened directory is the one that is verified and used, whatever its name is now
+                            if (!matches(dir.getFileAttributeView(PosixFileAttributeView.class).readAttributes())) {
+                                return false;
+                            }
+                            try {
+                                deleteEntry(dir, name);
+                            } catch (NoSuchFileException e) {
+                                // it is already gone
+                            }
+                            return true;
+                        }
+                    }
+                }
+                if (retry) {
+                    return false;
+                }
+                Path target = path.resolve(name);
+                deleteTree(target);
+                return Files.notExists(target, LinkOption.NOFOLLOW_LINKS);
+            } catch (IOException | RuntimeException e) {
+                return false;
+            }
+        }
+
+        //! Deletes an entry of an opened directory relative to it, without following links
+        /** A failure below a directory leaves that entry in place and the other entries are still tried, also if listing
+            the directory fails; the directory then cannot be deleted, which raises the error to the caller
+        */
+        private static void deleteEntry(SecureDirectoryStream<Path> dir, Path name) throws IOException {
+            BasicFileAttributes attrs = dir.getFileAttributeView(name, BasicFileAttributeView.class,
+                LinkOption.NOFOLLOW_LINKS).readAttributes();
+            if (!attrs.isDirectory()) {
+                dir.deleteFile(name);
+                return;
+            }
+            try (SecureDirectoryStream<Path> sub = dir.newDirectoryStream(name, LinkOption.NOFOLLOW_LINKS)) {
+                for (Path entry : sub) {
+                    try {
+                        deleteEntry(sub, entry.getFileName());
+                    } catch (IOException | RuntimeException e) {
+                        // the entry stays, so the deletion of this directory fails below
+                    }
+                }
+            } catch (DirectoryIteratorException e) {
+                // what was not listed stays, so the deletion of this directory fails below
+            }
+            dir.deleteDirectory(name);
         }
 
         //! Deletes what it can of a directory tree by path, without following links, on a first removal
-        /** Only where the platform has no secure directory stream; an I/O error is left for the caller to find, as the
-            directory then still exists
+        /** Only where the platform has no secure directory stream or no POSIX attributes
         */
         private static void deleteTree(Path path) {
             try {
@@ -551,6 +677,21 @@ public final class QoreCompilerClasspath implements AutoCloseable {
             } catch (IOException | RuntimeException e) {
                 // nothing more can be done for this path
             }
+        }
+
+        //! Removes an empty directory from the directory that contains it; it never removes anything else
+        /** @return true if it was removed; false if not, also where the platform has no secure directory stream
+        */
+        private static boolean removeEmpty(Path dir) {
+            try (DirectoryStream<Path> stream = Files.newDirectoryStream(dir.getParent())) {
+                if (stream instanceof SecureDirectoryStream) {
+                    ((SecureDirectoryStream<Path>) stream).deleteDirectory(dir.getFileName());
+                    return true;
+                }
+            } catch (IOException | RuntimeException e) {
+                // it stays, and is empty
+            }
+            return false;
         }
     }
 }

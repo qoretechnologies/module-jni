@@ -1076,7 +1076,7 @@ set (JNI_BIN_FILES
 generate_java(org/qore/jni/QoreJavaApi.java)
 generate_java(org/qore/jni/QoreSandbox.java $Policy $ClasspathPolicy)
 generate_java(org/qore/jni/QoreClasspathGuard.java)
-generate_java(org/qore/jni/QoreCompilerClasspath.java $Budget $Copy)
+generate_java(org/qore/jni/QoreCompilerClasspath.java $Budget $Copy $PrivateParent)
 generate_java(org/qore/jni/JavaCollectionTypes.java)
 generate_java(org/qore/jni/QoreExceptionWrapper.java)
 generate_java(org/qore/jni/QoreException.java)

@@ -3331,6 +3331,7 @@ static GlobalReference<jclass> getPrimitiveClass(Env& env, const char* wrapperNa
 #include "JavaClassQoreCompilerClasspath.inc"
 #include "JavaClassQoreCompilerClasspath_Budget.inc"
 #include "JavaClassQoreCompilerClasspath_Copy.inc"
+#include "JavaClassQoreCompilerClasspath_PrivateParent.inc"
 #include "JavaClassJavaCollectionTypes.inc"
 #include "JavaClassQoreRelativeTime.inc"
 #include "JavaClassJdbcColumnarBatch.inc"
@@ -3427,6 +3428,8 @@ static ucmap_t ucmap = {
         java_org_qore_jni_QoreCompilerClasspath_Budget_class}},
     {"org.qore.jni.QoreCompilerClasspath$Copy", {java_org_qore_jni_QoreCompilerClasspath_Copy_class_len,
         java_org_qore_jni_QoreCompilerClasspath_Copy_class}},
+    {"org.qore.jni.QoreCompilerClasspath$PrivateParent", {java_org_qore_jni_QoreCompilerClasspath_PrivateParent_class_len,
+        java_org_qore_jni_QoreCompilerClasspath_PrivateParent_class}},
     {"org.qore.jni.QoreURLClassLoader", {java_org_qore_jni_QoreURLClassLoader_class_len, java_org_qore_jni_QoreURLClassLoader_class}},
     {"org.qore.jni.QoreURLClassLoader$1", {java_org_qore_jni_QoreURLClassLoader_1_class_len, java_org_qore_jni_QoreURLClassLoader_1_class}},
     {"org.qore.jni.QoreURLClassLoader$2", {java_org_qore_jni_QoreURLClassLoader_2_class_len, java_org_qore_jni_QoreURLClassLoader_2_class}},
@@ -4296,6 +4299,9 @@ void Globals::defineQoreURLClassLoader(Env& env) {
         java_org_qore_jni_QoreCompilerClasspath_Budget_class, java_org_qore_jni_QoreCompilerClasspath_Budget_class_len);
     findDefineClass(env, "org.qore.jni.QoreCompilerClasspath$Copy", nullptr,
         java_org_qore_jni_QoreCompilerClasspath_Copy_class, java_org_qore_jni_QoreCompilerClasspath_Copy_class_len);
+    findDefineClass(env, "org.qore.jni.QoreCompilerClasspath$PrivateParent", nullptr,
+        java_org_qore_jni_QoreCompilerClasspath_PrivateParent_class,
+        java_org_qore_jni_QoreCompilerClasspath_PrivateParent_class_len);
 
     // create our class loader to load module classes
     classQoreURLClassLoader = findDefineClass(env, "org.qore.jni.QoreURLClassLoader", nullptr,

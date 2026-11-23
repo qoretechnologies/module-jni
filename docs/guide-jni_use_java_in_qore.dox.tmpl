@@ -367,9 +367,13 @@ class Outer {
     compile that would go over a limit fails, and the copies are removed when the compile ends, when their class
     loader is closed, and when the Program ends.  A copy that cannot be removed keeps its share of the limits, its
     removal is tried again at the next of these, and a removal that keeps failing is logged once, with no path; a compile
-    does not raise this failure.  A retry only removes the directory it created.  On a platform without a secure
-    directory stream in the JDK, a retry does not walk the directory, so such a copy keeps its share of the limits until
-    the process ends.  Once the module's shutdown has started, closing a class loader does
+    does not raise this failure.  The copies are kept in one directory of the JVM that only its user can access, which
+    is removed with its last copy.  A retry only removes the directory it created: if that private directory no longer
+    verifies (its type, owner, mode or identity changed), nothing below it is touched and its copies keep their share
+    of the limits.  On a platform without POSIX file attributes or a secure directory stream in the JDK, a retry does
+    not walk the directory, so such a copy keeps its share of the limits until the process ends.  These checks cover
+    removal only: a copy is made and read by path, so the JVM's temporary directory must be sticky or not writable by
+    other users.  They do not defend against Java code in the same JVM.  Once the module's shutdown has started, closing a class loader does
     nothing, so a copy of a compile that is still running is then removed only when that compile ends.  A process that
     ends with the \c exit() function while a compile is running does not remove that compile's copy, which stays in
     the JVM's temporary directory.  The Kotlin compiler also uses

@@ -419,6 +419,8 @@ public class ClasspathLookupProbe {
         volatile boolean fail = true;
         //! runs once, at the first deletion that fails
         volatile Runnable onFailure;
+        //! the attributes of an opened directory cannot be read while this is set
+        volatile boolean failHandle;
         int failures;
 
         //! Returns a path for \a target whose operations go through this provider
@@ -593,6 +595,19 @@ public class ClasspathLookupProbe {
             real.move(source, target, targetPath);
         }
         @Override public <V extends java.nio.file.attribute.FileAttributeView> V getFileAttributeView(Class<V> type) {
+            if (provider.failHandle) {
+                return type.cast(new java.nio.file.attribute.BasicFileAttributeView() {
+                    @Override public String name() { return "basic"; }
+                    @Override public java.nio.file.attribute.BasicFileAttributes readAttributes() throws IOException {
+                        throw new IOException("injected attribute failure");
+                    }
+                    @Override public void setTimes(java.nio.file.attribute.FileTime modified,
+                            java.nio.file.attribute.FileTime accessed, java.nio.file.attribute.FileTime created)
+                            throws IOException {
+                        throw new IOException("injected attribute failure");
+                    }
+                });
+            }
             return real.getFileAttributeView(type);
         }
         @Override public <V extends java.nio.file.attribute.FileAttributeView> V getFileAttributeView(Path path,
@@ -631,9 +646,10 @@ public class ClasspathLookupProbe {
     }
 
     //! Runs a removal of a compiler copy that really fails; returns "clean" or what is wrong
-    /** @param scenario "confirmed": a failed deletion keeps the charges, and a retry removes the copy; "replaced": the
-        name of the private directory comes to refer to another directory before the retry; "during": a release arrives
-        while a removal runs; "signal": a removal that keeps failing is reported, without its path
+    /** @param scenario "confirmed": a failed deletion keeps the charges, and a retry removes the copy; "during": a
+        release arrives while a removal runs; "signal": a removal that keeps failing is reported, without its path;
+        "parent-replaced", "parent-mode", "parent-owner", "parent-link", "parent-handle": the private parent no longer
+        verifies at a retry
     */
     public static String removalFailure(QoreURLClassLoader parent, String dir, String scenario) throws Exception {
         Object[] context = QoreURLClassLoader.saveContext();
@@ -649,14 +665,16 @@ public class ClasspathLookupProbe {
             }
             Object copy = copies.get(0);
             Class<?> copyClass = copy.getClass();
-            java.lang.reflect.Field rootField = copyClass.getDeclaredField("root");
-            rootField.setAccessible(true);
             Object budget = field(copy, "budget");
-            Path root = (Path) rootField.get(copy);
+            Path root = (Path) field(copy, "root");
+            Object parentObject = field(copy, "parent");
+            java.lang.reflect.Field parentPath = parentObject.getClass().getDeclaredField("path");
+            parentPath.setAccessible(true);
+            Path realParent = (Path) parentPath.get(parentObject);
             int failedState = constant(copyClass, "FAILED");
             int doneState = constant(copyClass, "DONE");
             FailingProvider provider = new FailingProvider();
-            rootField.set(copy, provider.wrap(root));
+            parentPath.set(parentObject, provider.wrap(realParent));
 
             if (scenario.equals("during")) {
                 // the release arrives during the first failing deletion, whose attempt then fails
@@ -675,7 +693,7 @@ public class ClasspathLookupProbe {
                 if (provider.failures < 1) {
                     return "the removal did not fail";
                 }
-                rootField.set(copy, root);
+                parentPath.set(parentObject, realParent);
                 if ((int) field(copy, "state") != doneState) {
                     close.invoke(handle);
                     return "a release during a removal did not get its retry";
@@ -713,33 +731,11 @@ public class ClasspathLookupProbe {
                     return "the report names the path";
                 }
             }
-            rootField.set(copy, root);
-            if (scenario.equals("replaced")) {
-                Path moved = root.resolveSibling(root.getFileName() + "-moved");
-                Files.move(root, moved);
-                Files.createDirectory(root);
-                Path marker = root.resolve("marker");
-                Files.writeString(marker, "not the copy's");
-                String rv = "clean";
-                try {
-                    close.invoke(handle);
-                    if (!Files.exists(marker)) {
-                        rv = "the retry removed a directory that it did not create";
-                    } else if ((int) field(copy, "state") != doneState) {
-                        rv = "the copy did not end";
-                    } else if (!chargesReturned(budget)) {
-                        rv = "the charges were not returned";
-                    }
-                    close.invoke(handle);
-                    if (rv.equals("clean") && !chargesReturned(budget)) {
-                        rv = "the charges were not returned exactly once";
-                    }
-                } finally {
-                    removeTestTree(root);
-                    removeTestTree(moved);
-                }
-                return rv;
+            if (scenario.startsWith("parent-")) {
+                return tamperedParent(scenario, loader, handle, copy, budget, parentObject, parentPath, realParent,
+                    root, provider);
             }
+            parentPath.set(parentObject, realParent);
             close.invoke(handle);
             if ((int) field(copy, "state") != doneState) {
                 return "the retry did not end the copy";
@@ -751,6 +747,133 @@ public class ClasspathLookupProbe {
         } finally {
             System.setOut(savedOut);
             QoreURLClassLoader.restoreContext(context);
+        }
+    }
+
+    //! Makes the private parent fail its verification; a retry touches nothing, and works again once it is restored
+    private static String tamperedParent(String scenario, QoreURLClassLoader loader, Object handle, Object copy,
+            Object budget, Object parentObject, java.lang.reflect.Field parentPath, Path parent, Path root,
+            FailingProvider provider) throws Exception {
+        java.lang.reflect.Method close = handle.getClass().getMethod("close");
+        int failedState = constant(copy.getClass(), "FAILED");
+        int doneState = constant(copy.getClass(), "DONE");
+        Path moved = parent.resolveSibling(parent.getFileName() + "-moved");
+        Path marker = parent.resolve("marker");
+        java.lang.reflect.Field ownerField = parentObject.getClass().getDeclaredField("owner");
+        ownerField.setAccessible(true);
+        Object savedOwner = ownerField.get(parentObject);
+        int entries = countTree(parent);
+        Path held = parent;
+        boolean swapped = false;
+        String rv = "clean";
+        try {
+            switch (scenario) {
+                case "parent-replaced":
+                    Files.move(parent, moved);
+                    swapped = true;
+                    held = moved;
+                    Files.createDirectory(parent, java.nio.file.attribute.PosixFilePermissions.asFileAttribute(
+                        java.nio.file.attribute.PosixFilePermissions.fromString("rwx------")));
+                    Files.writeString(marker, "not the copy's");
+                    break;
+                case "parent-link":
+                    Files.move(parent, moved);
+                    swapped = true;
+                    held = moved;
+                    Files.createSymbolicLink(parent, moved);
+                    break;
+                case "parent-mode":
+                    Files.setPosixFilePermissions(parent,
+                        java.nio.file.attribute.PosixFilePermissions.fromString("rwxr-x---"));
+                    break;
+                case "parent-owner":
+                    ownerField.set(parentObject, otherUser(savedOwner));
+                    break;
+                case "parent-handle":
+                    provider.fail = false;
+                    provider.failHandle = true;
+                    break;
+                default:
+                    return "unknown scenario " + scenario;
+            }
+            if (!scenario.equals("parent-handle")) {
+                parentPath.set(parentObject, parent);
+            }
+            // each of two retries leaves everything in place
+            for (int i = 0; i < 2 && rv.equals("clean"); ++i) {
+                close.invoke(handle);
+                if ((int) field(copy, "state") != failedState) {
+                    rv = "the retry did not leave the copy failed";
+                } else if (chargesReturned(budget)) {
+                    rv = "the retry returned the charges";
+                } else if (countTree(held) != entries) {
+                    rv = "the retry changed the copy";
+                } else if (scenario.equals("parent-replaced") && !Files.exists(marker)) {
+                    rv = "the retry touched the directory that replaced the parent";
+                }
+            }
+            // a new copy does not use a parent that does not verify
+            if (rv.equals("clean") && !scenario.equals("parent-handle")) {
+                Object next = QoreURLClassLoader.class.getMethod("openCompilerClasspath").invoke(loader);
+                try {
+                    Object nextCopy = ((List<?>) field(next, "copies")).get(0);
+                    if (field(nextCopy, "parent") == parentObject) {
+                        rv = "a new copy used a parent that does not verify";
+                    }
+                } finally {
+                    next.getClass().getMethod("close").invoke(next);
+                }
+            }
+        } finally {
+            provider.failHandle = false;
+            ownerField.set(parentObject, savedOwner);
+            if (swapped) {
+                Files.deleteIfExists(marker);
+                Files.delete(parent);
+                Files.move(moved, parent);
+            }
+            Files.setPosixFilePermissions(parent,
+                java.nio.file.attribute.PosixFilePermissions.fromString("rwx------"));
+            parentPath.set(parentObject, parent);
+        }
+        if (!rv.equals("clean")) {
+            close.invoke(handle);
+            return rv;
+        }
+        close.invoke(handle);
+        if ((int) field(copy, "state") != doneState) {
+            return "the copy did not end once the parent was restored";
+        }
+        if (Files.exists(root, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+            return "the copy remains once the parent was restored";
+        }
+        if (Files.exists(parent, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+            return "the parent remains after its last copy";
+        }
+        return chargesReturned(budget) ? "clean" : "the charges were not returned";
+    }
+
+    //! Returns a user other than \a owner
+    private static java.nio.file.attribute.UserPrincipal otherUser(Object owner) throws IOException {
+        java.nio.file.attribute.UserPrincipalLookupService users =
+            java.nio.file.FileSystems.getDefault().getUserPrincipalLookupService();
+        for (String name : new String[] {"root", "nobody", "daemon"}) {
+            try {
+                java.nio.file.attribute.UserPrincipal user = users.lookupPrincipalByName(name);
+                if (!user.equals(owner)) {
+                    return user;
+                }
+            } catch (java.nio.file.attribute.UserPrincipalNotFoundException e) {
+                // the next name is tried
+            }
+        }
+        throw new IOException("no other user is known");
+    }
+
+    //! Returns the number of entries of a directory tree, without following links
+    private static int countTree(Path dir) throws IOException {
+        try (Stream<Path> walk = Files.walk(dir)) {
+            return (int) walk.count();
         }
     }
 

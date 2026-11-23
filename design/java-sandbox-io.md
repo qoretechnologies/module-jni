@@ -119,13 +119,21 @@ are `static_assert`ed to match) and calls `QoreSandboxManager::checkFilesystemAc
   one, and a budget whose Program has ended refuses new copies.  A copy's charges are returned only once its directory
   is confirmed to be gone: a failed removal leaves it charged and live in a retryable state, the other copies are still
   ended, and the removal is tried again when its classpath or class loader is closed and at the end of its Program; a
-  release that arrives during a removal makes the removing thread try again if that attempt fails.  A retry only
-  removes the directory it created: the identity of the root (`fileKey()`) is recorded when it is created, and if the
-  name is missing or refers to anything else, the private directory is gone, its charges are returned once, and the
-  name is not touched.  Entries are removed relative to the opened directory through a `SecureDirectoryStream`, without
-  following links.  Where the platform has none, only the first removal walks the directory by path, and a retry leaves
-  the copy charged until the process ends.  A removal that keeps failing is logged once, with no path, through the
-  class loader's error log.  A cleanup failure is suppressed in an error that is being raised and never replaces it;
+  release that arrives during a removal makes the removing thread try again if that attempt fails.  Every copy's root
+  is inside one private parent directory of the JVM (`PrivateParent`, mode 0700), so other local users cannot create,
+  rename or replace anything below it, and a root needs no identity of its own.  A retry only removes the directory it
+  created: before anything below the parent is removed, the parent is verified to be a directory and not a link, owned
+  by the JVM's user, with mode 0700 and the `fileKey()` that it had when it was created.  If a check fails or cannot be
+  made, nothing below it is touched, its copies stay charged, and a new copy uses a new parent.  The check and the
+  removal use one opened directory (`SecureDirectoryStream`), because the parent's own name is in the shared temporary
+  directory, which need not be sticky.  Where the platform has no POSIX attributes or no secure directory stream, only
+  the first removal walks the copy by path, and a retry leaves it charged until the process ends.  The parent is
+  removed with its last copy, under the lock that a new copy takes; only an empty directory can be removed this way,
+  and if that is not possible the next copy reuses it.  If the JVM's user has no name that can be looked up, the
+  parent's owner is taken from the directory when it is created.  The verification covers removal only: a copy is made
+  and read by path, so `java.io.tmpdir` must be sticky or not writable by other users.  Code in the same JVM is not
+  defended against.  A
+  removal that keeps failing is logged once, with no path, through the class loader's error log.  A cleanup failure is suppressed in an error that is being raised and never replaces it;
   a compile does not raise a failure to remove its own copy, which stays charged and is retried.  Closing a class loader ends
   its own copies, except once the module's shutdown has started, when `close()` does nothing and a running compile
   removes its copies when it ends.  A process that ends with `exit()` while a handle is open leaves that copy in the

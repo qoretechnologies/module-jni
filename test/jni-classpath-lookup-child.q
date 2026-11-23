@@ -210,9 +210,11 @@ sub removal_error_case(string root) {
     result("removal-error left", 0, ClasspathLookupProbe::copyDirectories());
 }
 
-#! a removal that really fails, a retry that only removes the directory it created, and the report of a failure
+#! a removal that really fails, a retry that touches nothing unless the private parent verifies, and the report of a
+#! failure
 sub removal_failure_case(string root) {
-    foreach string scenario in ("confirmed", "replaced", "during", "signal") {
+    foreach string scenario in ("confirmed", "during", "signal", "parent-replaced", "parent-mode", "parent-owner",
+        "parent-link", "parent-handle") {
         Program p = new_empty_program(get_policy(root, ("ending",)));
         result("removal-failure " + scenario, "clean", p.callFunction("removal_failure", root + "/ending", scenario));
     }
