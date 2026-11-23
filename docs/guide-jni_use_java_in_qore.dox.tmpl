@@ -536,7 +536,8 @@ public class Fetcher {
       it (a relative entry resolved against the location of the jar that names it, as the class loader resolves it),
       with symbolic links resolved, before its own manifest is read.  If the policy denies any of them, or a
       \c Class-Path entry cannot be checked (ex: it is not a file, a jar is not a regular file, a manifest cannot be
-      read, or, before Java 22, a jar has a jar index), the whole classpath is refused with
+      read, or, before Java 22, a jar has a jar index, which is refused as a defense for other builds, as the JDK 21
+      builds that were tested have no jar index support to enable), the whole classpath is refused with
       \c JNI-CLASSPATH-ERROR, naming the file.  A caller whose filesystem access is restricted needs a manifest
       entry whose path can be checked exactly; a caller whose sandbox restricts only the network cannot use an entry
       that names another location, or a path that does not exist (unless it has the form of a directory) or cannot

@@ -137,7 +137,8 @@
       against the policy; they are now resolved as the class loader resolves them, recursively and each once, and
       checked as their real paths (with symbolic links resolved) together with the classpath's own entries; if the
       policy denies any of them, or one cannot be checked (ex: a jar that is not a regular file, or, before Java 22, a
-      jar with a jar index), the whole classpath is refused with \c JNI-CLASSPATH-ERROR, naming the file, and nothing
+      jar with a jar index, refused as a defense for other builds, as the JDK 21 builds that were tested have no jar
+      index support to enable), the whole classpath is refused with \c JNI-CLASSPATH-ERROR, naming the file, and nothing
       is added.  The class loader still follows the manifests, so the classpath that is used is unchanged.  The
       resolution has been verified for JDK feature versions 21 and 25; on any other JDK version, a governed classpath
       with a jar that has a manifest \c Class-Path attribute is refused with \c JNI-CLASSPATH-ERROR, naming the reason (a

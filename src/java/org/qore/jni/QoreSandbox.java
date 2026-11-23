@@ -395,10 +395,10 @@ public final class QoreSandbox {
         compiler checks those as it lists them for a restricted caller, but the class loader and the Kotlin compiler
         do not (qore#7276).  A compiler that is
         given the returned files resolves the manifest entries of a jar where they were checked.  A compiler does not
-        resolve every entry as the class loader does, so a jar whose manifest has an entry for which the two can differ
-        is refused.  A file
-        whose real name, after symbolic links are resolved, is not an archive name is refused as well, as its manifest
-        is not checked, and so is a special file, whatever its name.
+        resolve every entry as the class loader does, so for a caller that a filesystem policy restricts, a jar whose
+        manifest has an entry for which the two can differ is refused, and so is a file whose real name, after symbolic
+        links are resolved, is not an archive name, as its manifest is not checked, and a special file, whatever its
+        name.  A caller whose sandbox restricts only the network gets the location rule of manifest entries.
 
         @param classpath the classpath
 
@@ -411,14 +411,16 @@ public final class QoreSandbox {
     */
     public static List<File> checkCompilerClasspath(String classpath) {
         QoreURLClassLoader.ResolvedClasspath rc = checkedClasspath(classpath);
-        if (rc.hasAmbiguousManifestEntry()) {
-            throw argumentError0("a jar of the classpath has a manifest Class-Path entry that a compiler could resolve "
-                + "differently from the sandbox filesystem policy check");
-        }
-        if (rc.hasUnexpandedFile()) {
-            throw argumentError0("a file of the classpath does not have a .jar or .zip name once symbolic links are "
-                + "resolved, so a compiler could open it as an archive without its manifest being checked against "
-                + "the sandbox filesystem policy");
+        if (restrictsFilesystem()) {
+            if (rc.hasAmbiguousManifestEntry()) {
+                throw argumentError0("a jar of the classpath has a manifest Class-Path entry that a compiler could "
+                    + "resolve differently from the sandbox filesystem policy check");
+            }
+            if (rc.hasUnexpandedFile()) {
+                throw argumentError0("a file of the classpath does not have a .jar or .zip name once symbolic links "
+                    + "are resolved, so a compiler could open it as an archive without its manifest being checked "
+                    + "against the sandbox filesystem policy");
+            }
         }
         return rc.addedFiles();
     }

@@ -736,18 +736,38 @@ string sub compiler_classpath(string classpath) {
         string x = makeCase(inexact);
         string jar = x + "/main/main.jar";
         foreach Program p in ((newProgram(), getPermissiveProgram(True), getPermissiveProgram(False))) {
-            assertNRegex("cannot be checked exactly", p.callFunction("compiler_classpath", jar));
+            assertEq("ok: 1", p.callFunction("compiler_classpath", jar));
         }
         # and it still applies to one
         Program restricted = getProgram(allowedPaths(x, inexact));
         assertRegex("cannot be checked exactly", restricted.callFunction("compiler_classpath", jar));
 
-        # an archive with no manifest Class-Path is accepted for each of them
+        # the checks of what a compiler could read differently are for a caller whose filesystem access is restricted
         x = newDir();
         ClasspathUrlProbe::writeMarkerJar(x + "/dep.jar", Allowed);
+        ClasspathUrlProbe::writeManifestJar(x + "/differs.jar", "./dep.jar");
+        File f();
+        f.open2(x + "/text.bin", O_CREAT | O_WRONLY | O_TRUNC, 0600);
+        f.write("not an archive\n");
+        f.close();
         foreach Program p in ((newProgram(), getPermissiveProgram(True), getPermissiveProgram(False))) {
+            assertEq("ok: 1", p.callFunction("compiler_classpath", x + "/differs.jar"));
+            assertEq("ok: 1", p.callFunction("compiler_classpath", x + "/text.bin"));
+            # an archive with no manifest Class-Path
             assertEq("ok: 1", p.callFunction("compiler_classpath", x + "/dep.jar"));
         }
+        restricted = getProgram((x,));
+        assertRegex("a compiler could resolve", restricted.callFunction("compiler_classpath", x + "/differs.jar"));
+        assertRegex("does not have a .jar or .zip name", restricted.callFunction("compiler_classpath",
+            x + "/text.bin"));
+        assertEq("ok: 1", restricted.callFunction("compiler_classpath", x + "/dep.jar"));
+
+        # a caller that restricts the network still gets the location rule; the entry is not read
+        x = makeCase(OtherAuthorityCases[0]);
+        jar = x + "/main/main.jar";
+        assertRegex(OtherLocation, getPermissiveProgram(False).callFunction("compiler_classpath", jar));
+        assertEq("ok: 1", getPermissiveProgram(True).callFunction("compiler_classpath", jar));
+        assertEq("ok: 1", newProgram().callFunction("compiler_classpath", jar));
     }
 
     networkOnePathTest() {

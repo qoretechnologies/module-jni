@@ -572,7 +572,7 @@ public class QoreURLClassLoader extends URLClassLoader {
 
     //! Returns the manifest Class-Path attribute of what a local file URL names, or null if it can have none
     /** A path in the form of a directory, an existing directory and a regular file that is not an archive have none.
-        The class loader of the JDK versions that the module runs on reads no jar index.
+        A jar index is not read here: the JDK 21 and 25 builds that were tested have no jar index support to enable.
 
         @throw JNI-SANDBOX-ERROR the path does not exist and is not in the form of a directory, or it cannot be read
     */
@@ -2315,8 +2315,9 @@ public class QoreURLClassLoader extends URLClassLoader {
             File jar = paths.get(i);
             String classpath;
             try (JarFile jf = new JarFile(jar, true, ZipFile.OPEN_READ, JarFile.runtimeVersion())) {
-                // before Java 22, the class loader can open the jars that a jar index lists (if jar indexes are
-                // enabled), which this check does not resolve
+                // the JDK 21 builds that were tested have no jar index support to enable; an index is still refused
+                // below Java 22 as a defense for other builds of those versions, as this check does not resolve the
+                // jars that an index lists
                 if (Runtime.version().feature() < 22 && jf.getEntry("META-INF/INDEX.LIST") != null) {
                     refuse(jar, null, "the classpath jar '" + jar + "' has a jar index, whose jars cannot be checked "
                         + "against the sandbox policy");
