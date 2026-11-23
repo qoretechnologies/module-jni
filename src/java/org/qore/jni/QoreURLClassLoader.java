@@ -2034,6 +2034,12 @@ public class QoreURLClassLoader extends URLClassLoader {
                     + url + "', which is not a file, so it cannot be checked against the sandbox filesystem policy");
                 return;
             }
+            // before the URL is resolved to a path, on every JDK
+            if (!isExactFileUrl(url)) {
+                refuse(jar, referrer, "the manifest Class-Path attribute of the classpath jar '" + jar + "' names a "
+                    + "URL whose path cannot be checked exactly against the sandbox filesystem policy");
+                return;
+            }
             String key = urlKey(url);
             if (seen.contains(key)) {
                 return;
@@ -2115,6 +2121,27 @@ public class QoreURLClassLoader extends URLClassLoader {
             sb.append(file);
         }
         return sb.toString();
+    }
+
+    //! Returns true if the path that is checked for a file URL is exactly the path that is read through it
+    /** The class loader and the URLs of the resources that it returns do not all take the path of a URL from the same
+        components, so a classpath URL whose path cannot be checked exactly is refused for a caller that a filesystem
+        policy restricts (qore#7349).
+    */
+    static boolean isExactFileUrl(URL url) {
+        if (url.getQuery() != null || url.getRef() != null) {
+            return false;
+        }
+        String path = decodeUrlPath(url.getPath());
+        if (path == null) {
+            return false;
+        }
+        for (String segment : path.split("/", -1)) {
+            if (segment.equals(".") || segment.equals("..")) {
+                return false;
+            }
+        }
+        return true;
     }
 
     //! Returns the path of a file URL as the class loader decodes it, or null if it cannot be decoded exactly
