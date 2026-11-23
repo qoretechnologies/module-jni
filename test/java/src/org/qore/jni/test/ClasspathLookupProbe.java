@@ -433,6 +433,8 @@ public class ClasspathLookupProbe {
         static final int UID_NO_VIEW = 2;
         //! how reading a numeric UID fails, or 0
         volatile int failUid;
+        //! paths that are made from a path of this provider also go through it
+        volatile boolean wrapDerived;
         //! the reads of the attributes of an opened directory that failed with the injected I/O error
         int handleFailures;
         //! the deletions made by path
@@ -449,6 +451,10 @@ public class ClasspathLookupProbe {
                             return fs;
                         case "unwrap":
                             return target;
+                        case "resolve":
+                        case "getParent":
+                            Object derived = callOn(target, method, args);
+                            return wrapDerived && derived != null ? wrap((Path) derived) : derived;
                         default:
                             return callOn(target, method, args);
                     }
@@ -1062,6 +1068,152 @@ public class ClasspathLookupProbe {
             release.invoke(parent);
         }
         return Files.exists(parentDir, java.nio.file.LinkOption.NOFOLLOW_LINKS) ? "the parent remains" : "clean";
+    }
+
+    //! Returns null if opening a compiler classpath raises the refusal; a classpath that is opened is closed again
+    private static String openRefused(java.lang.reflect.Method open, QoreURLClassLoader loader, String refusal)
+            throws Exception {
+        Object handle;
+        try {
+            handle = open.invoke(loader);
+        } catch (java.lang.reflect.InvocationTargetException e) {
+            Throwable cause = e.getCause();
+            return cause instanceof IOException && refusal.equals(cause.getMessage()) ? null : "raised " + cause;
+        }
+        handle.getClass().getMethod("close").invoke(handle);
+        return "a copy was made";
+    }
+
+    //! Returns what is wrong if a refusal changed the charges, the live copies or the count of the parent
+    private static String unchanged(Object budget, Object parent, long[] used, int live, int copies) throws Exception {
+        synchronized (budget) {
+            if (!java.util.Arrays.equals(used, (long[]) field(budget, "used"))) {
+                return "a refusal changed the charges";
+            }
+            if (((java.util.Set<?>) field(budget, "live")).size() != live) {
+                return "a refusal changed the live copies";
+            }
+        }
+        return (int) field(parent, "copies") == copies ? null : "a refusal changed the count of the parent";
+    }
+
+    //! A root that is refused after it was created: it is removed, or else its parent takes no more copies
+    /** While one copy is held: an error from reading the UID of a new root; the same refusal through the budget, which
+        unwinds completely; and a root that cannot be removed, after which every further copy is refused, with nothing
+        more left in the parent.  Once that root is gone and the held copy ends, the parent goes and copies work again.
+        @return "clean", or what is wrong
+    */
+    public static String rootRefusals(QoreURLClassLoader loader) throws Exception {
+        java.lang.reflect.Method open = QoreURLClassLoader.class.getMethod("openCompilerClasspath");
+        Object held = open.invoke(loader);
+        java.lang.reflect.Method close = held.getClass().getMethod("close");
+        Object copy = ((List<?>) field(held, "copies")).get(0);
+        Object budget = field(copy, "budget");
+        Object parent = field(copy, "parent");
+        Path heldRoot = (Path) field(copy, "root");
+        java.lang.reflect.Field pathField = parentClass().getDeclaredField("path");
+        pathField.setAccessible(true);
+        Path real = (Path) pathField.get(parent);
+        String refusal = (String) parentStatic("TEMP_REFUSAL").get(null);
+        java.lang.reflect.Method newRoot = parentClass().getDeclaredMethod("newRoot");
+        newRoot.setAccessible(true);
+        FailingProvider provider = new FailingProvider();
+        provider.fail = false;
+        provider.wrapDerived = true;
+        String rv;
+        try {
+            pathField.set(parent, provider.wrap(real));
+            rv = rootRefusalSteps(open, loader, newRoot, budget, parent, real, refusal, provider);
+        } finally {
+            provider.fail = false;
+            provider.failUid = 0;
+            pathField.set(parent, real);
+            try (java.nio.file.DirectoryStream<Path> entries = Files.newDirectoryStream(real)) {
+                for (Path entry : entries) {
+                    if (!entry.getFileName().equals(heldRoot.getFileName())) {
+                        removeTestTree(entry);
+                    }
+                }
+            }
+            close.invoke(held);
+        }
+        if (!rv.equals("clean")) {
+            return rv;
+        }
+        if (Files.exists(real, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+            return "the parent remains";
+        }
+        if (!chargesReturned(budget)) {
+            return "the charges were not returned";
+        }
+        Object next = open.invoke(loader);
+        next.getClass().getMethod("close").invoke(next);
+        return "clean";
+    }
+
+    private static String rootRefusalSteps(java.lang.reflect.Method open, QoreURLClassLoader loader,
+            java.lang.reflect.Method newRoot, Object budget, Object parent, Path real, String refusal,
+            FailingProvider provider) throws Exception {
+        int entries = countTree(real);
+        long[] used;
+        int live;
+        synchronized (budget) {
+            used = ((long[]) field(budget, "used")).clone();
+            live = ((java.util.Set<?>) field(budget, "live")).size();
+        }
+        int count = (int) field(parent, "copies");
+
+        // the UID of the new root cannot be read: it is refused and removed
+        for (int mode : new int[] {FailingProvider.UID_ERROR, FailingProvider.UID_NO_VIEW}) {
+            provider.failUid = mode;
+            String rv = refused(newRoot, parent, refusal);
+            if (rv != null) {
+                return "reading the UID of a root: " + rv;
+            }
+            if (countTree(real) != entries) {
+                return "a root whose UID cannot be read remains";
+            }
+        }
+
+        // the same refusal through the budget unwinds what it charged and counted
+        provider.failUid = FailingProvider.UID_ERROR;
+        String rv = openRefused(open, loader, refusal);
+        if (rv != null) {
+            return "through the budget: " + rv;
+        }
+        rv = unchanged(budget, parent, used, live, count);
+        if (rv != null) {
+            return rv;
+        }
+        if (countTree(real) != entries) {
+            return "a root refused through the budget remains";
+        }
+
+        // a refused root that cannot be removed stays, and stops new copies in this parent
+        provider.fail = true;
+        rv = openRefused(open, loader, refusal);
+        provider.fail = false;
+        provider.failUid = 0;
+        if (rv != null) {
+            return "a root that cannot be removed: " + rv;
+        }
+        if (countTree(real) != entries + 1) {
+            return "the root that could not be removed is not there";
+        }
+        for (int i = 0; i < 3; ++i) {
+            rv = openRefused(open, loader, refusal);
+            if (rv != null) {
+                return "the next copy after a root that cannot be removed: " + rv;
+            }
+            if (countTree(real) != entries + 1) {
+                return "leftovers accumulate in the parent";
+            }
+            rv = unchanged(budget, parent, used, live, count);
+            if (rv != null) {
+                return rv;
+            }
+        }
+        return "clean";
     }
 
     //! Opens and closes a compiler classpath: returns "copies=<n>", or the message of the refusal

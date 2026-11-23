@@ -41,6 +41,9 @@ string sub removal_failure(string dir, string scenario) {
 string sub copy_outcome() {
     return ClasspathLookupProbe::copyOutcome(get_class_loader());
 }
+string sub root_refusals() {
+    return ClasspathLookupProbe::rootRefusals(get_class_loader());
+}
 string sub compiler_cleanup() {
     return ClasspathLookupProbe::compilerCleanupContained(get_class_loader());
 }
@@ -294,6 +297,7 @@ sub tmpdir_owner_case(string root, string tmp) {
     }
     result("owner by UID", "clean", ClasspathLookupProbe::uidRule(tmp));
     result("owner identity of a parent and a root", "clean", ClasspathLookupProbe::identityChecks(tmp));
+    result("owner refused roots", "clean", q.callFunction("root_refusals"));
     result("owner allowed at the end", "copies=1", q.callFunction("copy_outcome"));
 }
 
