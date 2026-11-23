@@ -126,6 +126,9 @@ public class QoreURLClassLoader extends URLClassLoader {
     */
     private volatile boolean inherits_program = false;
 
+    //! what the compiler copies of the Program use, and the live copies; shared and replaced with pgm_ptr
+    private volatile QoreCompilerClasspath.Budget copy_budget = new QoreCompilerClasspath.Budget();
+
     //! true while pgm_ptr is the holder of the parent class loader; guarded by ptr_lock
     private boolean shared_ptr = false;
 
@@ -308,6 +311,7 @@ public class QoreURLClassLoader extends URLClassLoader {
             synchronized (parent.ptr_lock) {
                 pgm_ptr = parent.pgm_ptr;
                 pgm_cleared = parent.pgm_cleared;
+                copy_budget = parent.copy_budget;
                 origin_ptr = parent.origin_ptr != 0L ? parent.origin_ptr : parent.pgm_ptr.get();
             }
             shared_ptr = true;
@@ -645,41 +649,51 @@ public class QoreURLClassLoader extends URLClassLoader {
         return false;
     }
 
-    //! Returns the locations of this class loader for a compiler of a restricted caller, as the policy allows
-    /** The classpath directories that restricted code added are replaced by copies of the files that their policy
-        allows, in a private directory that this class loader makes; give the result to releaseCompilerCopies() when
-        the compiler has finished.  For code that cannot reach this class loader's Program, the entries of restricted
-        code are left out and nothing is copied: a compiler walks the class loaders of its parents, and it only uses
-        the entries that it may use.
+    //! Opens the classpath of one compilation for a restricted caller: this class loader and its parents
+    /** The classpath directories that restricted code added are replaced by copies of the files that their policies
+        allow, in private directories; close the result when the compilation ends, also if it fails.  For code that
+        cannot reach the Program of a class loader, the entries of restricted code of that class loader are left out and
+        nothing is copied.
 
-        @throw IOException a copy cannot be made, or is larger than the limits; nothing is left
+        @return the classpath, which the caller closes
+
+        @throw IOException a copy cannot be made, is over a limit, or was ended; nothing is left
     */
-    public final java.util.List<File> getCheckedCompilerLocations() throws IOException {
+    public final QoreCompilerClasspath openCompilerClasspath() throws IOException {
+        QoreCompilerClasspath rv = new QoreCompilerClasspath();
+        try {
+            for (ClassLoader cl = this; cl != null; cl = cl.getParent()) {
+                if (cl instanceof QoreURLClassLoader) {
+                    ((QoreURLClassLoader) cl).addCompilerLocations(rv);
+                }
+            }
+            // no copy is ready before all of them are, so that no location that is returned has been removed
+            rv.ready();
+        } catch (Throwable e) {
+            rv.abort();
+            throw e;
+        }
+        return rv;
+    }
+
+    //! Adds the locations of this class loader to a compiler classpath
+    private void addCompilerLocations(QoreCompilerClasspath classpath) throws IOException {
         QoreClasspathGuard g = guard;
         java.util.List<File> locations = getCompilerLocations();
         if (g == null) {
-            return locations;
+            for (File location : locations) {
+                classpath.addLocation(location);
+            }
+            return;
         }
-        return g.compilerLocations(locations, programReachable0(getOriginPtr()), getOriginPtr(), super.getURLs());
+        g.addCompilerLocations(classpath, locations, programReachable0(getOriginPtr()), copy_budget, super.getURLs());
     }
 
-    //! Removes the private copies among locations that getCheckedCompilerLocations() returned; changes no other file
-    /** @throws RuntimeException the locations have a copy of this class loader, and the calling code cannot reach its
-        Program; nothing is changed
-    */
-    public final void releaseCompilerCopies(java.util.List<File> locations) {
-        QoreClasspathGuard g = guard;
-        if (g != null && g.holdsCopy(locations)) {
-            checkAccess();
-            g.releaseCopies(locations);
-        }
-    }
-
-    //! Removes the compiler copies of this class loader, which then makes no new ones
-    private void releaseAllCompilerCopies() {
+    //! Ends the compiler copies of this class loader, which then makes no new ones
+    private void endCompilerCopies() {
         QoreClasspathGuard g = guard;
         if (g != null) {
-            g.releaseAllCopies();
+            g.closeCopies();
         }
     }
 
@@ -1767,7 +1781,7 @@ public class QoreURLClassLoader extends URLClassLoader {
             try {
                 super.close();
             } finally {
-                releaseAllCompilerCopies();
+                endCompilerCopies();
             }
         }
     }
@@ -1880,7 +1894,18 @@ public class QoreURLClassLoader extends URLClassLoader {
         that require a valid Qore Program.
     */
     void clearProgramPtrIntern() {
-        releaseAllCompilerCopies();
+        // the class loader that owns the Program's holder ends the copies of the Program, also those of the class
+        // loaders derived from it; a derived class loader ends only its own
+        QoreCompilerClasspath.Budget program_budget = null;
+        synchronized (ptr_lock) {
+            if (!shared_ptr) {
+                program_budget = copy_budget;
+            }
+        }
+        endCompilerCopies();
+        if (program_budget != null) {
+            program_budget.closeAll();
+        }
         setPtrIntern(0, true);
         sharedDynamicClassLoaders.entrySet().removeIf(entry -> entry.getValue() == this);
     }
@@ -1925,10 +1950,15 @@ public class QoreURLClassLoader extends URLClassLoader {
             if (shared_ptr) {
                 pgm_ptr = new AtomicLong(ptr);
                 pgm_cleared = new AtomicBoolean(cleared);
+                copy_budget = new QoreCompilerClasspath.Budget();
                 shared_ptr = false;
             } else {
                 pgm_ptr.set(ptr);
                 pgm_cleared.set(cleared);
+                // a new Program for this class loader starts with a budget of its own
+                if (ptr != 0L && copy_budget.isClosed()) {
+                    copy_budget = new QoreCompilerClasspath.Budget();
+                }
             }
         }
     }

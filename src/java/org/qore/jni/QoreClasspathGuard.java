@@ -3,20 +3,15 @@ package org.qore.jni;
 
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
-import java.nio.file.LinkOption;
 import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -46,38 +41,15 @@ import java.util.concurrent.ConcurrentHashMap;
     @since jni 3.0
 */
 final class QoreClasspathGuard {
-    //! the most files in the outstanding compiler copies of a Program
-    static final int MAX_COMPILER_FILES = 100000;
-    //! the most bytes in the outstanding compiler copies of a Program
-    static final long MAX_COMPILER_BYTES = 1L << 30;
-    //! the most directory entries visited for the outstanding compiler copies of a Program
-    static final int MAX_COMPILER_ENTRIES = 200000;
-    //! the most outstanding private copy directories of a Program
-    static final int MAX_OUTSTANDING_COPIES = 32;
-
-    //! the kinds of resources that a copy is charged for, and the index of its Program in the record of a copy
-    private static final int CHARGE_FILES = 0;
-    private static final int CHARGE_BYTES = 1;
-    private static final int CHARGE_ENTRIES = 2;
-    private static final int CHARGE_COPIES = 3;
-    private static final int CHARGE_PROGRAM = 4;
-    private static final int CHARGE_SIZE = 5;
-    //! the names of the kinds of resources, for errors
-    private static final String[] CHARGE_NAMES = {"files", "bytes", "directory entries", "copies"};
-    //! what the outstanding copies of each Program use; guarded by itself
-    private static final HashMap<Long, long[]> OUTSTANDING = new HashMap<>();
-
     //! the deepest directory level that is copied for a compiler
     private static final int MAX_COMPILER_DEPTH = 256;
-    //! a system property that can lower MAX_COMPILER_ENTRIES
-    private static final String MAX_ENTRIES_PROP = "qore.jni.compiler.maxEntries";
 
     //! the policies of each path that restricted code added, as the class loader's URLs name it
     private final ConcurrentHashMap<String, QoreSandbox.ClasspathPolicy[]> roots = new ConcurrentHashMap<>();
     //! the roots that are directories which the class loader reads files below
     private final Set<String> directories = ConcurrentHashMap.newKeySet();
-    //! the private directories of the compiler copies that have not been released, with what each one has used
-    private final ConcurrentHashMap<Path, long[]> copies = new ConcurrentHashMap<>();
+    //! the compiler copies of this class loader that have not ended
+    private final Set<QoreCompilerClasspath.Copy> copies = ConcurrentHashMap.newKeySet();
     //! true once the class loader has been closed: no new copy is made
     private volatile boolean closed;
     //! incremented when the roots change, to invalidate the trusted roots
@@ -132,8 +104,9 @@ final class QoreClasspathGuard {
     }
 
     //! Returns true if a URL that the class loader found may be used
-    /** Every policy of the entries that contain the file applies, up to the nearest entry of trusted code.  A name with
-        a parent directory element is used only if it names the same file as its URL.
+    /** Every policy of the entries that contain the file applies, up to the nearest entry of trusted code
+        (enclosingPolicies(), the rule that compiler copies use as well).  A name with a parent directory element is
+        used only if it names the same file as its URL.
 
         @param url the URL of a class or resource
         @param name the name that was looked up
@@ -160,50 +133,37 @@ final class QoreClasspathGuard {
         } catch (URISyntaxException | IllegalArgumentException e) {
             return false;
         }
-        Set<String> trusted_roots = trustedRoots(loaderUrls);
-        boolean parent_elements = !jar && hasParentElement(name);
-        ArrayList<QoreSandbox.ClasspathPolicy[]> applied = null;
-        File base = null;
-        // a jar is an entry itself
-        for (File f = file; f != null; f = jar ? null : f.getParentFile()) {
-            String path = f.getPath();
-            QoreSandbox.ClasspathPolicy[] policies = roots.get(path);
-            if (policies != null) {
-                if (applied == null) {
-                    applied = new ArrayList<>(2);
-                }
-                applied.add(policies);
-                if (parent_elements && base == null && isBaseOf(f, name, file)) {
-                    base = f;
-                }
-                continue;
-            }
-            if (trusted_roots.contains(path)) {
-                if (applied == null) {
-                    return true;
-                }
-                break;
-            }
-        }
+        ArrayList<QoreSandbox.ClasspathPolicy[]> applied = enclosingPolicies(file, jar, trustedRoots(loaderUrls));
         // in no known entry: it cannot be attributed to any code
         if (applied == null) {
             return false;
         }
+        if (applied.isEmpty()) {
+            return true;
+        }
         Path real;
         try {
             real = file.toPath().toRealPath();
-            if (parent_elements && (base == null || !new File(base, name).toPath().toRealPath().equals(real))) {
-                return false;
+            if (!jar && hasParentElement(name)) {
+                File base = findBase(file, name);
+                if (base == null || !new File(base, name).toPath().toRealPath().equals(real)) {
+                    return false;
+                }
             }
         } catch (IOException | InvalidPathException | SecurityException e) {
             return false;
         }
-        for (QoreSandbox.ClasspathPolicy[] policies : applied) {
-            if (!checkReal(real, policies)) {
-                return false;
+        return checkAll(real, applied);
+    }
+
+    //! Returns the nearest entry of restricted code below which \a name is the normalized path \a file, or null
+    private File findBase(File file, String name) {
+        for (File f = file; f != null; f = f.getParentFile()) {
+            if (roots.containsKey(f.getPath()) && isBaseOf(f, name, file)) {
+                return f;
             }
         }
-        return true;
+        return null;
     }
 
     //! Returns true if a resource name has a parent directory element
@@ -286,7 +246,9 @@ final class QoreClasspathGuard {
     }
 
     //! Returns the policies of the entries that contain a file, up to the nearest entry of trusted code
-    /** @return the policies; an empty list if the nearest entry is one of trusted code; null if no entry contains it
+    /** The one rule for lookups and compiler copies; a jar is an entry itself.
+
+        @return the policies; an empty list if the nearest entry is one of trusted code; null if no entry contains it
     */
     private ArrayList<QoreSandbox.ClasspathPolicy[]> enclosingPolicies(File file, boolean jar,
             Set<String> trusted_roots) {
@@ -316,28 +278,25 @@ final class QoreClasspathGuard {
         return true;
     }
 
-    //! Returns the locations to give a compiler for the locations of the class loader
+    //! Adds the locations of the class loader to a compiler classpath
     /** An entry of trusted code is used as it is.  An entry of restricted code is used only if \a reachable, and if
         every policy that a lookup of it would apply allows it: a jar as it is, and for a directory a copy of the class
         files and Kotlin module files below it that those policies allow, with no other file, so that the compiler
-        cannot read a file that a policy denies, and does not see files that make it load code.  The copies are in a new
-        private directory, which releaseCopies() removes.  What they use is charged to the Program of the class loader
-        until they are released, so that the limits hold for a compilation across a chain of class loaders and for
-        copies that are kept; nothing is left if a copy fails.
+        cannot read a file that a policy denies, and does not see files that make it load code.  The copies of this
+        class loader are in one private directory, which \a classpath owns; nothing is left if it fails.
 
+        @param classpath the compiler classpath
         @param locations the locations, as the class loader has them
         @param reachable true if the calling code can reach the Program of the class loader
-        @param program the Program of the class loader, which the copies are charged to
+        @param budget what the copies of the Program use
         @param loaderUrls the URLs of the class loader's classpath
 
-        @throw IOException a copy cannot be made, is over a limit, or the class loader has been closed
+        @throw IOException a copy cannot be made, is over a limit, or has been ended
     */
-    List<File> compilerLocations(List<File> locations, boolean reachable, long program, URL[] loaderUrls)
-            throws IOException {
-        ArrayList<File> rv = new ArrayList<>(locations.size());
+    void addCompilerLocations(QoreCompilerClasspath classpath, List<File> locations, boolean reachable,
+            QoreCompilerClasspath.Budget budget, URL[] loaderUrls) throws IOException {
         Set<String> trusted_roots = trustedRoots(loaderUrls);
-        Path dir = null;
-        long[] charged = null;
+        QoreCompilerClasspath.Copy copy = null;
         int n = 0;
         try {
             for (File location : locations) {
@@ -347,7 +306,7 @@ final class QoreClasspathGuard {
                     continue;
                 }
                 if (applied.isEmpty()) {
-                    rv.add(location);
+                    classpath.addLocation(location);
                     continue;
                 }
                 if (!reachable) {
@@ -363,154 +322,40 @@ final class QoreClasspathGuard {
                     continue;
                 }
                 if (!Files.isDirectory(real)) {
-                    rv.add(location);
+                    classpath.addLocation(location);
                     continue;
                 }
-                if (dir == null) {
-                    charged = new long[CHARGE_SIZE];
-                    charged[CHARGE_PROGRAM] = program;
-                    charge(charged, CHARGE_COPIES, 1);
-                    // only its owner can use it
-                    dir = Files.createTempDirectory("qore-classpath-");
-                    copies.put(dir, charged);
+                if (copy == null) {
+                    copy = budget.open(this);
+                    copies.add(copy);
+                    classpath.addCopy(copy);
                     // after it is recorded: a close either sees it or is seen here
                     if (closed) {
                         throw new IOException("the class loader has been closed");
                     }
                 }
-                Path copy = Files.createDirectory(dir.resolve("cp" + n++));
-                copyAllowed(real, copy, location, "", trusted_roots, charged, new HashSet<>(), 0);
-                rv.add(copy.toFile());
+                Path dest = copy.newLocation("cp" + n++);
+                copyAllowed(copy, real, dest, location, "", trusted_roots, new HashSet<>(), 0);
+                classpath.addLocation(dest.toFile());
             }
         } catch (Throwable e) {
-            if (dir != null) {
-                releaseDirectory(dir);
-            } else if (charged != null) {
-                refund(charged);
+            if (copy != null) {
+                copy.abort();
             }
             throw e;
         }
-        return rv;
     }
 
-    //! Returns true if one of the locations is a copy that this guard holds
-    boolean holdsCopy(List<File> locations) {
-        for (File location : locations) {
-            File parent = location.getParentFile();
-            if (parent != null && copies.containsKey(parent.toPath())) {
-                return true;
-            }
-        }
-        return false;
+    //! Forgets a copy that has ended
+    void forgetCopy(QoreCompilerClasspath.Copy copy) {
+        copies.remove(copy);
     }
 
-    //! Removes the private directories of the given locations; a location that is not a copy is not changed
-    void releaseCopies(List<File> locations) {
-        for (File location : locations) {
-            File parent = location.getParentFile();
-            if (parent != null) {
-                releaseDirectory(parent.toPath());
-            }
-        }
-    }
-
-    //! Removes every copy, and refuses new ones: the class loader is closed
-    void releaseAllCopies() {
+    //! Ends every copy of this class loader, and refuses new ones: the class loader is closed
+    void closeCopies() {
         closed = true;
-        for (Path dir : copies.keySet()) {
-            releaseDirectory(dir);
-        }
-    }
-
-    //! Removes a private directory that this guard holds, and returns what it used to its Program
-    private void releaseDirectory(Path dir) {
-        long[] charged = copies.remove(dir);
-        if (charged != null) {
-            deleteTree(dir);
-            refund(charged);
-        }
-    }
-
-    //! Charges \a n of a resource to the Program of a copy; raises an error if that is over the limit of the Program
-    private static void charge(long[] charged, int kind, long n) throws IOException {
-        synchronized (OUTSTANDING) {
-            long[] used = OUTSTANDING.computeIfAbsent(charged[CHARGE_PROGRAM], k -> new long[CHARGE_PROGRAM]);
-            if (used[kind] + n > chargeLimit(kind)) {
-                if (isUnused(used)) {
-                    OUTSTANDING.remove(charged[CHARGE_PROGRAM]);
-                }
-                throw new IOException("the classpath is over the limit of " + CHARGE_NAMES[kind]
-                    + " that compilers of a Program can use at the same time");
-            }
-            used[kind] += n;
-        }
-        charged[kind] += n;
-    }
-
-    //! Returns what a copy used to its Program
-    private static void refund(long[] charged) {
-        synchronized (OUTSTANDING) {
-            long[] used = OUTSTANDING.get(charged[CHARGE_PROGRAM]);
-            if (used == null) {
-                return;
-            }
-            for (int i = 0; i < CHARGE_PROGRAM; ++i) {
-                used[i] -= charged[i];
-                charged[i] = 0;
-            }
-            if (isUnused(used)) {
-                OUTSTANDING.remove(charged[CHARGE_PROGRAM]);
-            }
-        }
-    }
-
-    //! Returns true if a Program has nothing outstanding
-    private static boolean isUnused(long[] used) {
-        for (long v : used) {
-            if (v != 0) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    //! Returns the limit of a kind of resource for the outstanding copies of a Program
-    private static long chargeLimit(int kind) {
-        switch (kind) {
-            case CHARGE_FILES:
-                return MAX_COMPILER_FILES;
-            case CHARGE_BYTES:
-                return MAX_COMPILER_BYTES;
-            case CHARGE_ENTRIES:
-                return maxCompilerEntries();
-            default:
-                return MAX_OUTSTANDING_COPIES;
-        }
-    }
-
-    //! Returns the most directory entries to visit for a compiler; a system property can only lower it
-    private static long maxCompilerEntries() {
-        Integer limit = Integer.getInteger(MAX_ENTRIES_PROP);
-        return limit != null && limit > 0 && limit < MAX_COMPILER_ENTRIES ? limit : MAX_COMPILER_ENTRIES;
-    }
-
-    //! Deletes what it can of a directory tree, without following links; never throws
-    private static void deleteTree(Path path) {
-        try {
-            if (Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)) {
-                try (DirectoryStream<Path> entries = Files.newDirectoryStream(path)) {
-                    for (Path entry : entries) {
-                        deleteTree(entry);
-                    }
-                }
-            }
-        } catch (IOException | RuntimeException e) {
-            // the directory is still tried below
-        }
-        try {
-            Files.deleteIfExists(path);
-        } catch (IOException | RuntimeException e) {
-            // nothing more can be done for this path
+        for (QoreCompilerClasspath.Copy copy : copies) {
+            copy.release();
         }
     }
 
@@ -519,24 +364,24 @@ final class QoreClasspathGuard {
         than the number of files.  Each entry is judged as a lookup of it is: by every policy of the entries of the
         classpath that contain it.
 
+        @param copy the copy, which fails its next charge once it has been released
         @param src the real path of the directory
         @param dest the directory of the copy
         @param logical the directory as the class loader's URLs name it
         @param relative the path of the directory below the classpath entry, with a trailing slash
         @param trusted_roots the paths that entries of trusted code reach
-        @param charged what the copy has used
         @param active the real paths of the directories being copied, so that a link cycle ends
 
-        @throw IOException a limit has been exceeded, or a file cannot be copied
+        @throw IOException a limit has been exceeded, the copy was released, or a file cannot be copied
     */
-    private void copyAllowed(Path src, Path dest, File logical, String relative, Set<String> trusted_roots,
-            long[] charged, Set<Path> active, int depth) throws IOException {
+    private void copyAllowed(QoreCompilerClasspath.Copy copy, Path src, Path dest, File logical, String relative,
+            Set<String> trusted_roots, Set<Path> active, int depth) throws IOException {
         if (depth > MAX_COMPILER_DEPTH || !active.add(src)) {
             return;
         }
         try (DirectoryStream<Path> entries = Files.newDirectoryStream(src)) {
             for (Path entry : entries) {
-                charge(charged, CHARGE_ENTRIES, 1);
+                copy.charge(QoreCompilerClasspath.ENTRIES, 1);
                 String name = entry.getFileName().toString();
                 Path real;
                 try {
@@ -551,10 +396,10 @@ final class QoreClasspathGuard {
                 }
                 if (Files.isDirectory(real)) {
                     Path sub = dest.resolve(name);
-                    Files.createDirectories(sub);
-                    copyAllowed(real, sub, child, relative + name + "/", trusted_roots, charged, active, depth + 1);
+                    QoreCompilerClasspath.Copy.createBelow(sub);
+                    copyAllowed(copy, real, sub, child, relative + name + "/", trusted_roots, active, depth + 1);
                 } else if (Files.isRegularFile(real) && isCompilerFile(relative, name)) {
-                    copyFile(real, dest.resolve(name), charged);
+                    copy.copyFile(real, dest.resolve(name));
                 }
             }
         } finally {
@@ -568,20 +413,5 @@ final class QoreClasspathGuard {
             return name.endsWith(".kotlin_module");
         }
         return name.endsWith(".class") && !relative.startsWith("META-INF/");
-    }
-
-    //! Copies a checked file, within the limits, without following a link that replaced it
-    private static void copyFile(Path real, Path target, long[] charged) throws IOException {
-        charge(charged, CHARGE_FILES, 1);
-        byte[] buf = new byte[8192];
-        try (InputStream in = Files.newInputStream(real, LinkOption.NOFOLLOW_LINKS);
-                OutputStream out = Files.newOutputStream(target, StandardOpenOption.CREATE_NEW,
-                    StandardOpenOption.WRITE)) {
-            int n;
-            while ((n = in.read(buf)) > 0) {
-                charge(charged, CHARGE_BYTES, n);
-                out.write(buf, 0, n);
-            }
-        }
     }
 }

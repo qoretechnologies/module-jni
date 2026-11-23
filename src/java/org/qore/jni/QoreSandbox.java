@@ -707,7 +707,9 @@ public final class QoreSandbox {
     }
 
     //! Reads the file name encoding once, as the file name encoding is fixed at startup
-    /** The class is initialized when the module is initialized (a static method ID is looked up for it)
+    /** The class is initialized when the module is initialized (a static method ID is looked up for it).  In a JVM that
+        was started first, with %Qore as a library, Java code that runs before the module is initialized can change the
+        property that is read here; such code is part of the trusted host.
     */
     private static Charset readNameCharset() {
         String name = System.getProperty("sun.jnu.encoding");

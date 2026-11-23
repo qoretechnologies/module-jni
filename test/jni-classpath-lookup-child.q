@@ -26,7 +26,26 @@ string sub lookup(string op, string name) {
 string sub locations_hold(string rel) {
     return ClasspathLookupProbe::locationsHold(get_class_loader(), \"\", rel);
 }
+string sub end_copy(string dir, string trigger, int at, int limit) {
+    return ClasspathLookupProbe::endCopyDuringMake(get_class_loader(), dir, trigger, at, limit);
+}
+string sub hold_derived(string dir) {
+    return ClasspathLookupProbe::holdDerived(get_class_loader(), dir);
+}
+int sub program_ptr() {
+    return ClasspathLookupProbe::programPtr(get_class_loader());
+}
+int sub hold_copies(int max) {
+    return ClasspathLookupProbe::holdCopies(get_class_loader(), max);
+}
 ";
+
+#! the directory entries of the \"ending\" directory of the test tree
+const EndingEntries = 5;
+#! the compiler copies that a Program can hold at once
+const MaxOutstandingCopies = 32;
+#! how many new Programs are tried for one at the address of a Program that has ended
+const AddressTries = 64;
 
 const EntriesProp = "qore.jni.compiler.maxEntries";
 const EncodingProp = "sun.jnu.encoding";
@@ -122,8 +141,49 @@ sub budget_case(string root) {
     result("budget", 0, ClasspathLookupProbe::copyDirectories());
 }
 
+#! a copy that is ended at each step of making it leaves nothing, and returns its charges once
+sub end_copy_case(string root, string trigger, string label) {
+    # the derived class loader and its parent each have the directory on their classpath
+    int entries = EndingEntries * 2;
+    for (int at = 1; at <= entries; ++at) {
+        Program p = new_program(get_policy(root, ("ending",)), root + "/ending");
+        result(sprintf("%s at %d", label, at), "clean", p.callFunction("end_copy", root + "/ending", trigger, at,
+            entries));
+    }
+}
+
+#! the end of a Program ends a copy of a derived class loader, and a new Program has a full budget
+sub program_end_case(string root) {
+    Program p = new_program(get_policy(root, ("ending",)), root + "/ending");
+    string copy = p.callFunction("hold_derived", root + "/ending");
+    int old = p.callFunction("program_ptr");
+    result("program-end held", True, is_dir(copy));
+    delete p;
+    result("program-end removed", False, is_dir(copy));
+    *Program q;
+    bool same = False;
+    list<Program> others = ();
+    for (int i = 0; i < AddressTries; ++i) {
+        q = new_program(get_policy(root, ("ending",)), root + "/ending");
+        if (q.callFunction("program_ptr") == old) {
+            same = True;
+            break;
+        }
+        push others, q;
+    }
+    printf("info: a new Program at the same address: %y\n", same);
+    result("program-end budget", MaxOutstandingCopies, q.callFunction("hold_copies", MaxOutstandingCopies * 2));
+}
+
 string case_name = ARGV[0];
 string root = ARGV[1];
+# these cases do not depend on the encoding of file names
+switch (case_name) {
+    case "budget": budget_case(root); exit(0);
+    case "end-close": end_copy_case(root, "close", case_name); exit(0);
+    case "end-path": end_copy_case(root, "release", case_name); exit(0);
+    case "program-end": program_end_case(root); exit(0);
+}
 if (ClasspathLookupProbe::fileNameEncoding() != "UTF-8") {
     printf("result: skipped: the file names of the JVM are in %s\n", ClasspathLookupProbe::fileNameEncoding());
     exit(0);
@@ -132,6 +192,5 @@ switch (case_name) {
     case "lossy": lossy_case(root); break;
     case "nonascii": non_ascii_case(root); break;
     case "charset": charset_case(root); break;
-    case "budget": budget_case(root); break;
     default: throw "TEST-ERROR", sprintf("unknown case %y", case_name);
 }

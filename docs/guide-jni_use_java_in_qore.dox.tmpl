@@ -334,7 +334,10 @@ class Outer {
     searched.  A policy that is bound to an entry is read for each lookup, so a change to it applies to the next lookup;
     a class that has already been loaded stays loaded.  A class loader to which no restricted code has added an entry
     makes no check.  A path is checked before it is opened, so a file that is replaced between the check and its use is
-    not covered.  A real path that the JVM's file name encoding cannot represent exactly is treated as denied.
+    not covered.  A real path that the JVM's file name encoding cannot represent exactly is treated as denied.  The
+    encoding is read once when the module is initialized, as the file name encoding is fixed at startup; in a JVM that
+    was started first, with %Qore as a library, Java code that runs before the module is initialized is part of the
+    trusted host and must not change it.
 
     <b>Operator rules:</b>
     - whoever adds a classpath entry owns its policy.  An entry that restricted code adds carries that code's policy and
@@ -361,8 +364,8 @@ class Outer {
     classpath directory that restricted code added, and its scripting plugin, which
     discovers script definitions on the classpath and runs their code, is turned off.  The copies that a Program has at
     one time are limited in number, files, bytes and directory entries visited, across all of its class loaders; a
-    compile that would go over a limit fails, and the copies are removed when the compile ends and when their class
-    loader is closed.  The Kotlin compiler also uses
+    compile that would go over a limit fails, and the copies are removed when the compile ends, when their class
+    loader is closed, and when the Program ends.  The Kotlin compiler also uses
     the host's %Qore and Kotlin jars and the entries that trusted code added.  A Kotlin script (\c kotlin_eval()) of such
     a caller is refused while a directory that restricted code added, directly or through a jar's manifest, is on its
     classpath, as the script compiler reads the files below it itself; use jars for that classpath.  The refusal

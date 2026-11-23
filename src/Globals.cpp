@@ -3328,6 +3328,9 @@ static GlobalReference<jclass> getPrimitiveClass(Env& env, const char* wrapperNa
 #include "JavaClassQoreSandbox_Policy.inc"
 #include "JavaClassQoreSandbox_ClasspathPolicy.inc"
 #include "JavaClassQoreClasspathGuard.inc"
+#include "JavaClassQoreCompilerClasspath.inc"
+#include "JavaClassQoreCompilerClasspath_Budget.inc"
+#include "JavaClassQoreCompilerClasspath_Copy.inc"
 #include "JavaClassJavaCollectionTypes.inc"
 #include "JavaClassQoreRelativeTime.inc"
 #include "JavaClassJdbcColumnarBatch.inc"
@@ -3418,6 +3421,12 @@ static ucmap_t ucmap = {
         java_org_qore_jni_QoreSandbox_ClasspathPolicy_class}},
     {"org.qore.jni.QoreClasspathGuard", {java_org_qore_jni_QoreClasspathGuard_class_len,
         java_org_qore_jni_QoreClasspathGuard_class}},
+    {"org.qore.jni.QoreCompilerClasspath", {java_org_qore_jni_QoreCompilerClasspath_class_len,
+        java_org_qore_jni_QoreCompilerClasspath_class}},
+    {"org.qore.jni.QoreCompilerClasspath$Budget", {java_org_qore_jni_QoreCompilerClasspath_Budget_class_len,
+        java_org_qore_jni_QoreCompilerClasspath_Budget_class}},
+    {"org.qore.jni.QoreCompilerClasspath$Copy", {java_org_qore_jni_QoreCompilerClasspath_Copy_class_len,
+        java_org_qore_jni_QoreCompilerClasspath_Copy_class}},
     {"org.qore.jni.QoreURLClassLoader", {java_org_qore_jni_QoreURLClassLoader_class_len, java_org_qore_jni_QoreURLClassLoader_class}},
     {"org.qore.jni.QoreURLClassLoader$1", {java_org_qore_jni_QoreURLClassLoader_1_class_len, java_org_qore_jni_QoreURLClassLoader_1_class}},
     {"org.qore.jni.QoreURLClassLoader$2", {java_org_qore_jni_QoreURLClassLoader_2_class_len, java_org_qore_jni_QoreURLClassLoader_2_class}},
@@ -4279,6 +4288,14 @@ void Globals::defineQoreURLClassLoader(Env& env) {
         "(I)Ljava/lang/String;");
     methodResolvedClasspathBindPolicy = env.getMethod(classQoreURLClassLoaderResolvedClasspath, "bindPolicy",
         "(J)V");
+
+    // the compiler classpath: every class loader has a reference to the budget of its Program's copies
+    findDefineClass(env, "org.qore.jni.QoreCompilerClasspath", nullptr, java_org_qore_jni_QoreCompilerClasspath_class,
+        java_org_qore_jni_QoreCompilerClasspath_class_len);
+    findDefineClass(env, "org.qore.jni.QoreCompilerClasspath$Budget", nullptr,
+        java_org_qore_jni_QoreCompilerClasspath_Budget_class, java_org_qore_jni_QoreCompilerClasspath_Budget_class_len);
+    findDefineClass(env, "org.qore.jni.QoreCompilerClasspath$Copy", nullptr,
+        java_org_qore_jni_QoreCompilerClasspath_Copy_class, java_org_qore_jni_QoreCompilerClasspath_Copy_class_len);
 
     // create our class loader to load module classes
     classQoreURLClassLoader = findDefineClass(env, "org.qore.jni.QoreURLClassLoader", nullptr,

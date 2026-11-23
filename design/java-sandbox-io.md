@@ -20,8 +20,8 @@ User documentation: `docs/guide-jni_use_java_in_qore.dox.tmpl`, section `jni_san
 
 The classes are embedded in the module like the other `org.qore.jni` classes (`generate_java()` in
 `CMakeLists.txt`) and listed in the module's class map, so user class loaders define the same classes.  No enum or
-anonymous class is used, so the class files are `QoreSandbox`, `QoreSandbox$Policy`, `QoreSandbox$ClasspathPolicy` and
-`QoreClasspathGuard`.
+anonymous class is used, so the class files are `QoreSandbox`, `QoreSandbox$Policy`, `QoreSandbox$ClasspathPolicy`,
+`QoreClasspathGuard`, `QoreCompilerClasspath`, `QoreCompilerClasspath$Budget` and `QoreCompilerClasspath$Copy`.
 
 ## Which policy a check applies
 
@@ -108,18 +108,22 @@ are `static_assert`ed to match) and calls `QoreSandboxManager::checkFilesystemAc
 - **Kotlin.** The compiler reads directories itself, so a restricted compile gets a private copy of the allowed class
   and `.kotlin_module` files of each guarded directory (`QoreClasspathGuard.compilerLocations()`), judged per entry by
   the same enclosing policies as a lookup, in a private directory that the class loader makes, for code that can reach
-  its Program.  What the outstanding copies use (copy directories, files, bytes, directory entries visited) is charged
-  to the Program of the class loader until they are released, so the limits hold across a chain of class loaders and
-  for copies that are kept, and a copy over a limit fails closed (the system property `qore.jni.compiler.maxEntries`
-  can only lower the entries limit).  The compiler releases its copies on every path; closing the class loader or
-  clearing its Program pointer releases what remains and refuses new ones, and only code that can reach the Program
-  releases them.  The default scripting plugin
+  its Program.  A compilation opens one `QoreCompilerClasspath` for its class loader chain and closes it on every path;
+  there is no release by path.  Each `Copy` has an explicit state (making, ready, ending, done) and one owner: a release
+  while it is being made only marks it, its next charge fails, and the making thread removes it; only the transition to
+  done removes the directory and returns its charges, so that happens once.  Directories are created only one level
+  below a root that the copy owns.  What the live copies use (copies, files, bytes, directory entries visited) is
+  charged to a `Budget` object that the class loader of a Program shares with the class loaders derived from it, so the
+  limits hold across a chain, no Program pointer is a key, and clearing the Program ends the copies of all of them.
+  Closing a class loader ends its own copies.  A copy over a limit fails closed (the system property
+  `qore.jni.compiler.maxEntries` can only lower the entries limit).  The default scripting plugin
   is disabled for a restricted compile, as it discovers script definitions on the classpath and runs their code.  The
   JSR-223 script engine takes its classpath from the class loaders and cannot be filtered, so a script of a restricted
   caller is refused while a guarded directory, added directly or named by a manifest, is on its classpath.  A jar is
   used whole once its policy has allowed it, and a directory with no bound policy does not refuse a script.
 - **File name encoding.** The bytes that a policy judges use the encoding that is read once when the class is
-  initialized, as the file name encoding is fixed at startup.
+  initialized, as the file name encoding is fixed at startup.  In a JVM started first with Qore as a library, Java code
+  that runs before the module is initialized is part of the trusted host.
 - **Limit.** A check precedes the open, so a file replaced in between is not covered.
 
 ## Strings

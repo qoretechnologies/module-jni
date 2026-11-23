@@ -118,14 +118,164 @@ public class ClasspathLookupProbe {
             return (List<File>) QoreURLClassLoader.class.getMethod("getCheckedCompilerLocations", Path.class)
                 .invoke(loader, Path.of(dir));
         }
+        java.lang.reflect.Method open = findMethod("openCompilerClasspath");
+        if (open != null) {
+            Object handle = open.invoke(loader);
+            List<File> rv = new ArrayList<>((List<File>) handle.getClass().getMethod("getLocations").invoke(handle));
+            synchronized (handles) {
+                handles.put(rv, handle);
+            }
+            return rv;
+        }
         return (List<File>) QoreURLClassLoader.class.getMethod("getCheckedCompilerLocations").invoke(loader);
     }
 
-    //! Releases compiler locations, where the class loader has a release for them
+    //! the handles of the compiler classpaths that checkedLocations() opened, by the list that it returned
+    private static final java.util.IdentityHashMap<List<File>, Object> handles = new java.util.IdentityHashMap<>();
+
+    //! Returns a public method of the class loader with no arguments, or null
+    private static java.lang.reflect.Method findMethod(String name) {
+        try {
+            return QoreURLClassLoader.class.getMethod(name);
+        } catch (NoSuchMethodException e) {
+            return null;
+        }
+    }
+
+    //! Returns true if the class loader releases compiler copies by their paths
+    public static boolean hasReleaseByPath() {
+        try {
+            QoreURLClassLoader.class.getMethod("releaseCompilerCopies", List.class);
+            return true;
+        } catch (NoSuchMethodException e) {
+            return false;
+        }
+    }
+
+    //! Releases compiler locations with their handle, or where the class loader has a release by path, with that
     private static void releaseLocations(QoreURLClassLoader loader, List<File> locations) throws Exception {
-        if (!hasCallerPathCopy()) {
+        Object handle;
+        synchronized (handles) {
+            handle = handles.remove(locations);
+        }
+        if (handle != null) {
+            handle.getClass().getMethod("close").invoke(handle);
+        } else if (hasReleaseByPath()) {
             QoreURLClassLoader.class.getMethod("releaseCompilerCopies", List.class).invoke(loader, locations);
         }
+    }
+
+    //! The system properties with an action that runs at a given read of one property, on the thread that reads it
+    private static final class ReadHook extends java.util.Properties {
+        private final String key;
+        private final transient Runnable action;
+        private int countdown;
+
+        ReadHook(java.util.Properties defaults, String key, int at, Runnable action) {
+            super(defaults);
+            this.key = key;
+            this.countdown = at;
+            this.action = action;
+        }
+
+        @Override
+        public String getProperty(String name) {
+            if (name.equals(key) && countdown > 0 && --countdown == 0) {
+                action.run();
+            }
+            return super.getProperty(name);
+        }
+    }
+
+    //! Makes a compiler copy, ending it from the copying thread at a given step; returns "clean" or what is left
+    /** The limit of the entries visited is set to \a limit, the number of entries of \a dir, so that anything that a
+        copy that was ended leaves charged makes the next copy fail.
+
+        @param trigger "close" to close the class loader, "release" to release by path
+    */
+    public static String endCopyDuringMake(QoreURLClassLoader parent, String dir, String trigger, int at, int limit)
+            throws Exception {
+        final String prop = "qore.jni.compiler.maxEntries";
+        QoreURLClassLoader loader = QoreURLClassLoader.createDerived(parent);
+        loader.addPath(dir);
+        java.util.Properties saved = System.getProperties();
+        System.setProperty(prop, Integer.toString(limit));
+        List<File> got = null;
+        System.setProperties(new ReadHook(saved, prop, at, () -> {
+            try {
+                if (trigger.equals("close")) {
+                    loader.close();
+                } else if (hasReleaseByPath()) {
+                    try (java.nio.file.DirectoryStream<Path> entries = Files.newDirectoryStream(
+                            Path.of(System.getProperty("java.io.tmpdir")), "qore-classpath-*")) {
+                        for (Path entry : entries) {
+                            QoreURLClassLoader.class.getMethod("releaseCompilerCopies", List.class).invoke(loader,
+                                List.of(entry.resolve("cp0").toFile()));
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                throw new IllegalStateException(e);
+            }
+        }));
+        try {
+            got = checkedLocations(loader, null);
+        } catch (java.lang.reflect.InvocationTargetException e) {
+            // the copy was ended: it is not returned
+        } finally {
+            System.setProperties(saved);
+        }
+        String rv = "clean";
+        if (got != null) {
+            for (File location : got) {
+                if (!location.exists()) {
+                    rv = "a location that was returned does not exist";
+                }
+            }
+            releaseLocations(loader, got);
+        }
+        int left = copyDirectories();
+        if (left != 0) {
+            return "left " + left + " directories";
+        }
+        QoreURLClassLoader next = QoreURLClassLoader.createDerived(parent);
+        next.addPath(dir);
+        try {
+            releaseLocations(next, checkedLocations(next, null));
+        } catch (java.lang.reflect.InvocationTargetException e) {
+            return "the next copy is over a limit";
+        } finally {
+            System.clearProperty(prop);
+        }
+        return rv;
+    }
+
+    //! the locations that holdDerived() holds; they are never released, for a test of the end of their Program
+    private static final ArrayList<List<File>> kept = new ArrayList<>();
+
+    //! Holds a copy on a loader derived from \a parent, and returns the path of the copy
+    public static String holdDerived(QoreURLClassLoader parent, String dir) throws Exception {
+        QoreURLClassLoader loader = QoreURLClassLoader.createDerived(parent);
+        loader.addPath(dir);
+        List<File> locations = checkedLocations(loader, null);
+        kept.add(locations);
+        for (File location : locations) {
+            if (isCopy(location)) {
+                return location.getPath();
+            }
+        }
+        throw new IllegalStateException("no copy");
+    }
+
+    //! Returns true if a compiler location is a private copy
+    private static boolean isCopy(File location) {
+        File parent = location.getParentFile();
+        return parent != null && parent.getName().startsWith("qore-classpath-");
+    }
+
+    //! Returns the Program pointer of a class loader
+    public static long programPtr(QoreURLClassLoader loader) {
+        return loader.getPtr();
     }
 
     //! Returns "yes" if a compiler location of the class loader has the file \a rel, "no" if not, or the refusal
@@ -157,7 +307,7 @@ public class ClasspathLookupProbe {
         List<File> locations = checkedLocations(loader, null);
         ArrayList<File> copies = new ArrayList<>();
         for (File location : locations) {
-            if (!location.getPath().equals(original)) {
+            if (isCopy(location)) {
                 copies.add(location);
             }
         }
@@ -230,7 +380,7 @@ public class ClasspathLookupProbe {
         List<File> locations = checkedLocations(loader, null);
         ArrayList<File> copies = new ArrayList<>();
         for (File location : locations) {
-            if (!location.getPath().equals(dir)) {
+            if (isCopy(location)) {
                 copies.add(location);
             }
         }
@@ -253,14 +403,22 @@ public class ClasspathLookupProbe {
 
     //! Tries to release the held locations; returns "released" or the refusal
     public static String releaseHeld(QoreURLClassLoader loader) {
+        if (!hasReleaseByPath()) {
+            return "refused: a compiler classpath is released only with its handle";
+        }
         try {
-            releaseLocations(loader, heldLocations);
+            QoreURLClassLoader.class.getMethod("releaseCompilerCopies", List.class).invoke(loader, heldLocations);
             return "released";
         } catch (java.lang.reflect.InvocationTargetException e) {
             return "refused: " + e.getCause().getClass().getSimpleName();
         } catch (Exception e) {
             return "refused: " + e.getClass().getSimpleName();
         }
+    }
+
+    //! Releases the held locations as their owner
+    public static void closeHeld(QoreURLClassLoader loader) throws Exception {
+        releaseLocations(loader, heldLocations);
     }
 
     //! Returns true if every held location exists
