@@ -247,6 +247,8 @@ QoreForkHandlerRegistration* Jvm::fork_reg = nullptr;
 void Jvm::forkChild(void*) {
     // runs in the child of fork() before anything else runs in it; takes no lock and allocates nothing (see
     // QoreForkHandler.h)
+    // a thread of the parent can have held the lock; the threads of the child use it
+    qore_fork_child_thread_lock(&JniExternalProgramData::saveObjectCallbackLock());
     if (vm) {
         forked_child = true;
         generated_bindings_fork_child();
@@ -255,6 +257,8 @@ void Jvm::forkChild(void*) {
 
 int Jvm::registerForkHandler() {
     assert(!fork_reg);
+    // created here, as the fork handler cannot allocate memory
+    (void)JniExternalProgramData::saveObjectCallbackLock();
     fork_reg = qore_register_fork_handler(QFR_MODULE_LEAF, "jni_vm", nullptr, nullptr, forkChild, nullptr);
     return fork_reg ? 0 : -1;
 }

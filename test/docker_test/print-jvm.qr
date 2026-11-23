@@ -1,0 +1,26 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+#
+# Prints the identity of the JVM that the jni module really runs in, for check-jdk.sh: the JVM's own properties and
+# the libjvm that this process has mapped.
+
+%prepend-module-path "${SCRIPT_DIR}/../../build"
+%requires jni
+%module-cmd(jni) import java.lang.System
+
+string version = Jni::java::lang::System::getProperty("java.version");
+string home = Jni::java::lang::System::getProperty("java.home");
+printf("jvm-version=%s\njvm-home=%s\n", version, home);
+
+FileLineIterator maps("/proc/self/maps");
+hash<string, bool> libs;
+while (maps.next()) {
+    *string lib = (maps.getValue() =~ x/(\/\S*libjvm\.so)/)[0];
+    if (lib) {
+        libs{lib} = True;
+    }
+}
+foreach string lib in (keys libs) {
+    printf("jvm-lib=%s\n", lib);
+}

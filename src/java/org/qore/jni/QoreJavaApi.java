@@ -309,9 +309,10 @@ public class QoreJavaApi {
     }
 
     //! Returns the Program pointers of the class loaders that defined the classes of the calling thread's stack
-    /** For each frame, the nearest org.qore.jni.QoreURLClassLoader among the class loader that defined the frame's class
-        and its parents; frames of the JDK and of other class loaders are left out.  The module refuses a call into a
-        Program from Java code of a sandboxed Program other than that Program (qore#7023)
+    /** For each frame, the Program of the class loader that defined the frame's class (see getLoaderProgramPtr());
+        frames of the JDK and of the JVM's classpath are left out.  The module refuses a call into a Program from Java
+        code of a sandboxed Program other than that Program, and from code of an unknown class loader (qore#7023,
+        qore#7131)
 
         @return the distinct Program pointers, in stack order
     */
@@ -324,36 +325,58 @@ public class QoreJavaApi {
             .toArray());
     }
 
-    //! the class loaders of the JDK and of the JVM's classpath, whose classes are trusted
+    //! the class loader of the JDK, whose classes are trusted, like those of the system class loader, which is read
+    //! when it is needed: this class is initialized while the JVM creates it if it is a QoreURLClassLoader
     private static final ClassLoader PLATFORM_LOADER = ClassLoader.getPlatformClassLoader();
-    private static final ClassLoader SYSTEM_LOADER = ClassLoader.getSystemClassLoader();
 
     //! Returns the Program that the Java code of the classes of the class loader \a first is attributed to (qore#7023)
-    /** @return 0 for a class loader of the JDK or of the JVM's classpath (trusted); the Program pointer of the nearest
-        class loader of a Program among \a first and its parents (the first pointer of a class loader whose pointer has
-        been cleared, ex: one whose Program has been deleted); -1 for any other class loader (unknown: code that a
-        sandbox governs can create class loaders), which counts as a sandboxed Program
+    /** @return 0 for a class loader of the JDK or of the JVM's classpath (trusted); for a QoreURLClassLoader, its
+        Program pointer (the first pointer of a class loader whose pointer has been cleared, ex: one whose Program has
+        been deleted), or that of its nearest QoreURLClassLoader parent if it was made to have none with
+        QoreURLClassLoader.createWithoutProgram(); -1 for any other class loader (unknown), which counts as a sandboxed
+        Program
 
-        Only objects of this module's QoreURLClassLoader class count: a class of another class loader with the same
-        name (ex: one that Java code defined) is an unknown class loader
+        A class loader that is not a QoreURLClassLoader inherits no Program from its parents: any code can create one
+        with any parent (qore#7131).  Only objects of this module's QoreURLClassLoader class count: a class of another
+        class loader with the same name (ex: one that Java code defined) is an unknown class loader
     */
     private static long getLoaderProgramPtr(ClassLoader first) {
-        if (first == null || first == PLATFORM_LOADER || first == SYSTEM_LOADER) {
+        ClassLoader system = ClassLoader.getSystemClassLoader();
+        if (first == null || first == PLATFORM_LOADER || isSystemLoaderOrParent(first, system)) {
             return 0L;
         }
         for (ClassLoader cl = first; cl != null; cl = cl.getParent()) {
-            if (cl instanceof QoreURLClassLoader) {
-                long ptr = ((QoreURLClassLoader)cl).getOriginPtr();
-                // a class loader that never had a Program is attributed to its parent's
-                if (ptr != 0L) {
-                    return ptr;
-                }
+            // checked first: the system class loader can be a QoreURLClassLoader of a trusted Program, whose trust is
+            // not inherited by the class loaders below it
+            if (cl == PLATFORM_LOADER || cl == system) {
+                break;
             }
-            if (cl == PLATFORM_LOADER || cl == SYSTEM_LOADER) {
+            if (!(cl instanceof QoreURLClassLoader)) {
+                break;
+            }
+            QoreURLClassLoader qcl = (QoreURLClassLoader)cl;
+            long ptr = qcl.getOriginPtr();
+            if (ptr != 0L) {
+                return ptr;
+            }
+            // only a class loader made to have no Program is attributed to its parent's
+            if (!qcl.inheritsProgram()) {
                 break;
             }
         }
         return -1L;
+    }
+
+    //! Returns true if \a loader is the system class loader or one of its parents
+    /** If the system class loader is a QoreURLClassLoader, the JVM's classpath is loaded by its parent
+    */
+    private static boolean isSystemLoaderOrParent(ClassLoader loader, ClassLoader system) {
+        for (ClassLoader cl = system; cl != null; cl = cl.getParent()) {
+            if (cl == loader) {
+                return true;
+            }
+        }
+        return false;
     }
 
     //! Returns the current stack trace, not including the call to this method

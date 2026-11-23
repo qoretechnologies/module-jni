@@ -133,7 +133,7 @@ public class PublicPath {
             dirname(get_module_hash().jni.filename), classes.path, Package, cls));
         tmp.file.close();
         # the JVM launcher must not write its "Picked up ..." banner into the output
-        return trim(backquote(sprintf("env -u JAVA_TOOL_OPTIONS -u _JAVA_OPTIONS -u JDK_JAVA_OPTIONS %s %s 2>&1; "
+        return trim(backquote(sprintf("unset JAVA_TOOL_OPTIONS _JAVA_OPTIONS JDK_JAVA_OPTIONS && %s %s 2>&1; "
             "echo exit=$?", shellQuote(qoreBin()), shellQuote(tmp.path))));
     }
 
@@ -243,7 +243,7 @@ public class PublicPath {
             "printf(\"%%s\\n\", call_object_method(list, \"elementData\", 0));\n",
             dirname(get_module_hash().jni.filename)));
         tmp.file.close();
-        string output = trim(backquote(sprintf("env -u JAVA_TOOL_OPTIONS -u _JAVA_OPTIONS -u JDK_JAVA_OPTIONS "
+        string output = trim(backquote(sprintf("unset JAVA_TOOL_OPTIONS _JAVA_OPTIONS JDK_JAVA_OPTIONS && "
             "QORE_JNI_JVM_ARGS=--add-opens=java.base/java.util=ALL-UNNAMED %s %s 2>&1; echo exit=$?",
             shellQuote(qoreBin()), shellQuote(tmp.path))));
         assertEq("first\nexit=0", output);

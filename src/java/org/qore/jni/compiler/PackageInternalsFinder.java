@@ -21,6 +21,7 @@ import java.net.URLDecoder;
 
 import javax.tools.JavaFileObject;
 
+import org.qore.jni.QoreSandbox;
 import org.qore.jni.QoreURLClassLoader;
 
 /**
@@ -37,8 +38,16 @@ class PackageInternalsFinder {
 
     private final HashMap<String, HashSet<String>> pendingClasses = new HashMap<String, HashSet<String>>();
 
+    //! the policy of a restricted caller, which each file found below a directory is checked with, or null
+    private QoreSandbox.Policy readPolicy;
+
     public PackageInternalsFinder(QoreURLClassLoader classLoader) {
         this.classLoader = classLoader;
+    }
+
+    //! Sets the policy of a restricted caller
+    void setReadPolicy(QoreSandbox.Policy policy) {
+        readPolicy = policy;
     }
 
     public List<JavaFileObject> find(String packageName) throws IOException {
@@ -73,9 +82,17 @@ class PackageInternalsFinder {
     }
 
     private Collection<JavaFileObject> listUnder(String packageName, URL packageFolderURL) {
-        File directory = new File(packageFolderURL.getFile());
+        // the file that the URL was made from
+        File directory = QoreURLClassLoader.urlToFile(packageFolderURL);
+        // a URL that is not a valid URI (ex: with an unencoded space) still names a directory for trusted code
+        if (directory == null && readPolicy == null && "file".equals(packageFolderURL.getProtocol())) {
+            directory = new File(packageFolderURL.getFile());
+            if (!directory.isDirectory()) {
+                directory = new File(URLDecoder.decode(packageFolderURL.getPath(), StandardCharsets.UTF_8));
+            }
+        }
         //System.out.printf("listUnder() packageName: %s url: %s dir: %s\n", packageName, packageFolderURL, directory.isDirectory());
-        if (directory.isDirectory()) {
+        if (directory != null && directory.isDirectory()) {
             // browse local .class files - useful for local execution
             return processDir(packageName, directory);
         } else { // browse a jar file
@@ -89,17 +106,7 @@ class PackageInternalsFinder {
             URLConnection conn = packageFolderURL.openConnection();
             //System.out.printf("jar type: %s\n", conn);
             if (!(conn instanceof JarURLConnection)) {
-                // try to get a directory from the URL
-                URL url = conn.getURL();
-                //System.out.printf("URL: %s\n", conn.getURL());
-                if (url.getProtocol().equals("file")) {
-                    String path = URLDecoder.decode(url.getPath(), StandardCharsets.UTF_8);
-                    File directory = new File(path);
-                    //System.out.printf("path: %s\n", path);
-                    if (directory.isDirectory()) {
-                        return processDir(packageName, directory);
-                    }
-                }
+                // a directory has been handled by listUnder()
                 return result;
             }
             JarURLConnection jarConn = (JarURLConnection)conn;
@@ -109,7 +116,12 @@ class PackageInternalsFinder {
             }
             int rootEnd = rootEntryName.length() + 1;
 
-            String jarUri = packageFolderURL.toExternalForm().split("!")[0];
+            // the separator is the last one: the path of the file can contain the same characters
+            String jarUri = packageFolderURL.toExternalForm();
+            int jarSep = jarUri.lastIndexOf("!/");
+            if (jarSep >= 0) {
+                jarUri = jarUri.substring(0, jarSep);
+            }
             //System.out.printf("jarUri: %s (%s)\n", jarUri, packageFolderURL.toExternalForm());
 
             Enumeration<JarEntry> entryEnum = jarConn.getJarFile().entries();
@@ -138,7 +150,18 @@ class PackageInternalsFinder {
         List<JavaFileObject> result = new ArrayList<JavaFileObject>();
 
         File[] childFiles = directory.listFiles();
+        if (childFiles == null) {
+            return result;
+        }
         for (File childFile : childFiles) {
+            try {
+                if (readPolicy != null && !QoreCompilerPolicy.isReadable(readPolicy, childFile.toPath())) {
+                    continue;
+                }
+            } catch (java.nio.file.InvalidPathException e) {
+                // a name that cannot be a path cannot be checked
+                continue;
+            }
             if (childFile.isFile()) {
                 // We only want the .class files.
                 if (childFile.getName().endsWith(CLASS_FILE_EXTENSION)) {

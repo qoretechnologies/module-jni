@@ -269,11 +269,11 @@ class JniModuleCmdIssuerTest inherits QUnit::Test {
                 "code: " + out);
             out = run(sprintf("%s %s %s/JniReplayFixture.qmod %s", qore, load, qmod_dir, kind), \rc);
             # a compiled module is native code: since qore#6776, the core refuses to load one from a path outside the
-            # module path into a sandboxed Program (whose sandbox does not allow uncontrolled APIs), before its
-            # recorded commands are replayed; with an earlier core, and for the Program that is only restricted with
-            # parse options, the module is loaded and its replayed command is refused by the jni module for the
+            # module path into a sandboxed Program (whose sandbox does not allow uncontrolled APIs), and a current core
+            # also into a Program whose functional domains are restricted, before its recorded commands are replayed;
+            # with an earlier core, the module is loaded and its replayed command is refused by the jni module for the
             # add-classpath command and the loader, not by another error
-            if (kind == "sandboxed" && trim(out) =~ /^LOAD-MODULE-ERROR: /) {
+            if (trim(out) =~ /^LOAD-MODULE-ERROR: /) {
                 assertRegex("^LOAD-MODULE-ERROR: cannot load binary module '[^']*/JniReplayFixture\\.qmod': code that "
                     "a sandbox governs or whose functional domains are restricted can load native code only from the "
                     "module path", trim(out), kind + ": a module chosen by path: the core refuses its native code: "

@@ -1,0 +1,895 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+# For a caller that a sandbox filesystem policy restricts, a manifest Class-Path entry whose path cannot be checked
+# exactly is refused, on every JDK, and nothing of the classpath is read through the class loader (qore#7349).  With no
+# sandbox, or a sandbox that does not restrict the filesystem, classpaths are added as before.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../build"
+%requires QUnit
+%requires FsUtil
+%requires jni
+%module-cmd(jni) add-relative-classpath qore-jni-test.jar
+%module-cmd(jni) import org.qore.jni.test.ClasspathUrlProbe
+%module-cmd(jni) import java.lang.Runtime
+%module-cmd(jni) import java.lang.System
+
+%exec-class JniClasspathUrlPathTest
+
+#! one manifest entry case
+hashdecl ClasspathUrlCase {
+    #! the label of the case
+    string label;
+    #! True for an archive, False for a directory
+    bool archive;
+    #! the name of the target below the case directory
+    string target;
+    #! the manifest entry; "{X}" is the case directory, as it is written in a URL
+    string entry;
+    #! True if the target's name needs a file name encoding that can represent it
+    bool utf8 = False;
+    #! True if the entry's path cannot be decoded, which any sandbox manager refuses
+    bool undecodable = False;
+}
+
+class JniClasspathUrlPathTest inherits QUnit::Test {
+    public {
+        #! the JDK feature versions on which a manifest Class-Path is followed
+        /** Deliberately not read from the product: on any other JDK every manifest here is refused for a caller with
+            a sandbox
+        */
+        const VerifiedJdkFeatures = (21, 25);
+
+        #! the Java routes that add to the classpath of a class loader
+        const JavaRoutes = ("addPath", "addPathOrig", "addURL", "addWildcard", "addParentPath");
+
+        #! the marker of a file that the policy allows
+        const Allowed = "ALLOWED";
+        #! the marker of a file that the policy does not allow
+        const Outside = "OUTSIDE";
+
+        #! the code of the Programs under test
+        const ProgramSource = "%requires jni
+%module-cmd(jni) import org.qore.jni.test.ClasspathUrlProbe
+list<string> sub read_all() {
+    return Jni::org::qore::jni::test::ClasspathUrlProbe::reads(Jni::org::qore::jni::get_class_loader());
+}
+hash<auto> sub add_classpath(string path) {
+    try {
+        Program::issueModuleCmd(\"jni\", \"add-classpath \" + path);
+        return {\"err\": \"ok\", \"desc\": \"\"};
+    } catch (hash<ExceptionInfo> ex) {
+        return {\"err\": ex.err, \"desc\": ex.desc};
+    }
+}
+string sub java_add(string route, string jar) {
+    return Jni::org::qore::jni::test::ClasspathUrlProbe::add(Jni::org::qore::jni::get_class_loader(), route, jar);
+}
+bool sub captured_network() {
+    return Jni::org::qore::jni::test::ClasspathUrlProbe::capturedRestrictsNetwork();
+}
+string sub java_add_unverified(string route, string jar) {
+    return Jni::org::qore::jni::test::ClasspathUrlProbe::addOnUnverifiedJdk(Jni::org::qore::jni::get_class_loader(),
+        route, jar);
+}
+string sub compiler_classpath(string classpath) {
+    return Jni::org::qore::jni::test::ClasspathUrlProbe::compilerClasspath(classpath);
+}
+string sub compiler_classpath_unverified(string classpath) {
+    return Jni::org::qore::jni::test::ClasspathUrlProbe::compilerClasspathOnUnverifiedJdk(classpath);
+}
+list<string> sub compiler_classpath_paths(string classpath) {
+    return Jni::org::qore::jni::test::ClasspathUrlProbe::compilerClasspathPaths(classpath);
+}
+";
+
+        #! the refusal for a caller whose sandbox restricts only the network
+        const OtherLocation = "names another location";
+        #! the refusal for such a caller of an entry whose location cannot be confirmed
+        const UncheckedLocation = "cannot be checked for another location";
+        #! the most manifest entries that are checked for a classpath
+        const MaxManifestEntries = 4096;
+
+        #! entries whose path is the path that is read: followed on a verified JDK
+        const ExactCases = (
+            <ClasspathUrlCase>{"label": "exact 1", "archive": False, "target": "d", "entry": "file:{X}/d/"},
+            <ClasspathUrlCase>{"label": "exact 2", "archive": False, "target": "d", "entry": "../d/"},
+            <ClasspathUrlCase>{"label": "exact 3", "archive": True, "target": "dep.jar", "entry": "file:{X}/dep.jar"},
+            <ClasspathUrlCase>{"label": "exact 4", "archive": True, "target": "dep.jar", "entry": "../dep.jar"},
+            <ClasspathUrlCase>{"label": "exact 5", "archive": False, "target": "d;p", "entry": "file:{X}/d;p/"},
+            <ClasspathUrlCase>{"label": "exact 6", "archive": False, "target": "d?q", "entry": "file:{X}/d%3Fq/"},
+            <ClasspathUrlCase>{"label": "exact 7", "archive": False, "target": "d#q", "entry": "file:{X}/d%23q/"},
+            <ClasspathUrlCase>{"label": "exact 8", "archive": False, "target": "d", "entry": "FiLe:{X}/d/"},
+            <ClasspathUrlCase>{"label": "exact 9", "archive": True, "target": "dep.jar;p", "entry": "file:{X}/dep.jar;p"},
+            <ClasspathUrlCase>{"label": "exact 10", "archive": True, "target": "dep.jar?q",
+                "entry": "file:{X}/dep.jar%3Fq"},
+            <ClasspathUrlCase>{"label": "exact 11", "archive": True, "target": "dep.jar#q",
+                "entry": "file:{X}/dep.jar%23q"},
+            <ClasspathUrlCase>{"label": "exact 12", "archive": True, "target": "dep.jar", "entry": "FiLe:{X}/dep.jar"},
+            <ClasspathUrlCase>{"label": "exact 13", "archive": False, "target": "d e", "entry": "file:{X}/d%20e/"},
+            <ClasspathUrlCase>{"label": "exact 14", "archive": True, "target": "d e.jar",
+                "entry": "file:{X}/d%20e.jar"},
+            <ClasspathUrlCase>{"label": "exact 15", "archive": False, "target": "dé", "entry": "file:{X}/d%C3%A9/",
+                "utf8": True},
+            <ClasspathUrlCase>{"label": "exact 16", "archive": True, "target": "dé.jar",
+                "entry": "file:{X}/d%C3%A9.jar", "utf8": True},
+        );
+
+        #! entries whose path cannot be checked exactly: refused on every JDK
+        const InexactCases = (
+            <ClasspathUrlCase>{"label": "inexact 1", "archive": False, "target": "d?q", "entry": "file:{X}/d?q/"},
+            <ClasspathUrlCase>{"label": "inexact 2", "archive": False, "target": "d?q", "entry": "../d?q/"},
+            <ClasspathUrlCase>{"label": "inexact 3", "archive": False, "target": "d?", "entry": "file:{X}/d?/"},
+            <ClasspathUrlCase>{"label": "inexact 4", "archive": False, "target": "d", "entry": "file:{X}/d/?"},
+            <ClasspathUrlCase>{"label": "inexact 5", "archive": False, "target": "d", "entry": "file:{X}/d/#f"},
+            <ClasspathUrlCase>{"label": "inexact 6", "archive": False, "target": "d#f", "entry": "file:{X}/d#f/"},
+            <ClasspathUrlCase>{"label": "inexact 7", "archive": False, "target": "d?q", "entry": "FILE:{X}/d?q/"},
+            <ClasspathUrlCase>{"label": "inexact 8", "archive": True, "target": "dep.jar?q",
+                "entry": "file:{X}/dep.jar?q"},
+            <ClasspathUrlCase>{"label": "inexact 9", "archive": True, "target": "dep.jar?",
+                "entry": "file:{X}/dep.jar?"},
+            <ClasspathUrlCase>{"label": "inexact 10", "archive": True, "target": "dep.jar",
+                "entry": "file:{X}/dep.jar#f"},
+            <ClasspathUrlCase>{"label": "inexact 11", "archive": False, "target": "d",
+                "entry": "absent/%2e%2e/d/"},
+            <ClasspathUrlCase>{"label": "inexact 12", "archive": False, "target": "d", "entry": "file:{X}/d%zz/",
+                "undecodable": True},
+            <ClasspathUrlCase>{"label": "inexact 13", "archive": False, "target": "d", "entry": "file:{X}/d%/",
+                "undecodable": True},
+            <ClasspathUrlCase>{"label": "inexact 14", "archive": False, "target": "d", "entry": "file:{X}/d%C3/",
+                "undecodable": True},
+            <ClasspathUrlCase>{"label": "inexact 15", "archive": True, "target": "dep.jar",
+                "entry": "file:{X}/dep%zz.jar", "undecodable": True},
+            <ClasspathUrlCase>{"label": "inexact 16", "archive": True, "target": "dep.jar",
+                "entry": "file:{X}/dep%C3.jar", "undecodable": True},
+        );
+
+        #! entries with an authority that is not the local host: refused on every JDK, and never read here
+        const OtherAuthorityCases = (
+            <ClasspathUrlCase>{"label": "authority 1", "archive": False, "target": "d",
+                "entry": "file://example.invalid{X}/d/"},
+            <ClasspathUrlCase>{"label": "authority 2", "archive": False, "target": "d",
+                "entry": "//example.invalid{X}/d/"},
+            <ClasspathUrlCase>{"label": "authority 3", "archive": False, "target": "d",
+                "entry": "file://127.0.0.1{X}/d/"},
+            <ClasspathUrlCase>{"label": "authority 4", "archive": False, "target": "d", "entry": "file://~{X}/d/"},
+            <ClasspathUrlCase>{"label": "authority 5", "archive": False, "target": "d",
+                "entry": "file://localhost:2121{X}/d/"},
+            <ClasspathUrlCase>{"label": "authority 6", "archive": False, "target": "d",
+                "entry": "file://user@localhost{X}/d/"},
+            <ClasspathUrlCase>{"label": "authority 7", "archive": True, "target": "dep.jar",
+                "entry": "file://example.invalid{X}/dep.jar"},
+            <ClasspathUrlCase>{"label": "authority 8", "archive": True, "target": "dep.jar",
+                "entry": "//example.invalid{X}/dep.jar"},
+            <ClasspathUrlCase>{"label": "authority 9", "archive": True, "target": "dep.jar",
+                "entry": "file://127.0.0.1{X}/dep.jar"},
+            <ClasspathUrlCase>{"label": "authority 10", "archive": True, "target": "dep.jar",
+                "entry": "file://~{X}/dep.jar"},
+            <ClasspathUrlCase>{"label": "authority 11", "archive": True, "target": "dep.jar",
+                "entry": "file://localhost:2121{X}/dep.jar"},
+            <ClasspathUrlCase>{"label": "authority 12", "archive": True, "target": "dep.jar",
+                "entry": "file://user@localhost{X}/dep.jar"},
+            <ClasspathUrlCase>{"label": "authority 13", "archive": False, "target": "d",
+                "entry": "file://user@{X}/d/"},
+            <ClasspathUrlCase>{"label": "authority 14", "archive": True, "target": "dep.jar",
+                "entry": "file://user@{X}/dep.jar"},
+            <ClasspathUrlCase>{"label": "authority 15", "archive": False, "target": "d",
+                "entry": "file://:2121{X}/d/"},
+            <ClasspathUrlCase>{"label": "authority 16", "archive": True, "target": "dep.jar",
+                "entry": "file://:2121{X}/dep.jar"},
+        );
+
+        #! entries with the local host as their authority: followed on a verified JDK
+        const LocalAuthorityCases = (
+            <ClasspathUrlCase>{"label": "local 1", "archive": False, "target": "d", "entry": "file://{X}/d/"},
+            <ClasspathUrlCase>{"label": "local 2", "archive": False, "target": "d",
+                "entry": "file://localhost{X}/d/"},
+            <ClasspathUrlCase>{"label": "local 3", "archive": False, "target": "d",
+                "entry": "file://LocalHost{X}/d/"},
+            <ClasspathUrlCase>{"label": "local 4", "archive": True, "target": "dep.jar",
+                "entry": "file://localhost{X}/dep.jar"},
+            <ClasspathUrlCase>{"label": "local 5", "archive": True, "target": "dep.jar",
+                "entry": "file://LOCALHOST{X}/dep.jar"},
+        );
+    }
+
+    private {
+        #! the scratch directory
+        string scratch;
+        #! the directory of this test
+        string script_dir;
+        #! the running JDK's feature version
+        int feature;
+        #! True if the JVM's file name encoding can represent the non-ASCII names of the cases
+        bool utf8_names;
+        #! a counter for the case directories
+        int counter = 0;
+    }
+
+    constructor() : QUnit::Test("JNI manifest Class-Path entry paths under a sandbox", "1.0") {
+        script_dir = realpath(get_script_dir());
+        feature = Jni::java::lang::Runtime::version().feature();
+        utf8_names = (Jni::java::lang::System::getProperty("sun.jnu.encoding") ?? "") =~ /utf-?8/i;
+        scratch = realpath(make_tmp_dir("jni-classpath-url-path-"));
+        on_exit {
+            remove_tree(scratch);
+        }
+        addTestCase("an entry whose path is exact is followed", \exactTest());
+        addTestCase("an entry whose path cannot be checked exactly is refused", \inexactTest());
+        addTestCase("the same through a nested manifest", \nestedTest());
+        addTestCase("the same when sandboxed code adds the classpath", \sandboxedIssuerTest());
+        addTestCase("an entry with another authority is refused before it is used", \otherAuthorityTest());
+        addTestCase("an entry with the local host as its authority is followed", \localAuthorityTest());
+        addTestCase("a classpath with no sandbox is unchanged", \unsandboxedTest());
+        addTestCase("a sandbox with no filesystem restriction", \permissiveTest());
+        addTestCase("the Java routes apply the same rule", \javaRoutesTest());
+        addTestCase("network only: an archive with any name is added", \networkArchiveNameTest());
+        addTestCase("network only: a path that does not exist", \networkLaterPathTest());
+        addTestCase("network only: a path that cannot be read", \networkUnreadableTest());
+        addTestCase("network only: an entry inside an archive", \networkInnerEntryTest());
+        addTestCase("network only: nested manifests on every Java route", \networkNestedRoutesTest());
+        addTestCase("network only: the bound on manifest entries", \networkBoundTest());
+        addTestCase("network only: manifest cycles and deep nesting", \networkCycleTest());
+        addTestCase("network only: the JDK's class path URL check disabled", \networkUrlCheckDisabledTest());
+        addTestCase("network only: an unverified JDK", \networkUnverifiedJdkTest());
+        addTestCase("the compiler classpath check for a caller with no filesystem restriction",
+            \compilerClasspathTrustedTest());
+        addTestCase("the compiler classpath: a caller that restricts nothing", \compilerClasspathOpenTest());
+        addTestCase("the compiler classpath: a caller that restricts only the network",
+            \compilerClasspathNetworkTest());
+        addTestCase("the compiler classpath: a caller that restricts the filesystem",
+            \compilerClasspathFilesystemTest());
+        addTestCase("network only: addPathOrig takes one path", \networkOnePathTest());
+        addTestCase("network only: a URL with the local host is added", \networkLocalUrlTest());
+        addTestCase("network only: a manifest entry that the loader ignores is ignored", \networkIgnoredEntryTest());
+        addTestCase("network only: an archive with a jar index is added", \networkJarIndexTest());
+        addTestCase("the network restriction of a captured policy", \capturedPolicyTest());
+        set_return_value(main());
+    }
+
+    #! makes the directory of a case; returns it
+    private string makeCase(hash<ClasspathUrlCase> c) {
+        string x = sprintf("%s/case%d", scratch, ++counter);
+        mkdir(x, 0700);
+        # markers that the policy of the case does not allow
+        ClasspathUrlProbe::writeMarkerDir(x, Outside);
+        *string stripped = (c.target =~ x/^([^?#;]+)[?#;]/)[0];
+        if (stripped) {
+            if (c.archive) {
+                ClasspathUrlProbe::writeMarkerJar(x + "/" + stripped, Outside);
+            } else {
+                ClasspathUrlProbe::writeMarkerDir(x + "/" + stripped, Outside);
+            }
+        }
+        if (c.archive) {
+            ClasspathUrlProbe::writeMarkerJar(x + "/" + c.target, Allowed);
+        } else {
+            ClasspathUrlProbe::writeMarkerDir(x + "/" + c.target, Allowed);
+        }
+        string entry = replace(c.entry, "{X}", ClasspathUrlProbe::encodedPath(x));
+        ClasspathUrlProbe::writeManifestJar(x + "/main/main.jar", entry);
+        ClasspathUrlProbe::writeManifestJar(x + "/main/nested.jar", entry);
+        ClasspathUrlProbe::writeManifestJar(x + "/main/top.jar", "nested.jar");
+        return x;
+    }
+
+    #! returns the cases that the file name encoding of the JVM can represent
+    private list<hash<ClasspathUrlCase>> usable(list<hash<ClasspathUrlCase>> cases) {
+        return cast<list<hash<ClasspathUrlCase>>>(select cases, !$1.utf8 || utf8_names);
+    }
+
+    #! returns a Program with the code under test, in the sandbox if one is given
+    private Program newProgram(*SandboxManager sm) {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.loadModule("jni");
+        p.issueModuleCmd("jni", "add-classpath " + script_dir + "/qore-jni-test.jar");
+        if (sm) {
+            p.setSandboxManager(sm);
+        }
+        p.parse(ProgramSource, "classpath-url");
+        return p;
+    }
+
+    #! returns a Program in a sandbox that allows reading only the given paths and this test's classes
+    private Program getProgram(list<string> allowed, bool open_network = False) {
+        SandboxManager sm();
+        sm.setUncontrolledApiPolicy(True);
+        sm.setFilesystemDefaultPolicy(False);
+        if (open_network) {
+            sm.setNetworkDefaultPolicy(True);
+        }
+        foreach string path in (allowed) {
+            sm.addFilesystemAllowedPath(path, QSEC_READ);
+        }
+        sm.addFilesystemAllowedPath(script_dir + "/../build", QSEC_READ);
+        sm.addFilesystemAllowedPath(script_dir + "/../qlib", QSEC_READ);
+        sm.addFilesystemAllowedPath(dirname(get_module_hash().jni.filename), QSEC_READ);
+        sm.addFilesystemAllowedPath(script_dir + "/qore-jni-test.jar", QSEC_READ);
+        return newProgram(sm);
+    }
+
+    #! returns a Program in a sandbox that does not restrict the filesystem
+    /** @param open_network if the sandbox also leaves the network open, so that it restricts nothing
+    */
+    private Program getPermissiveProgram(bool open_network) {
+        SandboxManager sm();
+        sm.setUncontrolledApiPolicy(True);
+        sm.setFilesystemDefaultPolicy(True);
+        if (open_network) {
+            sm.setNetworkDefaultPolicy(True);
+        }
+        return newProgram(sm);
+    }
+
+    #! adds a classpath as the trusted host
+    private hash<auto> hostAdd(Program p, string path) {
+        try {
+            p.issueModuleCmd("jni", "add-classpath " + path);
+            return {"err": "ok", "desc": ""};
+        } catch (hash<ExceptionInfo> ex) {
+            return {"err": ex.err, "desc": ex.desc};
+        }
+    }
+
+    private bool verified() {
+        return inlist(feature, VerifiedJdkFeatures);
+    }
+
+    #! asserts that nothing was read through the classpath
+    private assertNothingRead(Program p, string label) {
+        assertEq(("none", "none", "none", "none"), p.callFunction("read_all"), label);
+    }
+
+    #! asserts that a classpath was refused and that nothing of it can be read
+    private assertRefused(Program p, hash<auto> rv, string label) {
+        assertEq("JNI-CLASSPATH-ERROR", rv.err, label + ": " + rv.desc);
+        assertRegex(verified() ? "cannot be checked exactly" : "unverified JDK version", rv.desc, label);
+        assertNothingRead(p, label);
+    }
+
+    private list<string> allowedPaths(string x, hash<ClasspathUrlCase> c) {
+        return (x + "/main", x + "/" + c.target);
+    }
+
+    exactTest() {
+        foreach hash<ClasspathUrlCase> c in (usable(ExactCases)) {
+            string x = makeCase(c);
+            Program p = getProgram(allowedPaths(x, c));
+            hash<auto> rv = hostAdd(p, x + "/main/main.jar");
+            if (verified()) {
+                assertEq("ok", rv.err, c.label + ": " + rv.desc);
+                assertEq((Allowed, Allowed, Allowed, Allowed), p.callFunction("read_all"), c.label);
+            } else {
+                assertEq("JNI-CLASSPATH-ERROR", rv.err, c.label);
+                assertRegex("unverified JDK version", rv.desc, c.label);
+                assertNothingRead(p, c.label);
+            }
+        }
+    }
+
+    inexactTest() {
+        foreach hash<ClasspathUrlCase> c in (InexactCases) {
+            string x = makeCase(c);
+            Program p = getProgram(allowedPaths(x, c));
+            assertRefused(p, hostAdd(p, x + "/main/main.jar"), c.label);
+        }
+    }
+
+    nestedTest() {
+        foreach hash<ClasspathUrlCase> c in (InexactCases + OtherAuthorityCases) {
+            string x = makeCase(c);
+            Program p = getProgram(allowedPaths(x, c));
+            assertRefused(p, hostAdd(p, x + "/main/top.jar"), c.label);
+        }
+        # the positive control of a nested manifest
+        hash<ClasspathUrlCase> c = ExactCases[0];
+        string x = makeCase(c);
+        Program p = getProgram(allowedPaths(x, c));
+        hash<auto> rv = hostAdd(p, x + "/main/top.jar");
+        if (verified()) {
+            assertEq("ok", rv.err, rv.desc);
+            assertEq((Allowed, Allowed, Allowed, Allowed), p.callFunction("read_all"));
+        } else {
+            assertEq("JNI-CLASSPATH-ERROR", rv.err);
+        }
+    }
+
+    sandboxedIssuerTest() {
+        foreach hash<ClasspathUrlCase> c in (InexactCases + OtherAuthorityCases) {
+            string x = makeCase(c);
+            Program p = getProgram(allowedPaths(x, c));
+            assertRefused(p, p.callFunction("add_classpath", x + "/main/main.jar"), c.label);
+        }
+        hash<ClasspathUrlCase> c = ExactCases[0];
+        string x = makeCase(c);
+        Program p = getProgram(allowedPaths(x, c));
+        hash<auto> rv = p.callFunction("add_classpath", x + "/main/main.jar");
+        if (verified()) {
+            assertEq("ok", rv.err, rv.desc);
+            assertEq((Allowed, Allowed, Allowed, Allowed), p.callFunction("read_all"));
+        } else {
+            assertEq("JNI-CLASSPATH-ERROR", rv.err);
+        }
+    }
+
+    otherAuthorityTest() {
+        foreach hash<ClasspathUrlCase> c in (OtherAuthorityCases) {
+            string x = makeCase(c);
+            # the policy does not allow the target: the refusal names the jar, as the target is not resolved first
+            Program p = getProgram((x + "/main",));
+            assertRefused(p, hostAdd(p, x + "/main/main.jar"), c.label);
+        }
+    }
+
+    localAuthorityTest() {
+        foreach hash<ClasspathUrlCase> c in (LocalAuthorityCases) {
+            string x = makeCase(c);
+            Program p = getProgram(allowedPaths(x, c));
+            hash<auto> rv = hostAdd(p, x + "/main/main.jar");
+            if (verified()) {
+                assertEq("ok", rv.err, c.label + ": " + rv.desc);
+                assertEq((Allowed, Allowed, Allowed, Allowed), p.callFunction("read_all"), c.label);
+            } else {
+                assertEq("JNI-CLASSPATH-ERROR", rv.err, c.label);
+                assertRegex("unverified JDK version", rv.desc, c.label);
+            }
+        }
+    }
+
+    unsandboxedTest() {
+        foreach hash<ClasspathUrlCase> c in (usable(ExactCases)) {
+            string x = makeCase(c);
+            Program p = newProgram();
+            assertEq("ok", hostAdd(p, x + "/main/main.jar").err, c.label);
+            assertEq((Allowed, Allowed, Allowed, Allowed), p.callFunction("read_all"), c.label);
+        }
+        foreach hash<ClasspathUrlCase> c in (InexactCases) {
+            string x = makeCase(c);
+            Program p = newProgram();
+            assertEq("ok", hostAdd(p, x + "/main/main.jar").err, c.label);
+            # as the JDK's own class loader reads the same archive
+            list<string> expected = ClasspathUrlProbe::plainReads(x + "/main/main.jar");
+            assertEq(expected, p.callFunction("read_all"), c.label);
+        }
+    }
+
+    permissiveTest() {
+        foreach bool open_network in ((True, False)) {
+            string mode = open_network ? "restricts nothing" : "restricts only the network";
+            foreach hash<ClasspathUrlCase> c in (usable(ExactCases)) {
+                string x = makeCase(c);
+                Program p = getPermissiveProgram(open_network);
+                hash<auto> rv = hostAdd(p, x + "/main/main.jar");
+                string label = sprintf("%s: %s", mode, c.label);
+                assertNRegex("cannot be checked exactly", rv.desc, label);
+                if (verified()) {
+                    assertEq("ok", rv.err, label + ": " + rv.desc);
+                    assertEq((Allowed, Allowed, Allowed, Allowed), p.callFunction("read_all"), label);
+                }
+            }
+            # a directory and an archive with no manifest Class-Path, which are followed on every JDK
+            foreach hash<ClasspathUrlCase> c in ((ExactCases[0], ExactCases[2])) {
+                string x = makeCase(c);
+                Program p = getPermissiveProgram(open_network);
+                string label = sprintf("%s: no manifest entry: %s", mode, c.target);
+                hash<auto> rv = hostAdd(p, x + "/" + c.target);
+                assertEq("ok", rv.err, label + ": " + rv.desc);
+                assertEq((Allowed, Allowed, Allowed, Allowed), p.callFunction("read_all"), label);
+            }
+            foreach hash<ClasspathUrlCase> c in (InexactCases + OtherAuthorityCases) {
+                string x = makeCase(c);
+                Program p = getPermissiveProgram(open_network);
+                hash<auto> rv = hostAdd(p, x + "/main/main.jar");
+                string label = sprintf("%s: %s", mode, c.label);
+                bool other_authority = inlist_hard(c.label, (map $1.label, OtherAuthorityCases));
+                # a caller that restricts the network is refused an entry that names another location
+                if (!open_network && other_authority) {
+                    assertEq("JNI-CLASSPATH-ERROR", rv.err, label + ": " + rv.desc);
+                    assertRegex(verified() ? OtherLocation : "unverified JDK version", rv.desc, label);
+                    assertNothingRead(p, label);
+                    continue;
+                }
+                # otherwise the check of an exact path is for a caller whose filesystem access is restricted
+                assertNRegex("cannot be checked exactly", rv.desc, label);
+                if (verified()) {
+                    if (c.undecodable) {
+                        # refused for any sandbox manager, as before this check
+                        assertEq("JNI-CLASSPATH-ERROR", rv.err, label);
+                        assertRegex("cannot be resolved to a file", rv.desc, label);
+                        continue;
+                    }
+                    assertEq("ok", rv.err, label + ": " + rv.desc);
+                    # an entry with another authority is added for a caller that restricts nothing, but not read here,
+                    # as a read could open a connection
+                    if (!other_authority) {
+                        list<string> expected = ClasspathUrlProbe::plainReads(x + "/main/main.jar");
+                        assertEq(expected, p.callFunction("read_all"), label);
+                    }
+                }
+            }
+        }
+    }
+
+    javaRoutesTest() {
+        hash<ClasspathUrlCase> exact = ExactCases[0];
+        string refused = "^refused: .*" + OtherLocation;
+        # a directory and an archive entry with another authority
+        list<hash<ClasspathUrlCase>> others = cast<list<hash<ClasspathUrlCase>>>((OtherAuthorityCases[0],
+            OtherAuthorityCases[6]));
+        foreach string route in (JavaRoutes) {
+            string x;
+            Program p;
+            foreach hash<ClasspathUrlCase> other in (others) {
+                # a caller that restricts only the network: refused before the class loader can use the entry
+                x = makeCase(other);
+                p = getPermissiveProgram(False);
+                assertRegex(refused, p.callFunction("java_add", route, x + "/main/main.jar"), route + ": " + other.label);
+                assertNothingRead(p, route + ": " + other.label);
+
+                # a caller that restricts nothing is not affected; the entry with another authority is not read
+                x = makeCase(other);
+                p = getPermissiveProgram(True);
+                assertEq("ok", p.callFunction("java_add", route, x + "/main/main.jar"), route + ": " + other.label);
+            }
+
+            # the positive control of a caller that restricts only the network, on every JDK
+            x = makeCase(exact);
+            p = getPermissiveProgram(False);
+            assertEq("ok", p.callFunction("java_add", route, x + "/main/main.jar"), route);
+            assertEq((Allowed, Allowed, Allowed, Allowed), p.callFunction("read_all"), route);
+
+            x = makeCase(exact);
+            p = getPermissiveProgram(True);
+            assertEq("ok", p.callFunction("java_add", route, x + "/main/main.jar"), route);
+            assertEq((Allowed, Allowed, Allowed, Allowed), p.callFunction("read_all"), route);
+        }
+    }
+
+    #! returns a new directory for a case that makes its own files
+    private string newDir() {
+        string x = sprintf("%s/case%d", scratch, ++counter);
+        mkdir(x, 0700);
+        return x;
+    }
+
+    #! asserts that a caller that restricts only the network adds a path by a route, and reads the marker through it
+    private assertNetworkOnlyReads(string route, string path, string label) {
+        Program p = getPermissiveProgram(False);
+        assertEq("ok", p.callFunction("java_add", route, path), label);
+        assertEq((Allowed, Allowed, Allowed, Allowed), p.callFunction("read_all"), label);
+    }
+
+    networkArchiveNameTest() {
+        string x = newDir();
+        ClasspathUrlProbe::writeMarkerJar(x + "/archive.bin", Allowed);
+        assertNetworkOnlyReads("addPathOrig", x + "/archive.bin", "an archive with another name");
+    }
+
+    networkLaterPathTest() {
+        # a missing path that could become an archive: its manifest could not be checked when it is opened
+        string x = newDir();
+        string path = x + "/later.jar";
+        Program p = getPermissiveProgram(False);
+        assertRegex("^refused: .*" + UncheckedLocation, p.callFunction("java_add", "addPathOrig", path));
+        ClasspathUrlProbe::writeMarkerJar(path, Allowed);
+        assertNothingRead(p, "a missing archive that appears later");
+
+        # the same when a manifest names it
+        x = newDir();
+        ClasspathUrlProbe::writeManifestJar(x + "/main.jar", "later.jar");
+        p = getPermissiveProgram(False);
+        assertRegex("^refused: .*" + UncheckedLocation, p.callFunction("java_add", "addPath", x + "/main.jar"));
+        ClasspathUrlProbe::writeMarkerJar(x + "/later.jar", Allowed);
+        assertNothingRead(p, "a missing archive that a manifest names");
+
+        # a missing path in the form of a directory: the class loader reads no manifest from it
+        x = newDir();
+        p = getPermissiveProgram(False);
+        string url = "file:" + ClasspathUrlProbe::encodedPath(x) + "/later/";
+        assertEq("ok", p.callFunction("java_add", "addURLString", url));
+        ClasspathUrlProbe::writeMarkerDir(x + "/later", Allowed);
+        assertEq((Allowed, Allowed, Allowed, Allowed), p.callFunction("read_all"), "a directory that appears later");
+
+        # the same when a manifest names it
+        x = newDir();
+        ClasspathUrlProbe::writeManifestJar(x + "/main.jar", "later/");
+        p = getPermissiveProgram(False);
+        assertEq("ok", p.callFunction("java_add", "addPath", x + "/main.jar"));
+        ClasspathUrlProbe::writeMarkerDir(x + "/later", Allowed);
+        assertEq((Allowed, Allowed, Allowed, Allowed), p.callFunction("read_all"), "a named directory");
+
+        # an existing directory, with no trailing slash in the path
+        x = newDir();
+        ClasspathUrlProbe::writeMarkerDir(x + "/classes", Allowed);
+        assertNetworkOnlyReads("addPathOrig", x + "/classes", "an existing directory");
+    }
+
+    networkUnreadableTest() {
+        # a file that is neither regular nor a directory is not opened, as reading it may not return
+        string x = newDir();
+        mkfifo(x + "/fifo.jar");
+        Program p = getPermissiveProgram(False);
+        assertRegex("^refused: .*" + UncheckedLocation, p.callFunction("java_add", "addPathOrig", x + "/fifo.jar"));
+        ClasspathUrlProbe::writeManifestJar(x + "/main.jar", "fifo.jar");
+        p = getPermissiveProgram(False);
+        assertRegex("^refused: .*" + UncheckedLocation, p.callFunction("java_add", "addPath", x + "/main.jar"));
+
+        # a regular file that is confirmed not to be an archive has no entries
+        x = newDir();
+        File f();
+        f.open2(x + "/text.jar", O_CREAT | O_WRONLY | O_TRUNC, 0600);
+        f.write("not an archive\n");
+        f.close();
+        p = getPermissiveProgram(False);
+        assertEq("ok", p.callFunction("java_add", "addPathOrig", x + "/text.jar"));
+        assertNothingRead(p, "a file that is not an archive");
+
+        # a file that cannot be read; root can read any file
+        if (getuid()) {
+            x = newDir();
+            ClasspathUrlProbe::writeMarkerJar(x + "/secret.jar", Allowed);
+            chmod(x + "/secret.jar", 0);
+            on_exit chmod(x + "/secret.jar", 0600);
+            p = getPermissiveProgram(False);
+            assertRegex("^refused: .*" + UncheckedLocation, p.callFunction("java_add", "addPathOrig",
+                x + "/secret.jar"));
+        }
+    }
+
+    networkInnerEntryTest() {
+        string x = newDir();
+        ClasspathUrlProbe::writeMarkerJar(x + "/dep.jar", Allowed);
+        string url = "jar:file:" + ClasspathUrlProbe::encodedPath(x) + "/dep.jar!/sub/";
+        Program p = getPermissiveProgram(False);
+        assertRegex("^refused: .*" + UncheckedLocation, p.callFunction("java_add", "addURLString", url));
+        assertNothingRead(p, "an entry inside an archive");
+
+        # an archive named in the form of a directory inside a jar URL, whose manifest names another location
+        x = newDir();
+        ClasspathUrlProbe::writeMarkerJar(x + "/dep.jar", Allowed);
+        ClasspathUrlProbe::writeManifestJar(x + "/main.jar", "file://example.invalid"
+            + ClasspathUrlProbe::encodedPath(x) + "/dep.jar");
+        url = "jar:file:" + ClasspathUrlProbe::encodedPath(x) + "/main.jar/!/";
+        p = getPermissiveProgram(False);
+        assertRegex("^refused: .*" + UncheckedLocation, p.callFunction("java_add", "addURLString", url));
+        assertNothingRead(p, "an archive in the form of a directory");
+    }
+
+    networkNestedRoutesTest() {
+        hash<ClasspathUrlCase> other = OtherAuthorityCases[0];
+        hash<ClasspathUrlCase> exact = ExactCases[0];
+        foreach string route in (JavaRoutes) {
+            string x = makeCase(other);
+            Program p = getPermissiveProgram(False);
+            assertRegex("^refused: .*" + OtherLocation, p.callFunction("java_add", route, x + "/main/top.jar"), route);
+            assertNothingRead(p, route);
+
+            x = makeCase(exact);
+            p = getPermissiveProgram(False);
+            assertEq("ok", p.callFunction("java_add", route, x + "/main/top.jar"), route);
+            assertEq((Allowed, Allowed, Allowed, Allowed), p.callFunction("read_all"), route);
+        }
+    }
+
+    networkBoundTest() {
+        string x = newDir();
+        ClasspathUrlProbe::writeMarkerJar(x + "/dep.jar", Allowed);
+        list<string> entries = map "dep.jar", xrange(MaxManifestEntries);
+        ClasspathUrlProbe::writeManifestJar(x + "/at.jar", entries.join(" "));
+        assertNetworkOnlyReads("addPath", x + "/at.jar", "as many entries as the bound");
+
+        ClasspathUrlProbe::writeManifestJar(x + "/over.jar", (entries + "dep.jar").join(" "));
+        Program p = getPermissiveProgram(False);
+        assertRegex("^refused: .*" + UncheckedLocation, p.callFunction("java_add", "addPath", x + "/over.jar"));
+        assertNothingRead(p, "more entries than the bound");
+    }
+
+    networkCycleTest() {
+        string x = newDir();
+        ClasspathUrlProbe::writeMarkerDir(x + "/classes", Allowed);
+        ClasspathUrlProbe::writeManifestJar(x + "/a.jar", "b.jar classes/");
+        ClasspathUrlProbe::writeManifestJar(x + "/b.jar", "a.jar");
+        assertNetworkOnlyReads("addPath", x + "/a.jar", "a cycle");
+
+        # a deep chain that ends in a local archive, and one that ends in another location
+        foreach bool other in ((False, True)) {
+            x = newDir();
+            ClasspathUrlProbe::writeMarkerJar(x + "/dep.jar", Allowed);
+            string last = other ? "file://example.invalid" + ClasspathUrlProbe::encodedPath(x) + "/dep.jar" : "dep.jar";
+            int depth = 64;
+            ClasspathUrlProbe::writeManifestJar(sprintf("%s/n%d.jar", x, depth), last);
+            for (int i = depth - 1; i >= 0; --i) {
+                ClasspathUrlProbe::writeManifestJar(sprintf("%s/n%d.jar", x, i), sprintf("n%d.jar", i + 1));
+            }
+            if (other) {
+                Program p = getPermissiveProgram(False);
+                assertRegex("^refused: .*" + OtherLocation, p.callFunction("java_add", "addPath", x + "/n0.jar"));
+                assertNothingRead(p, "a deep chain to another location");
+            } else {
+                assertNetworkOnlyReads("addPath", x + "/n0.jar", "a deep chain");
+            }
+        }
+    }
+
+    networkUrlCheckDisabledTest() {
+        string prop = "jdk.net.URLClassPath.disableClassPathURLCheck";
+        *string saved = Jni::java::lang::System::getProperty(prop);
+        on_exit {
+            if (exists saved) {
+                Jni::java::lang::System::setProperty(prop, saved);
+            } else {
+                Jni::java::lang::System::clearProperty(prop);
+            }
+        }
+        string x = newDir();
+        ClasspathUrlProbe::writeMarkerJar(x + "/dep.jar", Allowed);
+        ClasspathUrlProbe::writeManifestJar(x + "/main.jar", "http://example.invalid/x.jar dep.jar");
+        Jni::java::lang::System::setProperty(prop, "true");
+        Program p = getPermissiveProgram(False);
+        assertRegex("^refused: .*" + OtherLocation, p.callFunction("java_add", "addPath", x + "/main.jar"));
+        assertNothingRead(p, "an entry that is not a file when the JDK follows it");
+    }
+
+    networkUnverifiedJdkTest() {
+        hash<ClasspathUrlCase> exact = ExactCases[0];
+        foreach string route in (JavaRoutes) {
+            string x = makeCase(exact);
+            Program p = getPermissiveProgram(False);
+            assertRegex("^refused: .*unverified JDK version", p.callFunction("java_add_unverified", route,
+                x + "/main/main.jar"), route);
+            assertNothingRead(p, route);
+        }
+        # an archive with no manifest Class-Path is not affected
+        string x = newDir();
+        ClasspathUrlProbe::writeMarkerJar(x + "/dep.jar", Allowed);
+        Program p = getPermissiveProgram(False);
+        assertEq("ok", p.callFunction("java_add_unverified", "addPath", x + "/dep.jar"));
+        assertEq((Allowed, Allowed, Allowed, Allowed), p.callFunction("read_all"));
+    }
+
+    compilerClasspathTrustedTest() {
+        # the rule for an exact path is for a caller whose filesystem access is restricted
+        hash<ClasspathUrlCase> inexact = InexactCases[0];
+        string x = makeCase(inexact);
+        string jar = x + "/main/main.jar";
+        foreach Program p in ((newProgram(), getPermissiveProgram(True), getPermissiveProgram(False))) {
+            assertEq("ok: 1", p.callFunction("compiler_classpath", jar));
+        }
+        # and it still applies to one
+        Program restricted = getProgram(allowedPaths(x, inexact));
+        assertRegex("cannot be checked exactly", restricted.callFunction("compiler_classpath", jar));
+
+        # the checks of what a compiler could read differently are for a caller whose filesystem access is restricted
+        x = newDir();
+        ClasspathUrlProbe::writeMarkerJar(x + "/dep.jar", Allowed);
+        ClasspathUrlProbe::writeManifestJar(x + "/differs.jar", "./dep.jar");
+        File f();
+        f.open2(x + "/text.bin", O_CREAT | O_WRONLY | O_TRUNC, 0600);
+        f.write("not an archive\n");
+        f.close();
+        foreach Program p in ((newProgram(), getPermissiveProgram(True), getPermissiveProgram(False))) {
+            assertEq("ok: 1", p.callFunction("compiler_classpath", x + "/differs.jar"));
+            assertEq("ok: 1", p.callFunction("compiler_classpath", x + "/text.bin"));
+            # an archive with no manifest Class-Path
+            assertEq("ok: 1", p.callFunction("compiler_classpath", x + "/dep.jar"));
+        }
+        restricted = getProgram((x,));
+        assertRegex("a compiler could resolve", restricted.callFunction("compiler_classpath", x + "/differs.jar"));
+        assertRegex("does not have a .jar or .zip name", restricted.callFunction("compiler_classpath",
+            x + "/text.bin"));
+        assertEq("ok: 1", restricted.callFunction("compiler_classpath", x + "/dep.jar"));
+
+        # a caller that restricts the network still gets the location rule; the entry is not read
+        x = makeCase(OtherAuthorityCases[0]);
+        jar = x + "/main/main.jar";
+        assertRegex(OtherLocation, getPermissiveProgram(False).callFunction("compiler_classpath", jar));
+        assertEq("ok: 1", getPermissiveProgram(True).callFunction("compiler_classpath", jar));
+        assertEq("ok: 1", newProgram().callFunction("compiler_classpath", jar));
+    }
+
+    #! makes the archives of the compiler classpath cases in a new directory; returns the directory
+    private string makeCompilerCases() {
+        string x = newDir();
+        ClasspathUrlProbe::writeMarkerJar(x + "/dep.jar", Allowed);
+        ClasspathUrlProbe::writeManifestJar(x + "/plain.jar", "dep.jar");
+        ClasspathUrlProbe::writeManifestJar(x + "/nonfile.jar", "http://example.invalid/x.jar dep.jar");
+        ClasspathUrlProbe::writeManifestJar(x + "/undecodable.jar", "dep%zz.jar");
+        ClasspathUrlProbe::writeIndexedJar(x + "/indexed.jar", Allowed);
+        mkfifo(x + "/special.jar");
+        return x;
+    }
+
+    compilerClasspathOpenTest() {
+        string x = makeCompilerCases();
+        foreach Program p in ((newProgram(), getPermissiveProgram(True))) {
+            foreach string name in ("nonfile.jar", "undecodable.jar", "special.jar", "indexed.jar") {
+                assertEq("ok: 1", p.callFunction("compiler_classpath", x + "/" + name), name);
+            }
+            assertEq("ok: 1", p.callFunction("compiler_classpath_unverified", x + "/plain.jar"), "an unverified JDK");
+            # the classpath comes back as it was given, also an entry that does not exist
+            list<string> given = (x + "/dep.jar", x + "/absent.jar", "relative.jar");
+            assertEq(given, p.callFunction("compiler_classpath_paths", given.join(PathSep)));
+        }
+    }
+
+    compilerClasspathNetworkTest() {
+        string x = makeCompilerCases();
+        Program p = getPermissiveProgram(False);
+        # as the class loader ignores it, and with no jar index support to follow
+        foreach string name in ("nonfile.jar", "indexed.jar", "plain.jar") {
+            assertEq("ok: 1", p.callFunction("compiler_classpath", x + "/" + name), name);
+        }
+        # the location of these cannot be confirmed
+        foreach string name in ("undecodable.jar", "special.jar", "absent.jar") {
+            assertRegex("^refused: .*" + UncheckedLocation, p.callFunction("compiler_classpath", x + "/" + name), name);
+        }
+        assertRegex("^refused: .*unverified JDK version", p.callFunction("compiler_classpath_unverified",
+            x + "/plain.jar"));
+        assertEq("ok: 1", p.callFunction("compiler_classpath_unverified", x + "/dep.jar"), "no manifest Class-Path");
+        assertEq((x + "/plain.jar", x + "/dep.jar"), p.callFunction("compiler_classpath_paths",
+            x + "/plain.jar" + PathSep + x + "/dep.jar"));
+
+        # the archives that a wildcard selects are walked
+        string w = newDir();
+        ClasspathUrlProbe::writeMarkerJar(w + "/dep.jar", Allowed);
+        assertEq("ok: 1", p.callFunction("compiler_classpath", w + "/*.jar"));
+        ClasspathUrlProbe::writeManifestJar(w + "/other.jar", "file://example.invalid"
+            + ClasspathUrlProbe::encodedPath(w) + "/dep.jar");
+        assertRegex("^refused: .*" + OtherLocation, p.callFunction("compiler_classpath", w + "/*.jar"));
+    }
+
+    compilerClasspathFilesystemTest() {
+        string x = makeCompilerCases();
+        Program p = getProgram((x,));
+        assertRegex("is not a file", p.callFunction("compiler_classpath", x + "/nonfile.jar"));
+        assertRegex("cannot be checked exactly", p.callFunction("compiler_classpath", x + "/undecodable.jar"));
+        assertRegex("not a regular file", p.callFunction("compiler_classpath", x + "/special.jar"));
+        if (feature < 22) {
+            assertRegex("has a jar index", p.callFunction("compiler_classpath", x + "/indexed.jar"));
+        } else {
+            assertEq("ok: 1", p.callFunction("compiler_classpath", x + "/indexed.jar"));
+        }
+        assertRegex("unverified JDK version", p.callFunction("compiler_classpath_unverified", x + "/plain.jar"));
+    }
+
+    networkOnePathTest() {
+        foreach string name in ("a;b.jar", "a:b.jar") {
+            string x = newDir();
+            ClasspathUrlProbe::writeMarkerJar(x + "/" + name, Allowed);
+            assertNetworkOnlyReads("addPathOrig", x + "/" + name, name);
+        }
+    }
+
+    networkLocalUrlTest() {
+        string x = newDir();
+        ClasspathUrlProbe::writeMarkerJar(x + "/dep.jar", Allowed);
+        string url = "file://localhost" + ClasspathUrlProbe::encodedPath(x) + "/dep.jar";
+        assertNetworkOnlyReads("addURLString", url, "a URL with the local host");
+    }
+
+    networkIgnoredEntryTest() {
+        string x = newDir();
+        ClasspathUrlProbe::writeMarkerJar(x + "/dep.jar", Allowed);
+        # the JDK's class loader does not follow the first entry, and opens no connection for it
+        ClasspathUrlProbe::writeManifestJar(x + "/main.jar", "http://example.invalid/x.jar dep.jar");
+        assertNetworkOnlyReads("addPath", x + "/main.jar", "a manifest entry that is not a file");
+    }
+
+    networkJarIndexTest() {
+        string x = newDir();
+        ClasspathUrlProbe::writeIndexedJar(x + "/indexed.jar", Allowed);
+        assertNetworkOnlyReads("addPath", x + "/indexed.jar", "an archive with a jar index");
+    }
+
+    capturedPolicyTest() {
+        assertTrue(getPermissiveProgram(False).callFunction("captured_network"), "restricts only the network");
+        assertFalse(getPermissiveProgram(True).callFunction("captured_network"), "restricts nothing");
+        assertFalse(getProgram((scratch,), True).callFunction("captured_network"), "restricts only the filesystem");
+        assertTrue(getProgram((scratch,)).callFunction("captured_network"), "restricts both");
+        assertFalse(newProgram().callFunction("captured_network"), "no sandbox");
+    }
+}

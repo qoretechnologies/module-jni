@@ -1,0 +1,246 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../build"
+%requires QUnit
+%requires jni
+%module-cmd(jni) add-relative-classpath ../build/qore-jni.jar
+%module-cmd(jni) add-relative-classpath qore-jni-test.jar
+%module-cmd(jni) add-relative-classpath ../build/qore-jni-compiler.jar
+%module-cmd(jni) import org.qore.jni.QoreURLClassLoader
+%module-cmd(jni) import org.qore.jni.test.ClassLoaderAccessProbe
+%module-cmd(jni) import org.qore.jni.test.GovernedProgramProbe
+
+%exec-class JniSandboxKotlinScriptAccessTest
+
+#! The classes of a Kotlin script belong to the Program that evaluated it (qoretechnologies/qore#7131)
+/** Outside CI, the test is skipped if no Kotlin scripting JARs are installed; in CI, missing JARs are an error.  If they
+    are found, scripting that does not work is a failure.  The first test case runs before any sandboxed code has used
+    Java.
+*/
+class JniSandboxKotlinScriptAccessTest inherits QUnit::Test {
+    public {
+        const Who = "org.qore.jni.QoreJavaApi.callFunction(\"who\")";
+        const Holder = "org.qore.jni.test.ClassLoaderAccessProbe.holder!!";
+
+        #! reports the class of the script's class loader and the Program that a call into Qore runs in
+        const Report = "val r = try { object {}.javaClass.classLoader.javaClass.simpleName + \":\" + " + Who
+            + " } catch (e: Throwable) { \"refused: \" + e }\nr";
+
+        const TenantSource = "%modern
+%requires jni
+%module-cmd(jni) import org.qore.jni.test.ClassLoaderAccessProbe
+string sub close_object(object compiler) {
+    return ClassLoaderAccessProbe::closeObject(compiler);
+}
+string sub who() {
+    return \"NAME\";
+}
+auto sub ev(string script) {
+    return kotlin_eval(script);
+}
+";
+        const NotGoverned = "JNI-ERROR.*cannot call into a Qore Program other than the one of the calling code";
+    }
+
+    private {
+        Program tenant1;
+        Program tenant2;
+    }
+
+    constructor() : QUnit::Test("jni sandbox Kotlin script access", "1.0") {
+        addTestCase("trusted script before sandboxed code used Java", \trustedBeforeTest());
+        addTestCase("trusted script after sandboxed code used Java", \trustedAfterTest());
+        addTestCase("sandboxed script reaches only its own Program", \sandboxedTest());
+        addTestCase("attribution is not forged by the thread's context", \forgeTest());
+        addTestCase("evaluations of different Programs", \acrossProgramsTest());
+        addTestCase("concurrent evaluations", \concurrentTest());
+        addTestCase("bindings and script errors", \behaviorTest());
+        addTestCase("a compiled script of another form", \otherCompiledScriptTest());
+        addTestCase("a Kotlin compiler's close", \kotlinCompilerCloseTest());
+        set_return_value(main());
+    }
+
+    #! finds the scripting JARs; returns NOTHING if none are installed
+    private static *list<string> getScriptingJars() {
+        list<string> dirs = ();
+        if (ENV.KOTLIN_SCRIPTING_JARS) {
+            push dirs, ENV.KOTLIN_SCRIPTING_JARS;
+        }
+        if (ENV.KOTLIN_HOME) {
+            push dirs, ENV.KOTLIN_HOME + "/lib/scripting";
+        }
+        dirs += ("/usr/share/qore/java/kotlin/lib/scripting", "/opt/kotlin/lib/scripting");
+        foreach string dir in (dirs) {
+            *list<string> jars = glob(dir + "/*.jar");
+            if (!jars || !(select jars, $1 =~ /kotlin-scripting-jsr223/)) {
+                continue;
+            }
+            foreach string name in ("kotlin-stdlib.jar", "kotlin-reflect.jar") {
+                string path = dirname(dir) + "/" + name;
+                if (is_file(path)) {
+                    push jars, path;
+                }
+            }
+            return jars;
+        }
+    }
+
+    #! makes scripting available, or skips the test if it is not installed; a failure to load it is an error
+    private checkKotlin() {
+        if (kotlin_scripting_available()) {
+            return;
+        }
+        *list<string> jars = getScriptingJars();
+        if (!jars) {
+            if (ENV.CI) {
+                throw "KOTLIN-MISSING", "the Kotlin scripting JARs are required in CI for this test";
+            }
+            testSkip("the Kotlin scripting JARs are not installed");
+        }
+        QoreURLClassLoader loader = QoreURLClassLoader::getCurrent();
+        map loader.addPath($1), jars;
+        assertTrue(kotlin_scripting_retry(), "the installed Kotlin scripting JARs must load");
+    }
+
+    private Program makeTenant(string name) {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse(replace(TenantSource, "NAME", name), name);
+        SandboxManager sm();
+        # only a tenant trusted with uncontrolled APIs can call Java code
+        sm.setUncontrolledApiPolicy(True);
+        p.setSandboxManager(sm);
+        return p;
+    }
+
+    #! creates the tenants, after which sandboxed code has used Java
+    private setupTenants() {
+        checkKotlin();
+        if (!tenant1) {
+            tenant1 = makeTenant("tenant1");
+            tenant2 = makeTenant("tenant2");
+            ClassLoaderAccessProbe::setHolder(get_class_loader());
+            assertEq("QoreURLClassLoader:tenant1", tenant1.callFunction("ev", Report));
+        }
+    }
+
+    private assertRefused(string rv) {
+        assertRegex("^(inner: )?refused: .*" + NotGoverned, rv, rv);
+    }
+
+    trustedBeforeTest() {
+        checkKotlin();
+        assertNothing(tenant1);
+        assertEq("QoreURLClassLoader:host", kotlin_eval(Report));
+    }
+
+    trustedAfterTest() {
+        setupTenants();
+        assertEq("QoreURLClassLoader:host", kotlin_eval(Report));
+    }
+
+    sandboxedTest() {
+        setupTenants();
+        assertEq("QoreURLClassLoader:tenant2", tenant2.callFunction("ev", Report));
+        string script = "val r = try { " + Holder + ".setContext(); \"reached: \" + " + Who
+            + " } catch (e: Throwable) { \"refused: \" + e }\nr";
+        assertRefused(tenant1.callFunction("ev", script));
+    }
+
+    forgeTest() {
+        setupTenants();
+        # a class loader cannot be derived from one of another Program
+        assertRefused(tenant1.callFunction("ev", "val r = try { org.qore.jni.QoreURLClassLoader.createDerived("
+            + Holder + "); \"created\" } catch (e: Throwable) { \"refused: \" + e }\nr"));
+        # with the context of another Program, a nested evaluation is not attributed to that Program
+        assertRefused(tenant1.callFunction("ev", "val r = try { " + Holder
+            + ".setContext(); \"inner: \" + org.qore.jni.KotlinScriptEngine.eval(\"\"\"" + Report
+            + "\"\"\") } catch (e: Throwable) { \"refused: \" + e }\nr"));
+        # the thread's context class loader does not attribute a script
+        assertEq("inner: QoreURLClassLoader:tenant1", tenant1.callFunction("ev", "val r = try { "
+            + "Thread.currentThread().contextClassLoader = " + Holder
+            + "; \"inner: \" + org.qore.jni.KotlinScriptEngine.eval(\"\"\"" + Report
+            + "\"\"\") } catch (e: Throwable) { \"refused: \" + e }\nr"));
+        # a class loader of another Program is not changed
+        assertRefused(tenant1.callFunction("ev", "val r = try { " + Holder
+            + ".addPendingClass(\"x.Y\", ByteArray(1)); \"added\" } catch (e: Throwable) { \"refused: \" + e }\nr"));
+    }
+
+    acrossProgramsTest() {
+        setupTenants();
+        assertEq("QoreURLClassLoader:tenant1", tenant1.callFunction("ev", Report));
+        assertEq("QoreURLClassLoader:host", kotlin_eval(Report));
+        assertEq("QoreURLClassLoader:tenant2", tenant2.callFunction("ev", Report));
+        assertEq("QoreURLClassLoader:tenant1", tenant1.callFunction("ev", Report));
+    }
+
+    concurrentTest() {
+        setupTenants();
+        Counter start(1);
+        Counter done();
+        Mutex m();
+        list<string> errs = ();
+        code run = sub (string expect, *Program p) {
+            on_exit done.dec();
+            try {
+                start.waitForZero();
+                for (int i = 0; i < 3; ++i) {
+                    string rv = p ? p.callFunction("ev", Report) : kotlin_eval(Report);
+                    if (rv != "QoreURLClassLoader:" + expect) {
+                        m.lock();
+                        on_exit m.unlock();
+                        push errs, sprintf("%s: %s", expect, rv);
+                    }
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                m.lock();
+                on_exit m.unlock();
+                push errs, sprintf("%s: %s: %s", expect, ex.err, ex.desc);
+            }
+        };
+        done.inc();
+        background run("host");
+        done.inc();
+        background run("tenant1", tenant1);
+        done.inc();
+        background run("tenant2", tenant2);
+        start.dec();
+        done.waitForZero();
+        assertEq((), errs);
+    }
+
+    #! the classes of a script that cannot be taken from the compiler stay in Kotlin's class loader, which is unknown
+    otherCompiledScriptTest() {
+        checkKotlin();
+        object loader = ClassLoaderAccessProbe::newDerived(get_class_loader());
+        string rv = ClassLoaderAccessProbe::addOtherCompiledScript(loader);
+        assertEq("ok: no classes", rv, rv);
+    }
+
+    #! a refused close leaves a Kotlin compiler open for its owner
+    kotlinCompilerCloseTest() {
+        setupTenants();
+        object compiler = ClassLoaderAccessProbe::newKotlinCompiler(get_class_loader());
+        on_exit ClassLoaderAccessProbe::closeObject(compiler);
+        string rv = tenant1.callFunction("close_object", compiler);
+        assertRegex("^refused: .*" + NotGoverned, rv, rv);
+        assertFalse(ClassLoaderAccessProbe::isClosedObject(compiler));
+        rv = ClassLoaderAccessProbe::closeObject(compiler);
+        assertEq("ok: closed", rv, rv);
+        assertTrue(ClassLoaderAccessProbe::isClosedObject(compiler));
+    }
+
+    behaviorTest() {
+        setupTenants();
+        assertEq(3, kotlin_eval("1 + 2"));
+        assertEq(42, ClassLoaderAccessProbe::evalWithBinding("bindings[\"x\"]", "x", 42));
+        assertThrows("JNI-ERROR", "Kotlin script error", \kotlin_eval(), "this is not kotlin (");
+    }
+}
+
+string sub who() {
+    return "host";
+}

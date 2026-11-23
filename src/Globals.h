@@ -37,6 +37,7 @@
 #include <atomic>
 #include <condition_variable>
 #include <mutex>
+#include <shared_mutex>
 
 DLLLOCAL QoreStringNode* jni_module_init_intern();
 
@@ -176,7 +177,7 @@ public:
 
     DLLLOCAL static GlobalReference<jclass> classQoreJavaApi;                     // org.qore.jni.QoreJavaApi
     DLLLOCAL static GlobalReference<jclass> classQoreSandbox;                     // org.qore.jni.QoreSandbox
-    DLLLOCAL static jmethodID methodQoreSandboxResolveClasspath;                  // static QoreURLClassLoader.ResolvedClasspath resolveClasspath(String, int)
+    DLLLOCAL static jmethodID methodQoreSandboxResolveClasspath;                  // static QoreURLClassLoader.ResolvedClasspath resolveClasspath(String, int, boolean, boolean)
     DLLLOCAL static jmethodID methodQoreSandboxExpandClasspath;                   // static void expandClasspath(ResolvedClasspath, int)
     DLLLOCAL static jmethodID methodQoreJavaApiGetStackTrace;                     // StackTraceElement[] getStackTrace()
     DLLLOCAL static jmethodID methodQoreJavaApiGetStackProgramPtrs;               // long[] getStackProgramPtrs()
@@ -233,6 +234,7 @@ public:
     DLLLOCAL static jmethodID methodResolvedClasspathEncodedPath;                 // byte[] ResolvedClasspath.encodedPath(int)
     DLLLOCAL static jmethodID methodResolvedClasspathIsWildcardMatch;             // boolean ResolvedClasspath.isWildcardMatch(int)
     DLLLOCAL static jmethodID methodResolvedClasspathManifestReferrer;            // String ResolvedClasspath.manifestReferrer(int)
+    DLLLOCAL static jmethodID methodResolvedClasspathGivenEntry;                  // String ResolvedClasspath.givenEntry(int)
     DLLLOCAL static jmethodID methodResolvedClasspathRefusal;                     // String ResolvedClasspath.refusal(int)
     DLLLOCAL static jmethodID methodQoreURLClassLoaderAddParentPath;              // void QoreURLClassLoader.addParentPath(String)
     DLLLOCAL static jmethodID methodQoreURLClassLoaderLoadClass;                  // Class QoreURLClassLoader.loadClass(String)
@@ -245,12 +247,12 @@ public:
     DLLLOCAL static jmethodID methodQoreURLClassLoaderGetResolveClass;            // Class<?> QoreURLClassLoader.getResolveClass(String)
     DLLLOCAL static jmethodID methodQoreURLClassLoaderClearCache;                 // void QoreURLClassLoader.clearCache()
     DLLLOCAL static jmethodID methodQoreURLClassLoaderDefineClassUnconditional;   // Class<?> QoreURLClassLoader.defineClassUnconditional(String, byte[])
-    DLLLOCAL static jmethodID methodQoreURLClassLoaderGetPtr;                     // long getPtr()
+    DLLLOCAL static jmethodID methodQoreURLClassLoaderGetPtr;                     // long getPtrIntern()
     DLLLOCAL static jmethodID methodQoreURLClassLoaderGetCurrent;                 // OoreURLClassLoader getCurrent()
     DLLLOCAL static jmethodID methodQoreURLClassLoaderCheckInProgress;            // boolean checkInProgress(String)
     DLLLOCAL static jmethodID methodQoreURLClassLoaderClearProgramPtr;            // void ClearProgramPtr()
     DLLLOCAL static jmethodID methodQoreURLClassLoaderClearContext;               // void clearContext()
-    DLLLOCAL static jmethodID methodQoreURLClassLoaderRegisterSharedDynamicClass; // void registerSharedDynamicClass(String)
+    DLLLOCAL static jmethodID methodQoreURLClassLoaderRegisterSharedDynamicClass; // void registerSharedDynamicClassIntern(String)
 
     DLLLOCAL static GlobalReference<jclass> classJavaClassBuilder;                // org.qore.jni.JavaClassBuilder
     DLLLOCAL static jmethodID methodJavaClassBuilderGetFunctionConstantClassBuilder; // static DynamicType.Builder<?> getFunctionConstantClassBuilder(String bin_name)
@@ -665,6 +667,40 @@ public:
     DLLLOCAL static std::atomic<int> dbg_context_programs_created;
     //! The number of global context Programs deleted by clearGlobalContext() in the process (debug builds only)
     DLLLOCAL static std::atomic<int> dbg_context_programs_deleted;
+
+    //! What a thread holds for dbgHoldContext() (debug builds only)
+    enum class DbgContextHoldKind {
+        //! the context lock
+        Lock,
+        //! the global context Program
+        Program,
+        //! the lock of the registry of the Programs' jni data
+        Registry,
+        //! the save object callback lock of the jni data of the calling Program
+        SaveObject,
+        //! the shutdown gate, as an access check of class loader cleanup holds it
+        ShutdownGate,
+    };
+
+    //! Makes a new thread hold \a kind until dbgReleaseContextHold() (debug builds only); returns once it holds it, or
+    //! false if a hold is active or the calling Program has no jni data
+    DLLLOCAL static bool dbgHoldContext(DbgContextHoldKind kind);
+
+    //! Counts a hold of the global context Program on the calling thread (debug builds only)
+    DLLLOCAL static void dbgHoldContextProgramOnThisThread() {
+        holdContextProgram();
+    }
+
+    //! Releases a hold of dbgHoldContextProgramOnThisThread() (debug builds only)
+    DLLLOCAL static void dbgReleaseContextProgramOnThisThread() {
+        releaseContextProgram();
+    }
+
+    //! Writes a marker of the module's cleanup to stderr, if QORE_JNI_DBG_FORK_MARKERS is set (debug builds only)
+    DLLLOCAL static void dbgContextMarker(const char* marker);
+
+    //! Ends the hold of dbgHoldContext(), if any, and joins its thread (debug builds only)
+    DLLLOCAL static void dbgReleaseContextHold();
 #endif
 
     //! Abandons the global context during process exit without running Qore destructors
@@ -674,6 +710,28 @@ public:
         which no global context Program is created.
     */
     DLLLOCAL static void abandonGlobalContext();
+
+    //! Returns the global context Program if it exists, without creating it; only for comparing the pointer
+    DLLLOCAL static const QoreProgram* peekContextProgram() {
+        return context_pgm.load(std::memory_order_acquire);
+    }
+
+    //! Returns the lock that serializes the access checks of class loader cleanup with the start of the shutdown
+    /** Held shared by a check, which uses Qore APIs, and exclusively while clearGlobalContext() sets the shutdown flag,
+        so that a check either ends first or sees the flag; never destroyed.  Checks take it with enterShutdownGate(),
+        so that no new check starts once the shutdown is announced; the shutdown waits for the checks already running
+    */
+    DLLLOCAL static std::shared_mutex& getShutdownGate();
+
+    //! Takes the shutdown gate shared for a check, unless the module's shutdown has started
+    /** clearGlobalContext() announces the shutdown before it waits for the gate: a check that sees the announcement
+        does not take the gate, so that only the checks already running are waited for
+
+        @param lock set to hold the gate if the function returns true; it can also hold it if it returns false
+
+        @return true if the check can use Qore APIs while \a lock holds the gate
+    */
+    DLLLOCAL static bool enterShutdownGate(std::shared_lock<std::shared_mutex>& lock);
 
     //! Returns true if the JNI module is shutting down
     /** Java background threads (e.g. ActiveMQ/JMS listeners) must check
@@ -756,6 +814,8 @@ private:
     //! The global context Program in qph, or nullptr, for the lookup with no lock in getJavaContextProgram(); set and
     //! cleared under getContextLock()
     DLLLOCAL static std::atomic<QoreProgram*> context_pgm;
+    //! Set before clearGlobalContext() waits for the shutdown gate; see enterShutdownGate()
+    DLLLOCAL static std::atomic<bool> shutdown_gate_closing;
     //! Returns the lock that serializes the creation of the global context Program (qph) with the start of the
     //! module's shutdown
     /** Recursive, as the creation of the Program can look it up again on the same thread; never destroyed, as
@@ -789,6 +849,16 @@ private:
     //! Waits until no other thread holds the global context Program, and returns the number of holders of this
     //! thread, which it cannot wait for
     DLLLOCAL static int waitForContextHolders();
+
+    //! clearGlobalContext() in a child process created with fork()
+    /** A lock or a hold of the global context Program that another thread of the parent had at the fork is never
+        released, so the function waits for neither.  It needs no lock against the child's own threads, as the module is
+        deleted after qore_cleanup() has waited for them.  The Program is deleted here, while the module's data exists:
+        a Program left allocated would be cleared by qore_cleanup() after the module has been deleted.  The library has
+        made the Program's own locks and thread counts consistent in the child.  Only a hold of the calling thread
+        itself keeps the Program, as in any other process
+    */
+    DLLLOCAL static void clearGlobalContextInForkedChild();
 
     friend class JniContextProgramHolder;
 

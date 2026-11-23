@@ -42,6 +42,12 @@
 */
 DLLLOCAL void init_jni_debug_functions(QoreNamespace& ns);
 
+//! True while the gate of Jni::dbg_jni_arm_save_object_gate() is armed; checked inline before it is run
+DLLLOCAL extern std::atomic<bool> dbg_jni_save_object_gate_set;
+
+//! Holds the thread that changes a save object callback, once, between its read of the old callback and the change
+DLLLOCAL void dbg_jni_run_save_object_gate();
+
 //! The points of a call at which a gate set with Jni::dbg_jni_set_context_gate() can run
 enum class DbgJniGatePoint {
     //! between the lookup of a Program's jni context and its use
