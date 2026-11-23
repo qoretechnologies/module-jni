@@ -34,7 +34,9 @@
 #include "QoreJniClassMap.h"
 #include "JavaToQore.h"
 #include "QoreJdbcDriver.h"
+#include "defs.h"
 
+#include <memory>
 #include <string>
 
 namespace jni {
@@ -47,10 +49,43 @@ enum DbType {
 };
 #endif
 
+//! The secrets of a jdbc connection, which are masked in the text of the Java exceptions of its operations (qore#7344)
+/** The connection shares it with the JavaExceptionMaskHelper of each operation, as the connection can be deleted
+    during an operation (ex: closed by a callback)
+*/
+class QoreJdbcSecretMasker : public JavaExceptionTextMasker {
+public:
+    DLLLOCAL QoreJdbcSecretMasker(const Datasource* ds) : ds(ds) {
+    }
+
+    //! Masks the secrets of the connection in the text of a Java exception
+    /** Replaces the URL of the connection (the \c url option and the database name, with and without the \c jdbc:
+        prefix) with its \c jdbc:<subprotocol>: prefix followed by \c "****", and the password of the datasource and
+        the credentials in the URL (the password of its user info, an Oracle-style \c user/password\@ and the values of
+        its password, secret, token and key properties, also percent-decoded) with \c "****"; ASCII letters are
+        matched in any case, and a secret of less than 6 bytes only where it is not next to an ASCII letter or digit
+
+        @return true if a secret was replaced
+    */
+    DLLLOCAL bool maskText(QoreString& text) const override;
+
+    //! the \c url option of the connection, in UTF-8
+    std::string url;
+
+private:
+    //! the datasource of the connection, which gives the database name and the password
+    const Datasource* ds;
+};
+
 class QoreJdbcConnection {
 public:
     DLLLOCAL QoreJdbcConnection(Datasource* d, ExceptionSink* xsink);
     DLLLOCAL ~QoreJdbcConnection();
+
+    //! Returns the masker of the secrets of the connection (qore#7344)
+    DLLLOCAL std::shared_ptr<const JavaExceptionTextMasker> getMasker() const {
+        return masker;
+    }
 
     DLLLOCAL int reconnect(Env& env, ExceptionSink* xsink);
 
@@ -232,6 +267,9 @@ private:
 
     //! Overridden db URL value
     std::string db;
+
+    //! The masker of the secrets of the connection (qore#7344)
+    std::shared_ptr<QoreJdbcSecretMasker> masker;
 
     //! Option for numeric values
     NumericOption numeric = ENO_OPTIMAL;

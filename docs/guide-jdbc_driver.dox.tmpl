@@ -183,6 +183,34 @@ try {
 }
     @endcode
 
+    @subsection jdbc_exception_masking Secrets in Exception Text
+
+    A JDBC driver can name the URL of the connection in the message of its exceptions (ex: the driver manager's
+    <tt>No suitable driver found for</tt> followed by the URL), and the URL can hold credentials.  So the jdbc driver
+    masks, in the description of each \c JNI-ERROR exception that it raises for an operation on a datasource (opening
+    the connection, also for a \c DatasourcePool or \c AbstractConnection::ping(), executing SQL, transactions and
+    \c SQLStatement methods):
+    - the URL (the @ref jdbc_option_url "url option" and the database name, with and without the \c jdbc: prefix),
+      which is replaced with its <tt>jdbc:</tt><em>subprotocol</em><tt>:</tt> prefix followed by \c "****" (ex:
+      \c "jdbc:postgresql:****")
+    - the password of the datasource, which the driver gets as its \c password property
+    - the credentials in the URL, also in their percent-decoded forms, wherever the driver names them (ex: in a
+      normalized form of the URL): the password of the user info (<tt>//user:</tt><em>password</em><tt>\@host</tt>),
+      an Oracle-style <tt>user/</tt><em>password</em><tt>\@</tt>, and the values of the URL's properties whose name
+      contains \c pass, \c pwd, \c secret, \c token or \c credential or is an access, API or private key name (ex:
+      <tt>password=</tt><em>value</em>, <tt>password={</tt><em>value</em><tt>}</tt>), each replaced with \c "****"
+
+    Letters are matched in any case; text without these values is not changed, and the code of the exception is
+    kept.  The argument of such an exception, the driver's Java exception (see @ref jdbc_sql_errors), would give the
+    values in its message, its string form (which \c AbstractConnection::ping() gives) and its causes; when its text
+    or the text of its causes names one of them, the argument is a \c java.sql.SQLException with the masked message
+    and the SQLState and vendor error code of the driver's exception (without its causes and its subclass), or, if the
+    driver's exception is not an \c SQLException, the exception has no argument.
+
+    @note a value of less than 6 bytes (ex: a short password) is masked only where it is not next to an ASCII letter
+    or digit, so that it is not masked in the words that contain it (a password \c "p" is not masked in
+    \c "SQLException")
+
     @section jdbc_transaction_boundaries JDBC Transaction Boundaries
 
     Ordinary selects outside a transaction use JDBC auto-commit mode, so a connection returned to a

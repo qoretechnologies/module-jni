@@ -37,6 +37,8 @@ namespace jni {
 
 static const char* this_file = q_basenameptr(__FILE__);
 
+thread_local const JavaExceptionTextMasker* JavaExceptionMaskHelper::current = nullptr;
+
 class JniCallStack : public QoreCallStack {
 public:
     DLLLOCAL JniCallStack(jobject throwable, QoreExternalProgramLocationWrapper& loc) {
@@ -129,6 +131,8 @@ QoreStringNode* JavaException::toString(bool clear) const {
     // raised again afterwards unless it is to be cleared
     env->ExceptionClear();
     QoreStringNode* rv = describe(env, throwable);
+    // the secrets of the operation are masked in the text (qore#7344)
+    JavaExceptionMaskHelper::mask(*rv);
     if (!clear) {
         env->Throw(throwable);
     }
@@ -213,6 +217,37 @@ QoreStringNode* JavaException::describe(JNIEnv* env, jthrowable original) {
     return desc.release();
 }
 
+//! Returns a java.sql.SQLException with \a msg and the SQLState and vendor code of \a throwable (qore#7344)
+/** @param env the JNI environment; no Java exception may be pending
+    @param throwable the exception
+    @param msg the masked message of \a throwable
+
+    @return the copy, or a null reference if \a throwable is not an SQLException or the copy cannot be made
+*/
+static LocalReference<jthrowable> masked_sql_exception(JNIEnv* env, jthrowable throwable, const QoreString& msg) {
+    if (!env->IsInstanceOf(throwable, Globals::classSQLException)) {
+        return nullptr;
+    }
+    try {
+        Env jenv(env);
+        jmethodID get_error_code = jenv.getMethod(Globals::classSQLException, "getErrorCode", "()I");
+        jmethodID ctor = jenv.getMethod(Globals::classSQLException, "<init>",
+            "(Ljava/lang/String;Ljava/lang/String;I)V");
+        LocalReference<jstring> state = jenv.callObjectMethod(throwable, Globals::methodSQLExceptionGetSQLState,
+            nullptr).as<jstring>();
+        jint code = jenv.callIntMethod(throwable, get_error_code, nullptr);
+        LocalReference<jstring> jmsg = jenv.newString(msg);
+        std::vector<jvalue> jargs(3);
+        jargs[0].l = jmsg;
+        jargs[1].l = state;
+        jargs[2].i = code;
+        return jenv.newObject(Globals::classSQLException, ctor, &jargs[0]).as<jthrowable>();
+    } catch (jni::Exception& e) {
+        e.ignore();
+    }
+    return nullptr;
+}
+
 void JavaException::convert(ExceptionSink* xsink) {
     // Converting the original exception must not throw a second cancellation exception while
     // constructing its Java call stack or argument. The request remains pending afterwards.
@@ -258,6 +293,8 @@ void JavaException::convert(ExceptionSink* xsink) {
                 // the description keeps its NUL characters
                 SimpleRefHolder<QoreStringNode> description(new QoreStringNode(desc_str.c_str(), desc_str.size(),
                     QCS_UTF8));
+                // the secrets of the operation are masked in the text (qore#7344)
+                JavaExceptionMaskHelper::mask(**description);
                 // the code is passed in the default encoding, which the API assumes for it
                 // (a code that cannot be converted is passed as it is)
                 QoreString err_utf8(err_str.c_str(), err_str.size(), QCS_UTF8);
@@ -317,6 +354,8 @@ void JavaException::convert(ExceptionSink* xsink) {
         desc = new QoreStringNode(name.c_str(), name.size(), QCS_UTF8);
     }
 
+    // the message of the exception
+    QoreString msg_text(QCS_UTF8);
     jstring raw_msg = static_cast<jstring>(env->CallObjectMethod(throwable,
         Globals::methodThrowableGetMessage));
     if (env->ExceptionCheck()) {
@@ -333,6 +372,34 @@ void JavaException::convert(ExceptionSink* xsink) {
         } else {
             Env::ModifiedUtf8 m(chars.get());
             desc->concat(m.c_str(), m.size());
+            msg_text.concat(m.c_str(), m.size());
+        }
+    }
+
+    // add Java call stack to Qore call stack; the stack of the exception that was raised
+    QoreExternalProgramLocationWrapper loc;
+    JniCallStack stack(throwable, loc);
+
+    // the secrets of the operation are masked in the text (qore#7344)
+    bool masked = JavaExceptionMaskHelper::mask(**desc);
+    // the Java exception is the argument of the Qore exception, whose text (ex: its toString(), which
+    // AbstractConnection::ping() gives) and causes can name the secrets too: it is replaced with a copy without them
+    bool replace_arg = masked;
+    if (!replace_arg && JavaExceptionMaskHelper::active()) {
+        SimpleRefHolder<QoreStringNode> full(describe(env, throwable));
+        replace_arg = JavaExceptionMaskHelper::mask(**full);
+    }
+    // true if the exception is raised without the Java exception: its text names the secrets, and it is not an
+    // SQLException
+    bool drop_arg = false;
+    if (replace_arg) {
+        JavaExceptionMaskHelper::mask(msg_text);
+        LocalReference<jthrowable> copy = masked_sql_exception(env, throwable, msg_text);
+        if (copy) {
+            throwable = std::move(copy);
+            tcls = static_cast<jclass>(env->NewLocalRef(Globals::classSQLException));
+        } else {
+            drop_arg = true;
         }
     }
 
@@ -343,11 +410,7 @@ void JavaException::convert(ExceptionSink* xsink) {
     JniContextProgramHolder ctx_holder;
     jni_get_context_or_global(pgm, ctx_holder);
 
-    // add Java call stack to Qore call stack
-    QoreExternalProgramLocationWrapper loc;
-    JniCallStack stack(throwable, loc);
-
-    if (!pgm) {
+    if (!pgm || drop_arg) {
         xsink->raiseExceptionArg(loc.get(), "JNI-ERROR", QoreValue(), desc.release(), stack);
     } else {
         Env jenv(env);

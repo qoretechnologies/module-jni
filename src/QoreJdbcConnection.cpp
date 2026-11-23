@@ -29,6 +29,9 @@
 #include "QoreToJava.h"
 #include "Env.h"
 
+#include <algorithm>
+#include <cctype>
+#include <utility>
 #include <vector>
 
 namespace jni {
@@ -55,8 +58,247 @@ static void set_prop(Env& env, LocalReference<jobject>& props, const char* prop,
     LocalReference<jobject> ignore = env.callObjectMethod(props, Globals::methodPropertiesSetProperty, &jargs[0]);
 }
 
-QoreJdbcConnection::QoreJdbcConnection(Datasource* ds, ExceptionSink* xsink) : ds(ds) {
+//! The masked form of a secret in the text of an exception (qore#7344)
+static constexpr const char* JDBC_MASK = "****";
+
+//! The shortest secret that is masked wherever it is in the text of an exception; a shorter one (ex: a short
+//! password) is masked only where it is not next to an ASCII letter or digit, so that it is not masked in words that
+//! contain it (ex: a password "p" in "SQLException")
+static constexpr size_t JDBC_MASK_ANYWHERE_MIN = 6;
+
+//! A secret of a connection and the text that replaces it in the text of an exception
+typedef std::pair<std::string, std::string> jdbc_secret_t;
+
+//! A list of secrets of a connection
+typedef std::vector<jdbc_secret_t> jdbc_secret_list_t;
+
+//! Returns a connection value of the datasource in UTF-8: in the datasource's encoding, as it is passed to Java
+/** a value that cannot be converted is returned as it is
+*/
+static std::string ds_utf8(const Datasource* ds, const std::string& val) {
+    const QoreEncoding* enc = ds->getQoreEncoding();
+    if (!enc) {
+        enc = QCS_DEFAULT;
+    }
+    if (enc == QCS_UTF8 || val.empty()) {
+        return val;
+    }
+    QoreString str(val.data(), val.size(), enc);
+    ExceptionSink xsink;
+    TempEncodingHelper utf8(str, QCS_UTF8, &xsink);
+    if (xsink) {
+        xsink.clear();
+        return val;
+    }
+    return std::string(utf8->c_str(), utf8->size());
+}
+
+//! Returns a string with its percent-encoded bytes decoded
+static std::string jdbc_percent_decode(const std::string& str) {
+    std::string rv;
+    rv.reserve(str.size());
+    for (size_t i = 0; i < str.size(); ++i) {
+        if (str[i] == '%' && i + 2 < str.size() && isxdigit(static_cast<unsigned char>(str[i + 1]))
+            && isxdigit(static_cast<unsigned char>(str[i + 2]))) {
+            rv += static_cast<char>(std::stoi(str.substr(i + 1, 2), nullptr, 16));
+            i += 2;
+        } else {
+            rv += str[i];
+        }
+    }
+    return rv;
+}
+
+//! Adds a credential value of a URL and its percent-decoded form to the secrets
+static void jdbc_add_credential(jdbc_secret_list_t& secrets, const std::string& val) {
+    if (val.empty()) {
+        return;
+    }
+    secrets.emplace_back(val, JDBC_MASK);
+    std::string decoded = jdbc_percent_decode(val);
+    if (!decoded.empty() && decoded != val) {
+        secrets.emplace_back(std::move(decoded), JDBC_MASK);
+    }
+}
+
+//! Returns true if the name of a URL property is the name of a property whose value is a secret
+static bool jdbc_is_secret_property(std::string name) {
+    std::transform(name.begin(), name.end(), name.begin(),
+        [](unsigned char c) { return static_cast<char>(tolower(c)); });
+    static const char* const words[] = {"pass", "pwd", "secret", "token", "credential", "apikey", "api_key",
+        "accesskey", "access_key", "privatekey", "private_key"};
+    for (const char* word : words) {
+        if (name.find(word) != std::string::npos) {
+            return true;
+        }
+    }
+    return false;
+}
+
+//! Adds a JDBC URL, its forms and the credentials in it to the secrets of a connection
+/** @param secrets the list to add to
+    @param str the URL as it was configured, with or without the \c jdbc: prefix, in UTF-8
+*/
+static void jdbc_add_url_secrets(jdbc_secret_list_t& secrets, const std::string& str) {
+    if (str.empty()) {
+        return;
+    }
+    // the URL as it is passed to the driver manager (see QoreJdbcConnection::connect())
+    std::string url = !str.rfind("jdbc:", 0) ? str : "jdbc:" + str;
+    // the "jdbc:<subprotocol>:" prefix, which is kept in the masked form
+    size_t pos = url.find(':', 5);
+    std::string prefix = pos == std::string::npos ? std::string("jdbc:") : url.substr(0, pos + 1);
+    secrets.emplace_back(url, prefix + JDBC_MASK);
+    // the URL without "jdbc:"
+    secrets.emplace_back(url.substr(5), prefix.substr(5) + JDBC_MASK);
+    if (str != url && str != url.substr(5)) {
+        secrets.emplace_back(str, JDBC_MASK);
+    }
+
+    // the password in the user info of an authority: "//user:password@host"
+    for (size_t start = url.find("//"); start != std::string::npos; start = url.find("//", start + 2)) {
+        size_t end = url.find_first_of("/?;#", start + 2);
+        std::string authority = url.substr(start + 2, end == std::string::npos ? std::string::npos
+            : end - start - 2);
+        size_t at = authority.rfind('@');
+        if (at == std::string::npos) {
+            continue;
+        }
+        size_t colon = authority.find(':');
+        if (colon != std::string::npos && colon < at) {
+            jdbc_add_credential(secrets, authority.substr(colon + 1, at - colon - 1));
+        }
+    }
+
+    // an Oracle-style "user/password@" after the last ':' before the first '@' (ex:
+    // "jdbc:oracle:thin:scott/password@host:1521:sid")
+    {
+        size_t at = url.find('@');
+        if (at != std::string::npos) {
+            size_t colon = url.rfind(':', at);
+            if (colon != std::string::npos && colon >= 4) {
+                std::string cred = url.substr(colon + 1, at - colon - 1);
+                size_t slash = cred.find('/');
+                if (slash != std::string::npos && slash > 0 && cred.find_first_of(";?&=") == std::string::npos) {
+                    jdbc_add_credential(secrets, cred.substr(slash + 1));
+                }
+            }
+        }
+    }
+
+    // the values of properties whose name is the name of a secret: "password=value" after one of ";&?:,(" or a space;
+    // a value in braces (ex: "password={a;b}") ends with the closing brace
+    for (size_t eq = url.find('='); eq != std::string::npos; eq = url.find('=', eq + 1)) {
+        size_t kstart = eq;
+        while (kstart > 0) {
+            unsigned char c = url[kstart - 1];
+            if (!isalnum(c) && c != '_' && c != '.' && c != '-') {
+                break;
+            }
+            --kstart;
+        }
+        if (kstart == eq || (kstart > 0 && (!url[kstart - 1] || !strchr(";&?:,( \t/", url[kstart - 1])))) {
+            continue;
+        }
+        if (!jdbc_is_secret_property(url.substr(kstart, eq - kstart))) {
+            continue;
+        }
+        size_t vstart = eq + 1;
+        size_t vend;
+        if (vstart < url.size() && url[vstart] == '{') {
+            size_t close = url.find('}', vstart);
+            vend = close == std::string::npos ? url.size() : close + 1;
+            // the value in the braces too
+            jdbc_add_credential(secrets, close == std::string::npos ? url.substr(vstart + 1)
+                : url.substr(vstart + 1, close - vstart - 1));
+        } else {
+            vend = url.find_first_of(";&,) \t", vstart);
+            if (vend == std::string::npos) {
+                vend = url.size();
+            }
+        }
+        jdbc_add_credential(secrets, url.substr(vstart, vend - vstart));
+    }
+}
+
+//! Returns true if \a secret is at \a pos in \a text; ASCII letters are matched in any case
+static bool jdbc_match_at(const char* text, size_t len, size_t pos, const std::string& secret) {
+    if (secret.size() > len - pos) {
+        return false;
+    }
+    for (size_t i = 0; i < secret.size(); ++i) {
+        if (tolower(static_cast<unsigned char>(text[pos + i])) != tolower(static_cast<unsigned char>(secret[i]))) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool QoreJdbcSecretMasker::maskText(QoreString& text) const {
+    if (text.empty()) {
+        return false;
+    }
+    jdbc_secret_list_t secrets;
+    // the url option, in UTF-8, and the database name, which the url option overrides
+    jdbc_add_url_secrets(secrets, url);
+    jdbc_add_url_secrets(secrets, ds_utf8(ds, ds->getDBNameStr()));
+    // the password of the datasource, which is passed to the driver as a property
+    {
+        std::string pass = ds_utf8(ds, ds->getPasswordStr());
+        if (!pass.empty()) {
+            secrets.emplace_back(std::move(pass), JDBC_MASK);
+        }
+    }
+    if (secrets.empty()) {
+        return false;
+    }
+    // the longest first, so that the URL is replaced with its masked form before the credentials in it
+    std::stable_sort(secrets.begin(), secrets.end(), [](const jdbc_secret_t& a, const jdbc_secret_t& b) {
+        return a.first.size() > b.first.size();
+    });
+
+    // one pass over the text: a replacement is not searched again
+    const char* p = text.c_str();
+    size_t len = text.size();
+    QoreString rv(text.getEncoding());
+    bool masked = false;
+    size_t pos = 0;
+    size_t copied = 0;
+    while (pos < len) {
+        const jdbc_secret_t* match = nullptr;
+        for (const jdbc_secret_t& secret : secrets) {
+            if (!secret.first.empty() && jdbc_match_at(p, len, pos, secret.first)
+                && (secret.first.size() >= JDBC_MASK_ANYWHERE_MIN
+                    || ((!pos || !isalnum(static_cast<unsigned char>(p[pos - 1])))
+                        && (pos + secret.first.size() == len
+                            || !isalnum(static_cast<unsigned char>(p[pos + secret.first.size()])))))) {
+                match = &secret;
+                break;
+            }
+        }
+        if (!match) {
+            ++pos;
+            continue;
+        }
+        rv.concat(p + copied, pos - copied);
+        rv.concat(match->second.c_str(), match->second.size());
+        pos += match->first.size();
+        copied = pos;
+        masked = true;
+    }
+    if (!masked) {
+        return false;
+    }
+    rv.concat(p + copied, len - copied);
+    text.set(rv);
+    return true;
+}
+
+QoreJdbcConnection::QoreJdbcConnection(Datasource* ds, ExceptionSink* xsink) : ds(ds),
+        masker(std::make_shared<QoreJdbcSecretMasker>(ds)) {
     assert(pgm);
+    // the secrets of the connection are masked in the text of the Java exceptions raised while it is opened (qore#7344)
+    JavaExceptionMaskHelper mask_helper(masker);
     // before the options are processed: the classpath option loads jars and instantiates the JDBC drivers in them
     if (checkSandbox(xsink)) {
         return;
@@ -534,6 +776,7 @@ int QoreJdbcConnection::setOption(const char* opt, const QoreValue val, Exceptio
             return -1;
         }
         db.assign(db_str->c_str(), db_str->size());
+        masker->url = db;
     } else if (!strcasecmp(opt, JDBC_OPT_LOB_MAX_SIZE)) {
         // an integer, or a string of digits only (ex: from a datasource string); "2G" or "1e9x" is refused
         int64 v = -1;

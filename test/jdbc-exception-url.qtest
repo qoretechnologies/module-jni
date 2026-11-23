@@ -1,0 +1,296 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# The text of the Java exceptions that the jdbc driver raises for an operation on a datasource is masked
+# (qore#7344): a JDBC driver can name the URL of the connection in its exception messages (ex: "No suitable driver
+# found for <url>"), and the URL can hold credentials; the URL, the database name, the password of the datasource and
+# the credentials in the URL are masked in the description of the exception, which the exception's code keeps
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../build"
+%requires jni
+%requires QUnit
+%requires Util
+%requires FsUtil
+%requires DbDataProvider
+
+%module-cmd(jni) add-relative-classpath ../build/qore-jni-compiler.jar
+%module-cmd(jni) import org.qore.jni.compiler.QoreJavaCompiler
+%module-cmd(jni) import org.qore.jni.compiler.CompilerOutput
+
+%exec-class JdbcExceptionUrlTest
+
+class JdbcExceptionUrlTest inherits QUnit::Test {
+    private {
+        #! the secrets of the test: the password in the URL's user info, a password property of the URL, and the
+        #! password of the datasource
+        string userInfoSecret = sprintf("ZZUI%sZZ", get_random_string(12));
+        string propSecret = sprintf("ZZPR%sZZ", get_random_string(12));
+        string dsSecret = sprintf("ZZDS%sZZ", get_random_string(12));
+
+        #! the directory of the echo driver's classes
+        TmpDir tmp("jdbc-exception-url-");
+    }
+
+    private:internal {
+        #! a JDBC driver that names the URL of the connection, its parts and the password property in its message
+        const EchoDriverSource = "package org.qore.test7344;
+
+import java.sql.Connection;
+import java.sql.Driver;
+import java.sql.DriverManager;
+import java.sql.DriverPropertyInfo;
+import java.sql.SQLException;
+import java.sql.SQLFeatureNotSupportedException;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
+import java.util.Properties;
+import java.util.logging.Logger;
+
+public class EchoDriver implements Driver {
+    public static final String PREFIX = \"jdbc:qore-echo7344:\";
+
+    static {
+        try {
+            DriverManager.registerDriver(new EchoDriver());
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public boolean acceptsURL(String url) {
+        return url != null && url.startsWith(PREFIX);
+    }
+
+    public Connection connect(String url, Properties info) throws SQLException {
+        if (!acceptsURL(url)) {
+            return null;
+        }
+        if (url.contains(\"mode=plain\")) {
+            throw new SQLException(\"plain connection failure 42\", \"08001\", 42);
+        }
+        String rest = url.substring(5);
+        String sub = url.substring(PREFIX.length());
+        throw new SQLException(\"cannot connect to \" + url + \" (\" + rest + \"); subname: \" + sub
+            + \"; normalized: \" + url.toUpperCase() + \"; decoded: \" + URLDecoder.decode(sub, StandardCharsets.UTF_8)
+            + \"; password: \" + info.getProperty(\"password\"), \"08001\", 17,
+            new SQLException(\"cause: \" + url));
+    }
+
+    public int getMajorVersion() {
+        return 1;
+    }
+
+    public int getMinorVersion() {
+        return 0;
+    }
+
+    public DriverPropertyInfo[] getPropertyInfo(String url, Properties info) {
+        return new DriverPropertyInfo[0];
+    }
+
+    public boolean jdbcCompliant() {
+        return false;
+    }
+
+    public Logger getParentLogger() throws SQLFeatureNotSupportedException {
+        throw new SQLFeatureNotSupportedException();
+    }
+}
+";
+    }
+
+    constructor() : Test("jdbc exception url", "1.0") {
+        addTestCase("no suitable driver", \noSuitableDriverTest());
+        addTestCase("url option", \urlOptionTest());
+        addTestCase("ping", \pingTest());
+        addTestCase("echo driver", \echoDriverTest());
+        addTestCase("credential forms", \credentialFormsTest());
+        addTestCase("unrelated text", \unrelatedTextTest());
+        addTestCase("short password", \shortPasswordTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        # the echo driver is compiled into a classpath directory with its service file, as a driver jar has it
+        QoreJavaCompiler compiler();
+        CompilerOutput out = compiler.compile("org.qore.test7344.EchoDriver", EchoDriverSource);
+        binary b = out.file.openInputStream().readAllBytes();
+        string dir = join_paths(tmp.path, "org", "qore", "test7344");
+        mkdir(dir, 0755, True);
+        File f();
+        f.open2(join_paths(dir, "EchoDriver.class"), O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(b);
+        f.close();
+        dir = join_paths(tmp.path, "META-INF", "services");
+        mkdir(dir, 0755, True);
+        f = new File();
+        f.open2(join_paths(dir, "java.sql.Driver"), O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("org.qore.test7344.EchoDriver\n");
+        f.close();
+    }
+
+    #! a URL with credentials in its user info and in a property
+    private string getUrlBody(string scheme) {
+        return sprintf("%s://u:%s@127.0.0.1:1/db;password=%s;other=1", scheme, userInfoSecret, propSecret);
+    }
+
+    #! checks that no secret is in the exception, its text or its argument, and returns its description
+    private string checkMasked(hash<ExceptionInfo> ex, string label, *list<string> extra) {
+        assertEq("JNI-ERROR", ex.err, label + ": code");
+        string desc = ex.desc;
+        # the text of the exception and of its argument, the Java exception: its message, its string form (which
+        # AbstractConnection::ping() gives) and its causes
+        list<string> texts = (desc, get_exception_string(ex));
+        if (ex.arg) {
+            texts += ex.arg.toString();
+            for (auto cause = ex.arg.getCause(); cause; cause = cause.getCause()) {
+                texts += cause.toString();
+            }
+        }
+        foreach string secret in ((userInfoSecret, propSecret, dsSecret) + (extra ?? ())) {
+            string name = sprintf("secret %d", $# + 1);
+            foreach string text in (texts) {
+                assertEq(-1, text.lwr().find(secret.lwr()), sprintf("%s: %s in text %d", label, name, $# + 1));
+            }
+        }
+        return desc;
+    }
+
+    noSuitableDriverTest() {
+        # the driver manager names the URL that no driver accepts: "No suitable driver found for <url>"
+        Datasource ds("jdbc", "u", dsSecret, getUrlBody("nosuch7344"));
+        try {
+            ds.open();
+            fail("no exception");
+        } catch (hash<ExceptionInfo> ex) {
+            string desc = checkMasked(ex, "database name");
+            assertEq("java.sql.SQLException: No suitable driver found for jdbc:nosuch7344:****", desc);
+        }
+
+        # the database name with the jdbc: prefix
+        ds = new Datasource("jdbc", "u", dsSecret, "jdbc:" + getUrlBody("nosuch7344"));
+        try {
+            ds.exec("select 1");
+            fail("no exception");
+        } catch (hash<ExceptionInfo> ex) {
+            string desc = checkMasked(ex, "database name with jdbc:");
+            assertEq("java.sql.SQLException: No suitable driver found for jdbc:nosuch7344:****", desc);
+        }
+    }
+
+    urlOptionTest() {
+        Datasource ds("jdbc", "u", dsSecret, "ignored");
+        ds.setOption("url", getUrlBody("nosuch7344"));
+        try {
+            ds.open();
+            fail("no exception");
+        } catch (hash<ExceptionInfo> ex) {
+            string desc = checkMasked(ex, "url option");
+            assertEq("java.sql.SQLException: No suitable driver found for jdbc:nosuch7344:****", desc);
+        }
+
+        # a pool reports the error of its first connection
+        try {
+            DatasourcePool pool(sprintf("jdbc:u/%s@ignored{url=%s}", dsSecret, getUrlBody("nosuch7344")));
+            fail("no exception");
+        } catch (hash<ExceptionInfo> ex) {
+            checkMasked(ex, "pool");
+        }
+    }
+
+    pingTest() {
+        # the result of a failed ping has the text of the exception and the string form of its argument
+        DbDataProvider::DatasourceConnection conn("jdbc-exception-url", "test", sprintf("jdbc:u/%s@ignored{url=%s}",
+            dsSecret, getUrlBody("nosuch7344")));
+        hash<PingInfo> info = conn.ping();
+        assertFalse(info.ok);
+        assertEq("JNI-ERROR", info.ex.err);
+        string text = sprintf("%N", info);
+        foreach string secret in (userInfoSecret, propSecret, dsSecret) {
+            assertEq(-1, text.lwr().find(secret.lwr()), sprintf("ping: secret %d", $# + 1));
+        }
+        assertTrue(text =~ /No suitable driver found for jdbc:nosuch7344:\*\*\*\*/, text);
+    }
+
+    echoDriverTest() {
+        # a driver that names the URL, the URL without "jdbc:", the URL's subname, an upper case form of the URL and
+        # the password property
+        Datasource ds("jdbc", "u", dsSecret, getUrlBody("qore-echo7344"));
+        ds.setOption("classpath", tmp.path);
+        try {
+            ds.open();
+            fail("no exception");
+        } catch (hash<ExceptionInfo> ex) {
+            string desc = checkMasked(ex, "echo driver");
+            assertTrue(desc.equalPartial("java.sql.SQLException: cannot connect to jdbc:qore-echo7344:**** "
+                "(qore-echo7344:****); subname: //u:****@127.0.0.1:1/db;password=****;other=1; normalized: "),
+                desc);
+            assertTrue(desc =~ /; password: \*\*\*\*$/, desc);
+            # the argument is the driver's exception, with its SQLState and vendor code
+            assertEq("08001", ex.arg.getSQLState());
+            assertEq(17, ex.arg.getErrorCode());
+        }
+    }
+
+    credentialFormsTest() {
+        # the driver names the credentials of the URL in its subname and in their percent-decoded forms: an
+        # Oracle-style "user/password@", a password with a percent-encoded character in the user info, a password in
+        # braces and a token property
+        string oracle_secret = sprintf("ZZOR%sZZ", get_random_string(12));
+        string encoded_secret = sprintf("ZZPE%sZZ", get_random_string(12));
+        string brace_secret = sprintf("ZZBR%sZZ", get_random_string(12));
+        string token_secret = sprintf("ZZTK%sZZ", get_random_string(12));
+        list<string> secrets = (oracle_secret, encoded_secret, brace_secret, token_secret);
+        list<string> urls = (
+            sprintf("qore-echo7344:thin:scott/%s@127.0.0.1:1:sid", oracle_secret),
+            sprintf("qore-echo7344://u:%s%%40x@127.0.0.1:1/db", encoded_secret),
+            sprintf("qore-echo7344://127.0.0.1:1;databaseName=db;password={a;%s};user=u", brace_secret),
+            sprintf("qore-echo7344://127.0.0.1:1/db?user=u&accessToken=%s&ssl=true", token_secret),
+        );
+        foreach string url in (urls) {
+            string label = sprintf("url %d", $# + 1);
+            Datasource ds("jdbc", "u", "", "ignored");
+            ds.setOption("url", url);
+            ds.setOption("classpath", tmp.path);
+            try {
+                ds.open();
+                fail("no exception");
+            } catch (hash<ExceptionInfo> ex) {
+                checkMasked(ex, label, secrets);
+                assertTrue(ex.desc.equalPartial("java.sql.SQLException: cannot connect to jdbc:qore-echo7344:**** "
+                    "(qore-echo7344:****); subname: "), label + ": " + ex.desc);
+            }
+        }
+    }
+
+    unrelatedTextTest() {
+        # a message that has no secret is not changed
+        Datasource ds("jdbc", "u", dsSecret, "qore-echo7344://h/db;mode=plain");
+        ds.setOption("classpath", tmp.path);
+        try {
+            ds.open();
+            fail("no exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("JNI-ERROR", ex.err);
+            assertEq("java.sql.SQLException: plain connection failure 42", ex.desc);
+            assertEq(42, ex.arg.getErrorCode());
+        }
+    }
+
+    shortPasswordTest() {
+        # a short password is masked where it is a word of its own, not in the words that contain it
+        Datasource ds("jdbc", "u", "p", "qore-echo7344://h/db");
+        ds.setOption("classpath", tmp.path);
+        try {
+            ds.open();
+            fail("no exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("JNI-ERROR", ex.err);
+            assertEq("java.sql.SQLException: cannot connect to jdbc:qore-echo7344:**** (qore-echo7344:****); "
+                "subname: //h/db; normalized: jdbc:qore-echo7344:****; decoded: //h/db; password: ****", ex.desc);
+            assertEq("08001", ex.arg.getSQLState());
+        }
+    }
+}
