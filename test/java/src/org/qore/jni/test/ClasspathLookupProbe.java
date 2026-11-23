@@ -411,6 +411,381 @@ public class ClasspathLookupProbe {
         }
     }
 
+    //! A file system provider over the default one, whose deletions fail with an I/O error while \a fail is set
+    /** So that a failed removal is real for any user, also for root, for whom permissions do not stop a deletion
+    */
+    private static final class FailingProvider extends java.nio.file.spi.FileSystemProvider {
+        private final java.nio.file.spi.FileSystemProvider real = java.nio.file.FileSystems.getDefault().provider();
+        volatile boolean fail = true;
+        //! runs once, at the first deletion that fails
+        volatile Runnable onFailure;
+        int failures;
+
+        //! Returns a path for \a target whose operations go through this provider
+        Path wrap(Path target) {
+            java.nio.file.FileSystem fs = new ProviderFileSystem(target.getFileSystem(), this);
+            return (Path) java.lang.reflect.Proxy.newProxyInstance(ClasspathLookupProbe.class.getClassLoader(),
+                new Class<?>[] {Path.class, Unwrappable.class}, (proxy, method, args) -> {
+                    switch (method.getName()) {
+                        case "getFileSystem":
+                            return fs;
+                        case "unwrap":
+                            return target;
+                        default:
+                            return callOn(target, method, args);
+                    }
+                });
+        }
+
+        private static Object callOn(Object target, java.lang.reflect.Method method, Object[] args) throws Throwable {
+            try {
+                return method.invoke(target, args);
+            } catch (java.lang.reflect.InvocationTargetException e) {
+                throw e.getCause();
+            }
+        }
+
+        private static Path unwrap(Path path) {
+            return path instanceof Unwrappable ? ((Unwrappable) path).unwrap() : path;
+        }
+
+        void failDeletion() throws IOException {
+            if (fail) {
+                ++failures;
+                Runnable hook = onFailure;
+                onFailure = null;
+                if (hook != null) {
+                    hook.run();
+                }
+                throw new IOException("injected deletion failure");
+            }
+        }
+
+        @Override public String getScheme() { return real.getScheme(); }
+        @Override public java.nio.file.FileSystem newFileSystem(java.net.URI uri, java.util.Map<String, ?> env) {
+            throw new UnsupportedOperationException();
+        }
+        @Override public java.nio.file.FileSystem getFileSystem(java.net.URI uri) {
+            return real.getFileSystem(uri);
+        }
+        @Override public Path getPath(java.net.URI uri) { return real.getPath(uri); }
+        @Override public java.nio.channels.SeekableByteChannel newByteChannel(Path path,
+                java.util.Set<? extends java.nio.file.OpenOption> options,
+                java.nio.file.attribute.FileAttribute<?>... attrs) throws IOException {
+            return real.newByteChannel(unwrap(path), options, attrs);
+        }
+        @Override public java.nio.file.DirectoryStream<Path> newDirectoryStream(Path dir,
+                java.nio.file.DirectoryStream.Filter<? super Path> filter) throws IOException {
+            java.nio.file.DirectoryStream<Path> stream = real.newDirectoryStream(unwrap(dir), filter);
+            return stream instanceof java.nio.file.SecureDirectoryStream
+                ? new FailingStream((java.nio.file.SecureDirectoryStream<Path>) stream, this) : stream;
+        }
+        @Override public void createDirectory(Path dir, java.nio.file.attribute.FileAttribute<?>... attrs)
+                throws IOException {
+            real.createDirectory(unwrap(dir), attrs);
+        }
+        @Override public void delete(Path path) throws IOException {
+            failDeletion();
+            real.delete(unwrap(path));
+        }
+        @Override public void copy(Path source, Path target, java.nio.file.CopyOption... options) throws IOException {
+            real.copy(unwrap(source), unwrap(target), options);
+        }
+        @Override public void move(Path source, Path target, java.nio.file.CopyOption... options) throws IOException {
+            real.move(unwrap(source), unwrap(target), options);
+        }
+        @Override public boolean isSameFile(Path path, Path path2) throws IOException {
+            return real.isSameFile(unwrap(path), unwrap(path2));
+        }
+        @Override public boolean isHidden(Path path) throws IOException { return real.isHidden(unwrap(path)); }
+        @Override public java.nio.file.FileStore getFileStore(Path path) throws IOException {
+            return real.getFileStore(unwrap(path));
+        }
+        @Override public void checkAccess(Path path, java.nio.file.AccessMode... modes) throws IOException {
+            real.checkAccess(unwrap(path), modes);
+        }
+        @Override public <V extends java.nio.file.attribute.FileAttributeView> V getFileAttributeView(Path path,
+                Class<V> type, java.nio.file.LinkOption... options) {
+            return real.getFileAttributeView(unwrap(path), type, options);
+        }
+        @Override public <A extends java.nio.file.attribute.BasicFileAttributes> A readAttributes(Path path,
+                Class<A> type, java.nio.file.LinkOption... options) throws IOException {
+            return real.readAttributes(unwrap(path), type, options);
+        }
+        @Override public java.util.Map<String, Object> readAttributes(Path path, String attributes,
+                java.nio.file.LinkOption... options) throws IOException {
+            return real.readAttributes(unwrap(path), attributes, options);
+        }
+        @Override public void setAttribute(Path path, String attribute, Object value,
+                java.nio.file.LinkOption... options) throws IOException {
+            real.setAttribute(unwrap(path), attribute, value, options);
+        }
+    }
+
+    //! A path of FailingProvider
+    public interface Unwrappable {
+        Path unwrap();
+    }
+
+    //! The default file system with another provider
+    private static final class ProviderFileSystem extends java.nio.file.FileSystem {
+        private final java.nio.file.FileSystem real;
+        private final java.nio.file.spi.FileSystemProvider provider;
+
+        ProviderFileSystem(java.nio.file.FileSystem real, java.nio.file.spi.FileSystemProvider provider) {
+            this.real = real;
+            this.provider = provider;
+        }
+
+        @Override public java.nio.file.spi.FileSystemProvider provider() { return provider; }
+        @Override public void close() { throw new UnsupportedOperationException(); }
+        @Override public boolean isOpen() { return real.isOpen(); }
+        @Override public boolean isReadOnly() { return real.isReadOnly(); }
+        @Override public String getSeparator() { return real.getSeparator(); }
+        @Override public Iterable<Path> getRootDirectories() { return real.getRootDirectories(); }
+        @Override public Iterable<java.nio.file.FileStore> getFileStores() { return real.getFileStores(); }
+        @Override public java.util.Set<String> supportedFileAttributeViews() {
+            return real.supportedFileAttributeViews();
+        }
+        @Override public Path getPath(String first, String... more) { return real.getPath(first, more); }
+        @Override public java.nio.file.PathMatcher getPathMatcher(String pattern) {
+            return real.getPathMatcher(pattern);
+        }
+        @Override public java.nio.file.attribute.UserPrincipalLookupService getUserPrincipalLookupService() {
+            return real.getUserPrincipalLookupService();
+        }
+        @Override public java.nio.file.WatchService newWatchService() throws IOException {
+            return real.newWatchService();
+        }
+    }
+
+    //! A secure directory stream whose deletions go through FailingProvider's failure
+    private static final class FailingStream implements java.nio.file.SecureDirectoryStream<Path> {
+        private final java.nio.file.SecureDirectoryStream<Path> real;
+        private final FailingProvider provider;
+
+        FailingStream(java.nio.file.SecureDirectoryStream<Path> real, FailingProvider provider) {
+            this.real = real;
+            this.provider = provider;
+        }
+
+        @Override public java.util.Iterator<Path> iterator() { return real.iterator(); }
+        @Override public void close() throws IOException { real.close(); }
+        @Override public java.nio.file.SecureDirectoryStream<Path> newDirectoryStream(Path path,
+                java.nio.file.LinkOption... options) throws IOException {
+            return new FailingStream(real.newDirectoryStream(path, options), provider);
+        }
+        @Override public java.nio.channels.SeekableByteChannel newByteChannel(Path path,
+                java.util.Set<? extends java.nio.file.OpenOption> options,
+                java.nio.file.attribute.FileAttribute<?>... attrs) throws IOException {
+            return real.newByteChannel(path, options, attrs);
+        }
+        @Override public void deleteFile(Path path) throws IOException {
+            provider.failDeletion();
+            real.deleteFile(path);
+        }
+        @Override public void deleteDirectory(Path path) throws IOException {
+            provider.failDeletion();
+            real.deleteDirectory(path);
+        }
+        @Override public void move(Path source, java.nio.file.SecureDirectoryStream<Path> target, Path targetPath)
+                throws IOException {
+            real.move(source, target, targetPath);
+        }
+        @Override public <V extends java.nio.file.attribute.FileAttributeView> V getFileAttributeView(Class<V> type) {
+            return real.getFileAttributeView(type);
+        }
+        @Override public <V extends java.nio.file.attribute.FileAttributeView> V getFileAttributeView(Path path,
+                Class<V> type, java.nio.file.LinkOption... options) {
+            return real.getFileAttributeView(path, type, options);
+        }
+    }
+
+    //! Returns the value of a private field
+    private static Object field(Object target, String name) throws Exception {
+        java.lang.reflect.Field f = target.getClass().getDeclaredField(name);
+        f.setAccessible(true);
+        return f.get(target);
+    }
+
+    //! Returns the value of a private static int constant of a class
+    private static int constant(Class<?> cls, String name) throws Exception {
+        java.lang.reflect.Field f = cls.getDeclaredField(name);
+        f.setAccessible(true);
+        return f.getInt(null);
+    }
+
+    //! Deletes a directory tree of a test
+    private static void removeTestTree(Path path) throws IOException {
+        if (!Files.exists(path, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+            return;
+        }
+        try (Stream<Path> walk = Files.walk(path)) {
+            List<Path> entries = new ArrayList<>();
+            walk.forEach(entries::add);
+            Collections.reverse(entries);
+            for (Path entry : entries) {
+                Files.delete(entry);
+            }
+        }
+    }
+
+    //! Runs a removal of a compiler copy that really fails; returns "clean" or what is wrong
+    /** @param scenario "confirmed": a failed deletion keeps the charges, and a retry removes the copy; "replaced": the
+        name of the private directory comes to refer to another directory before the retry; "during": a release arrives
+        while a removal runs; "signal": a removal that keeps failing is reported, without its path
+    */
+    public static String removalFailure(QoreURLClassLoader parent, String dir, String scenario) throws Exception {
+        Object[] context = QoreURLClassLoader.saveContext();
+        java.io.PrintStream savedOut = System.out;
+        try {
+            QoreURLClassLoader loader = QoreURLClassLoader.createDerived(parent);
+            loader.addPath(dir);
+            Object handle = QoreURLClassLoader.class.getMethod("openCompilerClasspath").invoke(loader);
+            java.lang.reflect.Method close = handle.getClass().getMethod("close");
+            List<?> copies = (List<?>) field(handle, "copies");
+            if (copies.size() != 1) {
+                return "expected one copy, found " + copies.size();
+            }
+            Object copy = copies.get(0);
+            Class<?> copyClass = copy.getClass();
+            java.lang.reflect.Field rootField = copyClass.getDeclaredField("root");
+            rootField.setAccessible(true);
+            Object budget = field(copy, "budget");
+            Path root = (Path) rootField.get(copy);
+            int failedState = constant(copyClass, "FAILED");
+            int doneState = constant(copyClass, "DONE");
+            FailingProvider provider = new FailingProvider();
+            rootField.set(copy, provider.wrap(root));
+
+            if (scenario.equals("during")) {
+                // the release arrives during the first failing deletion, whose attempt then fails
+                provider.onFailure = () -> {
+                    provider.fail = false;
+                    try {
+                        close.invoke(handle);
+                    } catch (ReflectiveOperationException e) {
+                        throw new IllegalStateException(e);
+                    }
+                    provider.fail = true;
+                    provider.onFailure = () -> provider.fail = false;
+                };
+                close.invoke(handle);
+                provider.fail = false;
+                if (provider.failures < 1) {
+                    return "the removal did not fail";
+                }
+                rootField.set(copy, root);
+                if ((int) field(copy, "state") != doneState) {
+                    close.invoke(handle);
+                    return "a release during a removal did not get its retry";
+                }
+                return chargesReturned(budget) ? (Files.exists(root) ? "the directory remains" : "clean")
+                    : "the charges were not returned";
+            }
+
+            java.io.ByteArrayOutputStream captured = new java.io.ByteArrayOutputStream();
+            if (scenario.equals("signal")) {
+                System.setOut(new java.io.PrintStream(captured, true));
+            }
+            // no exception: the deletion fails with an I/O error, which the removal handles
+            close.invoke(handle);
+            if ((int) field(copy, "state") != failedState) {
+                return "a failed deletion was taken as a removal";
+            }
+            if (chargesReturned(budget)) {
+                return "a failed removal returned its charges";
+            }
+            if (!Files.isDirectory(root)) {
+                return "the directory is gone after a failed removal";
+            }
+            if (scenario.equals("signal")) {
+                close.invoke(handle);
+                close.invoke(handle);
+                System.out.flush();
+                System.setOut(savedOut);
+                String text = captured.toString();
+                int count = text.split("could not be removed", -1).length - 1;
+                if (count != 1) {
+                    return "reported " + count + " times";
+                }
+                if (text.contains(root.toString()) || text.contains(root.getFileName().toString())) {
+                    return "the report names the path";
+                }
+            }
+            rootField.set(copy, root);
+            if (scenario.equals("replaced")) {
+                Path moved = root.resolveSibling(root.getFileName() + "-moved");
+                Files.move(root, moved);
+                Files.createDirectory(root);
+                Path marker = root.resolve("marker");
+                Files.writeString(marker, "not the copy's");
+                String rv = "clean";
+                try {
+                    close.invoke(handle);
+                    if (!Files.exists(marker)) {
+                        rv = "the retry removed a directory that it did not create";
+                    } else if ((int) field(copy, "state") != doneState) {
+                        rv = "the copy did not end";
+                    } else if (!chargesReturned(budget)) {
+                        rv = "the charges were not returned";
+                    }
+                    close.invoke(handle);
+                    if (rv.equals("clean") && !chargesReturned(budget)) {
+                        rv = "the charges were not returned exactly once";
+                    }
+                } finally {
+                    removeTestTree(root);
+                    removeTestTree(moved);
+                }
+                return rv;
+            }
+            close.invoke(handle);
+            if ((int) field(copy, "state") != doneState) {
+                return "the retry did not end the copy";
+            }
+            if (Files.exists(root, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+                return "the retry left the directory";
+            }
+            return chargesReturned(budget) ? "clean" : "the charges were not returned";
+        } finally {
+            System.setOut(savedOut);
+            QoreURLClassLoader.restoreContext(context);
+        }
+    }
+
+    //! Returns true if a budget has no charge and no live copy
+    private static boolean chargesReturned(Object budget) throws Exception {
+        synchronized (budget) {
+            if (!((java.util.Set<?>) field(budget, "live")).isEmpty()) {
+                return false;
+            }
+            for (long used : (long[]) field(budget, "used")) {
+                if (used != 0) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    //! Returns "contained" if the removal of the Kotlin compiler's temporary directory raises nothing for any failure
+    public static String compilerCleanupContained(QoreURLClassLoader loader) throws Exception {
+        Class<?> cls = loader.loadClass("org.qore.jni.compiler.QoreKotlinCompiler");
+        java.lang.reflect.Method delete = cls.getDeclaredMethod("deleteTree", Path.class);
+        delete.setAccessible(true);
+        Path failing = (Path) java.lang.reflect.Proxy.newProxyInstance(Path.class.getClassLoader(),
+            new Class<?>[] {Path.class}, (proxy, method, args) -> {
+                throw new InjectedError();
+            });
+        try {
+            delete.invoke(null, failing);
+            return "contained";
+        } catch (java.lang.reflect.InvocationTargetException e) {
+            return "raised " + e.getCause().getClass().getSimpleName();
+        }
+    }
+
     //! Compiles Kotlin while the Program of the class loader ends at the given read of a system property
     /** @return "clean" if the compile returned or raised its own exception, the hook ran and nothing is left
     */

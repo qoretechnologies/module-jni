@@ -35,6 +35,12 @@ string sub detached_limit(string dir) {
 object sub capture_policy() {
     return ClasspathLookupProbe::capturePolicy();
 }
+string sub removal_failure(string dir, string scenario) {
+    return ClasspathLookupProbe::removalFailure(get_class_loader(), dir, scenario);
+}
+string sub compiler_cleanup() {
+    return ClasspathLookupProbe::compilerCleanupContained(get_class_loader());
+}
 string sub program_switch() {
     return ClasspathLookupProbe::programSwitchBudget(get_class_loader());
 }
@@ -204,6 +210,15 @@ sub removal_error_case(string root) {
     result("removal-error left", 0, ClasspathLookupProbe::copyDirectories());
 }
 
+#! a removal that really fails, a retry that only removes the directory it created, and the report of a failure
+sub removal_failure_case(string root) {
+    foreach string scenario in ("confirmed", "replaced", "during", "signal") {
+        Program p = new_empty_program(get_policy(root, ("ending",)));
+        result("removal-failure " + scenario, "clean", p.callFunction("removal_failure", root + "/ending", scenario));
+    }
+    result("removal-failure left", 0, ClasspathLookupProbe::copyDirectories());
+}
+
 #! each new Program of a class loader has a budget of its own
 sub program_switch_case(string root) {
     Program p = new_empty_program(get_policy(root, ("ending",)));
@@ -236,6 +251,10 @@ sub compile_end_case(string root) {
     host.loadModule("jni");
     map host.issueModuleCmd("jni", "global-add-classpath " + home + "/lib/" + $1),
         ("kotlin-compiler.jar", "kotlin-stdlib.jar");
+    {
+        Program p = new_program(get_policy(root, ("allowed",)), root + "/allowed");
+        result("compile-end cleanup", "contained", p.callFunction("compiler_cleanup"));
+    }
     string source = "class KEnd { fun f(x: pkg.Ok?) = x }\n";
     foreach hash<auto> i in ({"label": "copy", "key": EntriesProp}, {"label": "compiler", "key": CompilerProp}) {
         Program p = new_program(get_policy(root, ("allowed",)), root + "/allowed");
@@ -275,6 +294,7 @@ switch (case_name) {
     case "program-end": program_end_case(root); exit(0);
     case "detached": detached_case(root); exit(0);
     case "removal-error": removal_error_case(root); exit(0);
+    case "removal-failure": removal_failure_case(root); exit(0);
     case "program-switch": program_switch_case(root); exit(0);
     case "compile-end": compile_end_case(root); exit(0);
 }

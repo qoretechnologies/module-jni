@@ -358,8 +358,9 @@ public class QoreKotlinCompiler implements AutoCloseable {
                     compilerClasspath.close();
                 }
             } catch (RuntimeException | Error e) {
-                // never replaces the result or the error of the compilation: a copy that could not be removed stays
-                // charged, and is removed again when its class loader is closed or its Program ends
+                // not reported to the caller, and never replaces the result or the error of the compilation: a copy
+                // that could not be removed stays charged, is removed again when its class loader is closed or its
+                // Program ends, and is logged if it keeps failing
             } finally {
                 // Clean up temp directory
                 cleanupTempDir();
@@ -713,12 +714,12 @@ public class QoreKotlinCompiler implements AutoCloseable {
                     }
                 }
             }
-        } catch (IOException | RuntimeException e) {
+        } catch (IOException | RuntimeException | Error e) {
             // the directory is still tried below
         }
         try {
             Files.deleteIfExists(path);
-        } catch (IOException | RuntimeException e) {
+        } catch (IOException | RuntimeException | Error e) {
             // nothing more can be done for this path
         }
     }

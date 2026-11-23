@@ -82,6 +82,7 @@ object sub derived() {
         addTestCase("a copy ended by closing its class loader while it is made", \copyEndedByCloseTest());
         addTestCase("derived loaders keep the Program's copy budget", \copyDetachedBudgetTest());
         addTestCase("a failed removal of a copy stays charged and is retried", \copyRemovalErrorTest());
+        addTestCase("a retry only removes the directory it created", \copyRemovalFailureTest());
         addTestCase("each new Program of a class loader has a budget of its own", \copyProgramSwitchTest());
         addTestCase("a compile whose Program ends while it runs", \compileProgramEndTest());
         addTestCase("the end of a Program ends the copies of its class loaders", \copyProgramEndTest());
@@ -330,6 +331,11 @@ object sub derived() {
     #! a failed removal keeps its charges, does not stop the removal of the others, and is retried
     copyRemovalErrorTest() {
         runChildCase("removal-error", True);
+    }
+
+    #! a retry only removes the directory it created, and a removal counts only once the directory is gone
+    copyRemovalFailureTest() {
+        runChildCase("removal-failure", True);
     }
 
     #! each new Program of a class loader has a budget of its own

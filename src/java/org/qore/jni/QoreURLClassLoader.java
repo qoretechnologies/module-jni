@@ -2932,7 +2932,7 @@ public class QoreURLClassLoader extends URLClassLoader {
         }
     }
 
-    static private void errorLog(String msg) {
+    static void errorLog(String msg) {
         System.out.println("QoreURLClassLoader ERROR: " + msg);
     }
 

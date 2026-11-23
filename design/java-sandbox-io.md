@@ -118,8 +118,15 @@ are `static_assert`ed to match) and calls `QoreSandboxManager::checkFilesystemAc
   Derived loaders keep the Program's copy budget also when their own pointer is cleared; only a new Program gets a new
   one, and a budget whose Program has ended refuses new copies.  A copy's charges are returned only once its directory
   is confirmed to be gone: a failed removal leaves it charged and live in a retryable state, the other copies are still
-  ended, and the removal is tried again when its classpath or class loader is closed and at the end of its Program.  A
-  cleanup failure is suppressed in the error that is being raised and never replaces it.  Closing a class loader ends
+  ended, and the removal is tried again when its classpath or class loader is closed and at the end of its Program; a
+  release that arrives during a removal makes the removing thread try again if that attempt fails.  A retry only
+  removes the directory it created: the identity of the root (`fileKey()`) is recorded when it is created, and if the
+  name is missing or refers to anything else, the private directory is gone, its charges are returned once, and the
+  name is not touched.  Entries are removed relative to the opened directory through a `SecureDirectoryStream`, without
+  following links.  Where the platform has none, only the first removal walks the directory by path, and a retry leaves
+  the copy charged until the process ends.  A removal that keeps failing is logged once, with no path, through the
+  class loader's error log.  A cleanup failure is suppressed in an error that is being raised and never replaces it;
+  a compile does not raise a failure to remove its own copy, which stays charged and is retried.  Closing a class loader ends
   its own copies, except once the module's shutdown has started, when `close()` does nothing and a running compile
   removes its copies when it ends.  A process that ends with `exit()` while a handle is open leaves that copy in the
   JVM's temporary directory.  A copy over
