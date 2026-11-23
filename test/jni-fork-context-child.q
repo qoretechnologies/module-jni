@@ -129,10 +129,7 @@ if (!pid) {
     } else {
         printf("parent: the child did not exit: pid %d\n", pid);
         flush();
-        if (ENV.QORE_JNI_FORK_HANG_STACK) {
-            system(sprintf("gdb -q -batch -p %d -ex 'thread apply all bt 14' > %s 2>&1", pid,
-                ENV.QORE_JNI_FORK_HANG_STACK));
-        }
+        fork_hang_stack(pid);
         kill(pid, SIGKILL);
         remove uncollected;
         call_function(WaitChild, pid);

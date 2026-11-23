@@ -45,7 +45,17 @@ const Source = "%modern\n%requires jni\n"
     "binary sub bytes(string name) {\n"
     "    return QoreURLClassLoader::getCurrent().generateByteCode(\"qore.EmbeddedBindingTest.\" + name);\n"
     "}\n"
-    "sub wait_entered() { entered.get(); }\n"
+    "bool sub wait_entered(int ms) {\n"
+    "    try {\n"
+    "        entered.get(ms);\n"
+    "        return True;\n"
+    "    } catch (hash<ExceptionInfo> ex) {\n"
+    "        if (ex.err == \"QUEUE-TIMEOUT\") {\n"
+    "            return False;\n"
+    "        }\n"
+    "        rethrow;\n"
+    "    }\n"
+    "}\n"
     "sub release() { gate.push(1); }\n";
 
 string route = ARGV[0] ?? "exit";
@@ -66,7 +76,7 @@ GeneratedBindings f(p.getProgramId(), p.callFunction("bytes", "Constants"), p.ca
     p.callFunction("bytes", "$Functions"), p.callFunction("bytes", "$Constants"));
 object thread = f.functionInThread("hold", 1);
 # the Java thread holds the locks when the callback has signaled it
-p.callFunction("wait_entered");
+wait_fork_holder(p, thread);
 
 int parent_pid = getpid();
 # the child until it has been collected
@@ -77,8 +87,7 @@ on_exit {
         if (uncollected) {
             kill(uncollected, SIGKILL);
         }
-        p.callFunction("release");
-        thread.join();
+        release_fork_holder(p, thread);
     }
 }
 
@@ -110,10 +119,7 @@ if (!pid) {
         remove uncollected;
     } else {
         result = "did not exit";
-        if (ENV.QORE_JNI_FORK_HANG_STACK) {
-            system(sprintf("gdb -q -batch -p %d -ex 'thread apply all bt 14' > %s 2>&1", pid,
-                ENV.QORE_JNI_FORK_HANG_STACK));
-        }
+        fork_hang_stack(pid);
         kill(pid, SIGKILL);
         remove uncollected;
         call_function(WaitChild, pid);
