@@ -7,12 +7,12 @@
     @section jni_3_0_0 jni Module Version 3.0.0
 
     - <b>Security</b>: the filesystem policy of restricted code now applies to every class and resource lookup below a
-      classpath entry that it added, to the real path of each file, on any thread, also for a lookup that the JVM
-      makes with no %Qore caller.  A file that the policy denies behaves as a file that does not exist.  The Kotlin
-      compiler is given a private copy of the files that the policy allows below such a directory, within limits for
-      each Program, and its scripting plugin is off for a restricted caller.  Class loaders with no entry from restricted code, which includes trusted
-      code and sandboxes that restrict nothing, make no check.  A file replaced between its check and its use is not
-      covered.  These checks are defense in depth (qore#7276)
+      classpath entry that it added, to the real path of each file, on any thread, also for a lookup that the JVM makes
+      with no %Qore caller.  A file that the policy denies behaves as a file that does not exist.  The Kotlin compiler
+      is given a private copy of the files that the policy allows below such a directory, within limits for each
+      Program, and its scripting plugin is off for a restricted caller.  Class loaders with no entry from restricted
+      code, which includes trusted code and sandboxes that restrict nothing, make no check.  A file replaced between its
+      check and its use is not covered.  These checks are defense in depth (qore#7276)
     - <b>Behavior change</b> (qore#7276): a class or resource below a classpath directory of restricted code that its
       policy denies is no longer found.  A Kotlin script of a restricted caller is refused while a directory that
       restricted code added is on its classpath.  The \c global-* classpath commands are refused under a sandbox
@@ -21,10 +21,12 @@
       restricted code adds carries that code's policy and fails closed, and an entry that a trusted host deliberately
       adds to the class loader of a sandboxed Program is a grant of the host, which is not also checked against the
       policy of that Program.  A caller whose sandbox restricts only the network makes no such grant: a policy that is
-      bound to an entry stays when it adds the entry again.  An entry added before a Program's filesystem policy applied, or while its sandbox
-      restricted nothing, stays unchecked when the policy is set or tightened later: configure the policy before the
-      classpath is added.  On a JDK version whose manifest \c Class-Path handling has not been verified, what the
-      manifests of trusted jars name is not found in a class loader that also has entries of restricted code
+      bound to an entry stays when it adds the entry again, and a new entry that it adds below an entry of restricted
+      code is judged by that entry's policy.  An entry added before a Program's filesystem policy applied, or while its
+      sandbox restricted nothing, stays unchecked when the policy is set or tightened later: configure the policy before
+      the classpath is added.  On a JDK version whose manifest \c Class-Path handling has not been verified, what the
+      manifests of trusted jars name is not found in a class loader that also has entries of restricted code.  Below
+      the entries of restricted code, a jar whose path holds the separator of a jar URL (\c "!/") is not used
     - The connection classes of the data provider modules declare the functional domains of their clients, so code
       restricted only from other domains can create them; Camel connections use all of them, and JDBC connections
       declare \c FILESYSTEM because their \c classpath option loads driver jars from the file system, unlike the
@@ -35,11 +37,11 @@
       the URL, which can hold credentials, in its messages (see @ref jdbc_exception_masking, qore#7344)
     - <b>Security</b>: for a caller that a sandbox filesystem policy restricts, a manifest \c Class-Path entry whose
       path cannot be checked exactly is refused with \c JNI-CLASSPATH-ERROR, on every JDK version, and nothing of the
-      classpath is added.  For a caller whose sandbox restricts only the network, an entry that names another
-      location, or whose location cannot be confirmed, is refused, also when Java code adds the classpath, which is
-      otherwise added as for a caller with no sandbox, and also for the \c global-* classpath module commands; a caller
-      whose sandbox restricts neither is not affected
-      (qore#7349, qore#7195)
+      classpath is added.  For a caller whose sandbox restricts only the network, an entry that names another location,
+      or whose location cannot be confirmed, is refused, also when Java code adds the classpath, which is otherwise
+      added as for a caller with no sandbox, and also for the \c global-* classpath module commands, whose classpath
+      is then added as a whole or not at all; a caller whose sandbox restricts neither is not affected (qore#7349,
+      qore#7195)
     - A child process created with \c fork() could wait forever when it ended, if another thread of the parent held
       one of the module's locks on the child's exit path or the global context Program at the time of the fork, as that
       thread does not exist in the child.  The module's cleanup in a child no longer waits for that state (qore#7192)

@@ -347,67 +347,72 @@ class Outer {
       the policy of the Program that owns the class loader, so that Program can load everything below it.  Add only
       what the Program may read
     - a policy is bound to an entry only if it restricts the filesystem when the entry is added.  An entry that was
-      added before \c setSandboxManager(), or while the Program's sandbox restricted nothing, stays unchecked: setting or
-      tightening the policy later does not apply to it.  Configure the filesystem policy of a Program before its
+      added before \c setSandboxManager(), or while the Program's sandbox restricted nothing, stays unchecked: setting
+      or tightening the policy later does not apply to it.  Configure the filesystem policy of a Program before its
       classpath is added
     - on a JDK version for which manifest \c Class-Path handling has not been verified, what the manifests of trusted
       jars name is not found in a class loader that also has entries of restricted code (fail closed)
+    - a caller whose sandbox restricts the network but not the filesystem makes no grant of the host: adding an entry
+      again leaves its policy in place, and a new entry of such a caller has no policy of its own, so a lookup below it
+      applies the policies of the entries of restricted code that enclose it, and none if no such entry does
+    - below the entries of restricted code, a jar whose path holds the separator of a jar URL (\c "!/") is not used, as
+      a connection to its URLs would open another archive than the one that was checked
 
     <b>Compilers:</b> the Kotlin compiler validates the source and class names that it is given as Java binary names,
     keeps the files that it makes for them in its private temporary directory, and validates the names of the classes
-    that it produces; the Java compiler keeps sources and classes in memory and makes no file for a name.  For a caller that a
-    filesystem policy restricts, Java compiler options that name no file are accepted, a classpath and an output
+    that it produces; the Java compiler keeps sources and classes in memory and makes no file for a name.  For a caller
+    that a filesystem policy restricts, Java compiler options that name no file are accepted, a classpath and an output
     directory are checked against the policy and the compiler is given the files that were checked, annotation
     processing and the Java compiler's extensions from the classpath are turned off, and any other option is refused;
     use the \c add-classpath module command to add to the classpath.  For such a caller, the Kotlin compiler is given a
     private copy of the class files and Kotlin module files that every policy of the enclosing entries allows below each
-    classpath directory that restricted code added, and its scripting plugin, which
-    discovers script definitions on the classpath and runs their code, is turned off.  The copies that a Program has at
-    one time are limited in number, files, bytes and directory entries visited, across all of its class loaders; a
-    compile that would go over a limit fails, and the copies are removed when the compile ends, when their class
-    loader is closed, and when the Program ends.  A copy that cannot be removed keeps its share of the limits, its
-    removal is tried again at the next of these, and a removal that keeps failing is logged once, with no path; a compile
-    does not raise this failure.  The copies are kept in one directory of the JVM that only its user can access, which
-    is removed with its last copy if it is then empty; it stays, empty, and is used by the next copy if the JVM cannot read the temporary
-    directory (for example mode 1733 of another owner, or 0300 owned by the JVM's user) or the JDK has no secure directory stream.  A retry only removes the directory it created: if that private directory no longer
-    verifies (its type, owner, mode or identity changed), nothing below it is touched and its copies keep their share
-    of the limits.  On a platform without POSIX file attributes or a secure directory stream in the JDK, a retry does
-    not walk the directory, so such a copy keeps its share of the limits until the process ends.  A compile that
-    needs a copy is refused unless the real path of the JVM's temporary directory is a directory owned by the JVM's numeric UID
-    or by root that is not writable by group or others or that has the sticky bit; no user name is needed, and a compile
-    is also refused if a UID cannot be read, which includes a Java runtime image without the \c jdk.security.auth
-    module, or if a new copy would have another UID than its private directory.  The removal of such a refused copy is
-    attempted; if it cannot be removed, it stays inside the private directory, and while that directory is the
-    current one, compiles that need a copy are refused, with an error of their own that is logged once.  Once no copy is in flight, the next compile recovers if
+    classpath directory that restricted code added, and its scripting plugin, which discovers script definitions on the
+    classpath and runs their code, is turned off.  The copies that a Program has at one time are limited in number,
+    files, bytes and directory entries visited, across all of its class loaders; a compile that would go over a limit
+    fails, and the copies are removed when the compile ends, when their class loader is closed, and when the Program
+    ends.  A copy that cannot be removed keeps its share of the limits, its removal is tried again at the next of these,
+    and a removal that keeps failing is logged once, with no path; a compile does not raise this failure.  The copies
+    are kept in one directory of the JVM that only its user can access, which is removed with its last copy if it is
+    then empty; it stays, empty, and is used by the next copy if the JVM cannot read the temporary directory (for
+    example mode 1733 of another owner, or 0300 owned by the JVM's user) or the JDK has no secure directory stream.  A
+    retry only removes the directory it created: if that private directory no longer verifies (its type, owner, mode or
+    identity changed), nothing below it is touched and its copies keep their share of the limits.  On a platform without
+    POSIX file attributes or a secure directory stream in the JDK, a retry does not walk the directory, so such a copy
+    keeps its share of the limits until the process ends.  A compile that needs a copy is refused unless the real path
+    of the JVM's temporary directory is a directory owned by the JVM's numeric UID or by root that is not writable by
+    group or others or that has the sticky bit; no user name is needed, and a compile is also refused if a UID cannot be
+    read, which includes a Java runtime image without the \c jdk.security.auth module, or if a new copy would have
+    another UID than its private directory.  The removal of such a refused copy is attempted; if it cannot be removed,
+    it stays inside the private directory, and while that directory is the current one, compiles that need a copy are
+    refused, with an error of their own that is logged once.  Once no copy is in flight, the next compile recovers if
     that directory is gone or is verified and empty; a leftover that never goes means refusal until the process
-    restarts.  Compiles that make no copy are not affected.  Only on a platform without
-    POSIX file attributes can this not be checked, and a copy is made.  Its parent directories and ACLs are not judged.
-    These checks do not defend against Java code in the same JVM.  Once the module's shutdown has started, closing a class loader does
-    nothing, so a copy of a compile that is still running is then removed only when that compile ends.  A process that
-    ends with the \c exit() function while a compile is running does not remove that compile's copy, which stays in
-    the JVM's temporary directory.  A jar with a manifest \c Class-Path attribute is left out of a Kotlin compile for
-    such a caller, so the classes of that jar and of what its manifest names are not visible to the compile, also when
-    the class loader's check accepted them.  The Kotlin compiler also uses
-    the host's %Qore and Kotlin jars and the entries that trusted code added.  A Kotlin script (\c kotlin_eval()) of such
-    a caller is refused while a directory that restricted code added, directly or through a jar's manifest, is on its
-    classpath, as the script compiler reads the files below it itself; use jars for that classpath.  The refusal
-    covers only those directories: a jar is used as a whole once the policy has allowed it, and a directory with no
-    bound policy (a grant of the host, or an entry added before a filesystem policy applied) does not refuse a script,
-    which can then read all of it.  A compiler applies these rules to the caller that creates it: a
-    compiler that trusted code creates keeps the options and classpath that it was given and does not check the files
-    below its classpath directories, also when restricted code uses it, so do not hand one to restricted code.  A
-    path is checked before it is opened, so a file that changes between the check and its use is not covered.  A
-    classpath added with \c addClassPath() of a compiler or with \c addPath(), \c addWildcard() or
-    \c addParentPath() of a class loader is checked against the same policy.  On a Java thread whose %Qore caller is
-    not known, these operations follow the Java thread rule and its known limit, described above; a captured
-    \c QoreSandbox.Policy does not change this.  These checks cover the names and options given to the compilers: Java code that a Program
-    is allowed to run is not confined by them (see the rules below).
+    restarts.  Compiles that make no copy are not affected.  Only on a platform without POSIX file attributes can this
+    not be checked, and a copy is made.  Its parent directories and ACLs are not judged. These checks do not defend
+    against Java code in the same JVM.  Once the module's shutdown has started, closing a class loader does nothing, so
+    a copy of a compile that is still running is then removed only when that compile ends.  A process that ends with the
+    \c exit() function while a compile is running does not remove that compile's copy, which stays in the JVM's
+    temporary directory.  A jar with a manifest \c Class-Path attribute is left out of a Kotlin compile for such a
+    caller, so the classes of that jar and of what its manifest names are not visible to the compile, also when the
+    class loader's check accepted them.  The Kotlin compiler also uses the host's %Qore and Kotlin jars and the entries
+    that trusted code added.  A Kotlin script (\c kotlin_eval()) of such a caller is refused while a directory that
+    restricted code added, directly or through a jar's manifest, is on its classpath, as the script compiler reads the
+    files below it itself; use jars for that classpath.  The refusal covers only those directories: a jar is used as a
+    whole once the policy has allowed it, and a directory with no bound policy (a grant of the host, or an entry added
+    before a filesystem policy applied) does not refuse a script, which can then read all of it.  A compiler applies
+    these rules to the caller that creates it: a compiler that trusted code creates keeps the options and classpath that
+    it was given and does not check the files below its classpath directories, also when restricted code uses it, so do
+    not hand one to restricted code.  A path is checked before it is opened, so a file that changes between the check
+    and its use is not covered.  A classpath added with \c addClassPath() of a compiler or with \c addPath(), \c
+    addWildcard() or \c addParentPath() of a class loader is checked against the same policy.  On a Java thread whose
+    %Qore caller is not known, these operations follow the Java thread rule and its known limit, described above; a
+    captured \c QoreSandbox.Policy does not change this.  These checks cover the names and options given to the
+    compilers: Java code that a Program is allowed to run is not confined by them (see the rules below).
 
-    The exceptions are thrown in Java as \c org.qore.jni.QoreExceptionWrapper (a \c RuntimeException), which becomes
-    the original %Qore exception when it reaches %Qore code.  The policy allows callers that no sandbox restricts,
-    though a check still raises an error for invalid arguments and on a thread whose policy cannot be determined (see
-    below); the host name is resolved for them as well, so the code is the same in both cases.  In a system-policy capability
-    (\c SandboxManager::createSystemPolicyCall()) the checks apply the system policy, as they do for %Qore sockets.
+    The exceptions are thrown in Java as \c org.qore.jni.QoreExceptionWrapper (a \c RuntimeException), which becomes the
+    original %Qore exception when it reaches %Qore code.  The policy allows callers that no sandbox restricts, though a
+    check still raises an error for invalid arguments and on a thread whose policy cannot be determined (see below); the
+    host name is resolved for them as well, so the code is the same in both cases.  In a system-policy capability (\c
+    SandboxManager::createSystemPolicyCall()) the checks apply the system policy, as they do for %Qore sockets.
 
     <b>Java threads:</b> the static methods apply the policy of the %Qore caller of the current thread.  Work that
     Java runs on threads of its own (an executor, a connection pool, the I/O threads of a client library) has no

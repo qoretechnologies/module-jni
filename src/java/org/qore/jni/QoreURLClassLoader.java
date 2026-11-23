@@ -187,6 +187,9 @@ public class QoreURLClassLoader extends URLClassLoader {
     //! true on a thread that adds a classpath for a caller whose sandbox restricts only the network
     private static final ThreadLocal<Boolean> locationChecked = new ThreadLocal<Boolean>();
 
+    //! the transparent entries of the class loader, also before it has a guard; guarded by this object
+    private final HashSet<String> transparentPaths = new HashSet<String>();
+
     //! true if the JDK's class loader, which reads the setting when it starts, follows entries that are not files
     private static final boolean CLASS_PATH_URL_CHECK_DISABLED = isClassPathUrlCheckDisabled();
 
@@ -450,9 +453,10 @@ public class QoreURLClassLoader extends URLClassLoader {
         // a caller that a sandbox restricts makes no grant of the host: a policy bound to the entry stays
         if (QoreSandbox.restrictsNetwork()) {
             checkClasspathLocation(url);
-        } else {
-            noteTrustedUrl(url);
+            addTransparentUrl(url);
+            return;
         }
+        noteTrustedUrl(url);
         super.addURL(url);
     }
 
@@ -476,11 +480,58 @@ public class QoreURLClassLoader extends URLClassLoader {
             // a caller that a sandbox restricts makes no grant of the host: a policy bound to the entry stays
             if (QoreSandbox.restrictsNetwork()) {
                 checkClasspathLocation(url);
-            } else {
-                noteTrustedUrl(url);
+                addTransparentUrl(url);
+                return;
             }
+            noteTrustedUrl(url);
         }
         super.addURL(url);
+    }
+
+    //! Adds a URL for a caller that a sandbox restricts for the network but not the filesystem; a new entry is
+    //! transparent
+    private void addTransparentUrl(URL url) {
+        File file = urlToFile(url);
+        boolean fresh = file != null && isNewEntry(file.getPath());
+        super.addURL(url);
+        if (fresh) {
+            noteTransparent(file.getPath());
+        }
+    }
+
+    //! Adds the URL of a file that the class loader was given
+    /** @param transparent true if the caller is one that a sandbox restricts for the network but not the filesystem, so
+        that a new entry is transparent; also when the location of the URL is checked on this thread
+    */
+    private void addFileUrl(File file, boolean transparent) {
+        URL url = createUrl(file);
+        boolean fresh = url != null && (transparent || locationChecked.get() != null) && isNewEntry(file.getPath());
+        addURLIntern(url);
+        if (fresh) {
+            noteTransparent(file.getPath());
+        }
+    }
+
+    //! Returns true if no URL of the class loader names a path
+    private boolean isNewEntry(String path) {
+        for (URL u : super.getURLs()) {
+            File f = urlToFile(u);
+            if (f != null && f.getPath().equals(path)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    //! Records a new entry of a caller that a sandbox restricts for the network but not the filesystem
+    /** It binds no policy and makes no grant: a lookup below it applies the policies of the bound entries that enclose
+        it (see QoreClasspathGuard)
+    */
+    private synchronized void noteTransparent(String path) {
+        transparentPaths.add(path);
+        if (guard != null) {
+            guard.markTransparent(path);
+        }
     }
 
     //! Adds a URL that the class loader has made from a path that it was given
@@ -494,12 +545,17 @@ public class QoreURLClassLoader extends URLClassLoader {
 
     //! Records that code that no sandbox restricts added a URL: its entry is a grant of the host
     private void noteTrustedUrl(URL url) {
-        QoreClasspathGuard g = guard;
-        if (g != null) {
-            File file = urlToFile(url);
-            if (file != null) {
-                g.markTrusted(file.getPath());
-            }
+        File file = urlToFile(url);
+        if (file != null) {
+            noteTrustedPath(file.getPath());
+        }
+    }
+
+    //! Records that code that no sandbox restricts added a path: its entry is a grant of the host
+    private synchronized void noteTrustedPath(String path) {
+        transparentPaths.remove(path);
+        if (guard != null) {
+            guard.markTrusted(path);
         }
     }
 
@@ -509,16 +565,19 @@ public class QoreURLClassLoader extends URLClassLoader {
         caller simply has no filesystem policy.
     */
     private void noteTrustedFile(File file) {
-        QoreClasspathGuard g = guard;
-        if (g != null && locationChecked.get() == null) {
-            g.markTrusted(file.getPath());
+        if (locationChecked.get() == null) {
+            noteTrustedPath(file.getPath());
         }
     }
 
-    //! Returns the guard of this class loader, making it if necessary
+    //! Returns the guard of this class loader, making it if necessary, with the transparent entries added before it
     private synchronized QoreClasspathGuard getGuard() {
         if (guard == null) {
-            guard = new QoreClasspathGuard();
+            QoreClasspathGuard g = new QoreClasspathGuard();
+            for (String path : transparentPaths) {
+                g.markTransparent(path);
+            }
+            guard = g;
         }
         return guard;
     }
@@ -2324,7 +2383,12 @@ public class QoreURLClassLoader extends URLClassLoader {
     void addParentPathIntern(String classpath) {
         // also reached by the global module commands: for a caller that a network policy restricts, the location of
         // each URL is checked, as on the other routes, and no grant of the host is made
-        addLocationChecked(QoreSandbox.restrictsNetwork(), () -> addToParentPath(classpath));
+        boolean network = QoreSandbox.restrictsNetwork();
+        if (network && classpath != null) {
+            // every entry first, so that a classpath that is refused adds nothing, as for add-classpath
+            checkClasspathLocations(classpath);
+        }
+        addLocationChecked(network, () -> addToParentPath(classpath));
     }
 
     //! Adds a classpath to the parent class loader, or to this one if it has no parent of this class
@@ -2422,10 +2486,10 @@ public class QoreURLClassLoader extends URLClassLoader {
                 //errorLog("Could not find classpath element '" + fileentry + "'");
             } else if (fileentry.isDirectory()) {
                 //debugLog("adding dir: " + fileentry.getName() + " (" + fileentry.toString() + ")");
-                addURLIntern(createUrl(fileentry));
+                addFileUrl(fileentry, false);
             } else if (isLoadable(fileentry.getName())) {
                 //debugLog("adding jar: " + fileentry.getName() + " (" + fileentry.toString() + ")");
-                addURLIntern(createUrl(fileentry));
+                addFileUrl(fileentry, false);
             } else {
                 errorLog("ClassPath element '" + fileentry + "' is not an existing directory and is not a file " +
                     "ending with '.zip' or '.jar'");
@@ -3144,7 +3208,7 @@ public class QoreURLClassLoader extends URLClassLoader {
                 continue;
             }
             if (rc.isWildcardMatch(i) || fileentry.isDirectory() || isLoadable(fileentry.getName())) {
-                addURLIntern(createUrl(fileentry));
+                addFileUrl(fileentry, !rc.restricted && rc.networkRestricted);
             } else {
                 errorLog("ClassPath element '" + fileentry + "' is not an existing directory and is not a file " +
                     "ending with '.zip' or '.jar'");
@@ -3316,7 +3380,7 @@ public class QoreURLClassLoader extends URLClassLoader {
             if (isLoadable(f.getName())) {
                 //debugLog("adding file: " + f.getName());
                 noteTrustedFile(f);
-                addURLIntern(createUrl(f));
+                addFileUrl(f, false);
             }
         }
     }

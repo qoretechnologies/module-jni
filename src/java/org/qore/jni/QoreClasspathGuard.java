@@ -23,9 +23,14 @@ import java.util.concurrent.ConcurrentHashMap;
 
     <b>Whose policy applies:</b> the policy of the code that added the entry, captured when it was added and kept with
     the entry.  A lookup can run on any thread, and the JVM makes lookups by itself, with no %Qore caller on the stack,
-    so the thread's caller is never consulted.  An entry with no policy is not checked: it was added by trusted code,
-    or when no filesystem policy restricted the code that added it (no sandbox yet, or a sandbox that restricted nothing
-    then), and a policy that is set or tightened later does not apply to it.
+    so the thread's caller is never consulted.  An entry with no policy is one of three kinds:
+    - a grant of the host: added by code that no sandbox restricted for the filesystem or the network then (trusted
+      code, no sandbox yet, or a sandbox that restricted neither); a lookup below it applies no policy, and a policy that
+      is set or tightened later does not apply to it
+    - transparent: added by code that a sandbox restricts for the network but not the filesystem, which binds no
+      filesystem policy and makes no grant; a lookup below it applies the policies of the bound entries that enclose it,
+      as if it were not there, and none if no bound entry encloses it
+    - bound: added by code that a filesystem policy restricts, with that policy (see bind())
 
     <b>Each lookup</b> resolves the file that was found to its real path, with symbolic links resolved, and applies the
     policy to that path.  A file that the policy denies, or that cannot be checked for any reason, is treated as a file
@@ -52,9 +57,12 @@ final class QoreClasspathGuard {
     private final Set<QoreCompilerClasspath.Copy> copies = ConcurrentHashMap.newKeySet();
     //! true once the class loader has been closed: no new copy is made
     private volatile boolean closed;
-    //! incremented when the roots change, to invalidate the trusted roots
+    //! the paths of transparent entries, as the class loader's URLs name them
+    private final Set<String> transparent = ConcurrentHashMap.newKeySet();
+    //! incremented when the roots or the transparent entries change, to invalidate the trusted roots
     private volatile int version;
-    //! the paths that trusted entries reach, the version of the roots and the number of URLs that they were made for
+    //! the paths that trusted and transparent entries reach, the version of the roots and the number of URLs that they
+    //! were made for
     private volatile Object[] trusted;
 
     //! Binds \a policies to the given paths of a class loader's classpath; each path keeps the policies it had too
@@ -74,7 +82,17 @@ final class QoreClasspathGuard {
     //! Marks a path as added by trusted code, so that it is a grant of the host
     synchronized void markTrusted(String path) {
         directories.remove(path);
-        if (roots.remove(path) != null) {
+        boolean changed = roots.remove(path) != null;
+        if (transparent.remove(path) || changed) {
+            ++version;
+        }
+    }
+
+    //! Marks a new entry of code that a sandbox restricts for the network but not the filesystem as transparent
+    /** A bound entry stays bound
+    */
+    synchronized void markTransparent(String path) {
+        if (!roots.containsKey(path) && transparent.add(path)) {
             ++version;
         }
     }
@@ -116,9 +134,10 @@ final class QoreClasspathGuard {
         String spec = url.toString();
         boolean jar = spec.startsWith("jar:");
         if (jar) {
-            // as the JDK splits a jar URL
+            // the class loader finds an entry at the last separator, but a connection to the URL opens the archive at
+            // the first one: a URL with two names no file that both of them read, so it is refused
             int sep = spec.lastIndexOf("!/");
-            if (sep < 0) {
+            if (sep < 0 || spec.indexOf("!/") != sep) {
                 return false;
             }
             spec = spec.substring(4, sep);
@@ -131,7 +150,7 @@ final class QoreClasspathGuard {
         if (file == null) {
             return false;
         }
-        ArrayList<QoreSandbox.ClasspathPolicy[]> applied = enclosingPolicies(file, jar, trustedRoots(loaderUrls));
+        ArrayList<QoreSandbox.ClasspathPolicy[]> applied = enclosingPolicies(file, jar, reachedRoots(loaderUrls));
         // in no known entry: it cannot be attributed to any code
         if (applied == null) {
             return false;
@@ -243,49 +262,67 @@ final class QoreClasspathGuard {
         return true;
     }
 
-    //! Returns the paths that the entries of trusted code reach, with the manifests of their jars
-    private Set<String> trustedRoots(URL[] loaderUrls) {
+    //! Returns the paths that the entries of trusted code reach, and those that transparent entries reach, with the
+    //! manifests of their jars
+    /** @return the trusted paths, then the transparent paths
+    */
+    @SuppressWarnings("unchecked")
+    private Set<String>[] reachedRoots(URL[] loaderUrls) {
         Object[] current = trusted;
         if (current != null && (Integer) current[1] == version && (Integer) current[2] == loaderUrls.length) {
-            @SuppressWarnings("unchecked")
-            Set<String> rv = (Set<String>) current[0];
-            return rv;
+            return (Set<String>[]) current[0];
         }
         synchronized (this) {
-            ArrayList<File> files = new ArrayList<>();
+            ArrayList<File> grants = new ArrayList<>();
+            ArrayList<File> others = new ArrayList<>();
             for (URL u : loaderUrls) {
                 File f = QoreURLClassLoader.urlToFile(u);
                 if (f != null && !roots.containsKey(f.getPath())) {
-                    files.add(f);
+                    (transparent.contains(f.getPath()) ? others : grants).add(f);
                 }
             }
-            Set<String> rv = QoreURLClassLoader.reachableRoots(files);
+            Set<String>[] rv = (Set<String>[]) new Set<?>[] {QoreURLClassLoader.reachableRoots(grants),
+                QoreURLClassLoader.reachableRoots(others)};
+            // a path that a grant also reaches is a grant
+            rv[1].removeAll(rv[0]);
             trusted = new Object[] {rv, version, loaderUrls.length};
             return rv;
         }
     }
 
     //! Returns the policies of the entries that contain a file, up to the nearest entry of trusted code
-    /** The one rule for lookups and compiler copies; a jar is an entry itself.
+    /** The one rule for lookups and compiler copies.  A transparent entry is passed through, also a jar, so the bound
+        entries that enclose it apply; a bound jar or a jar of trusted code is an entry itself, which ends the walk.
 
-        @return the policies; an empty list if the nearest entry is one of trusted code; null if no entry contains it
+        @param reached the paths that trusted entries reach, then those that transparent entries reach
+
+        @return the policies; an empty list if the nearest entry is one of trusted code, or if only transparent entries
+        contain the file; null if no entry contains it
     */
-    private ArrayList<QoreSandbox.ClasspathPolicy[]> enclosingPolicies(File file, boolean jar,
-            Set<String> trusted_roots) {
+    private ArrayList<QoreSandbox.ClasspathPolicy[]> enclosingPolicies(File file, boolean jar, Set<String>[] reached) {
         ArrayList<QoreSandbox.ClasspathPolicy[]> rv = null;
-        for (File f = file; f != null; f = jar ? null : f.getParentFile()) {
+        boolean in_transparent = false;
+        for (File f = file; f != null; f = f.getParentFile()) {
             String path = f.getPath();
             QoreSandbox.ClasspathPolicy[] policies = roots.get(path);
+            boolean pass = false;
             if (policies != null) {
                 if (rv == null) {
                     rv = new ArrayList<>(2);
                 }
                 rv.add(policies);
-            } else if (trusted_roots.contains(path)) {
+            } else if (reached[0].contains(path)) {
                 return rv == null ? new ArrayList<>(0) : rv;
+            } else if (reached[1].contains(path)) {
+                in_transparent = true;
+                pass = true;
+            }
+            // a jar is an entry itself, unless it is transparent
+            if (jar && f == file && !pass) {
+                break;
             }
         }
-        return rv;
+        return rv == null && in_transparent ? new ArrayList<>(0) : rv;
     }
 
     //! Returns true if every one of the sets of policies allows reading a real path
@@ -315,7 +352,7 @@ final class QoreClasspathGuard {
     */
     void addCompilerLocations(QoreCompilerClasspath classpath, List<File> locations, boolean reachable,
             QoreCompilerClasspath.Budget budget, URL[] loaderUrls) throws IOException {
-        Set<String> trusted_roots = trustedRoots(loaderUrls);
+        Set<String>[] trusted_roots = reachedRoots(loaderUrls);
         QoreCompilerClasspath.Copy copy = null;
         int n = 0;
         try {
@@ -388,13 +425,13 @@ final class QoreClasspathGuard {
         @param dest the directory of the copy
         @param logical the directory as the class loader's URLs name it
         @param relative the path of the directory below the classpath entry, with a trailing slash
-        @param trusted_roots the paths that entries of trusted code reach
+        @param trusted_roots the paths that entries of trusted code reach, then those of transparent entries
         @param active the real paths of the directories being copied, so that a link cycle ends
 
         @throw IOException a limit has been exceeded, the copy was released, or a file cannot be copied
     */
     private void copyAllowed(QoreCompilerClasspath.Copy copy, Path src, Path dest, File logical, String relative,
-            Set<String> trusted_roots, Set<Path> active, int depth) throws IOException {
+            Set<String>[] trusted_roots, Set<Path> active, int depth) throws IOException {
         if (depth > MAX_COMPILER_DEPTH || !active.add(src)) {
             return;
         }

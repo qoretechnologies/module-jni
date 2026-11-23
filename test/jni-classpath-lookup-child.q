@@ -370,6 +370,14 @@ sub network_readd_case(string root) {
     sm.addFilesystemDeniedPath(jar);
     result("refused add kept", "missing", p.callFunction("lookup", "getResource", "denied/JB.class"));
 
+    # a global classpath of such a caller that is refused at a later entry adds nothing, as add-classpath does
+    {
+        Program q = new_program(get_policy(root, ("allowed",)), root + "/allowed");
+        result("global all or nothing", "refused", ClasspathLookupProbe::addRouteUnder(policy,
+            q.callFunction("own_loader"), "addParentPathIntern", root + "/jars/src" + PathSep + dir + "/bad.jar"));
+        result("global all or nothing added", "missing", q.callFunction("lookup", "getResource", "denied/JB.class"));
+    }
+
     # the global module commands check the location of each entry for such a caller, as add-classpath does
     foreach string cmd in ("add-classpath", "global-add-classpath") {
         Program g(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
@@ -384,6 +392,76 @@ sub network_readd_case(string root) {
         }
         result("network-only " + cmd, "JNI-CLASSPATH-ERROR", err);
     }
+}
+
+#! an entry that a caller restricted only for the network adds below a bound entry does not end that entry's policy
+sub network_nested_case(string root) {
+    SandboxManager net();
+    net.setUncontrolledApiPolicy(True);
+    net.setFilesystemDefaultPolicy(True);
+    net.setNetworkDefaultPolicy(False);
+    object policy = new_empty_program(net).callFunction("capture_policy");
+    # a name that no other file of the test tree has
+    write_file(root + "/allowed/denied/nested.txt", "denied");
+    string jar_dir = root + "/allowed/denied/nested";
+    mkdir(jar_dir, 0700);
+    ClasspathLookupProbe::writeJar(root + "/jars/src", jar_dir + "/w.jar", "");
+
+    foreach hash<auto> i in ((
+            {"route": "addPath", "path": root + "/allowed/denied", "name": "nested.txt"},
+            {"route": "addPathOrig", "path": root + "/allowed/denied", "name": "nested.txt"},
+            {"route": "addURL", "path": root + "/allowed/denied", "name": "nested.txt"},
+            {"route": "addParentPathIntern", "path": root + "/allowed/denied", "name": "nested.txt"},
+            {"route": "resolved", "path": root + "/allowed/denied", "name": "nested.txt"},
+            {"route": "addWildcard", "path": jar_dir + "/*.jar", "name": "denied/JB.class"},
+            {"route": "addPath", "path": jar_dir + "/w.jar", "name": "denied/JB.class", "label": "addPath jar"})) {
+        string label = i.label ?? i.route;
+        Program p = new_program(get_policy(root, ("allowed",)), root + "/allowed");
+        object loader = p.callFunction("own_loader");
+        result("nested before " + label, "missing", p.callFunction("lookup", "getResource", i.name));
+        result("nested added " + label, "ok", ClasspathLookupProbe::addRouteUnder(policy, loader, i.route, i.path));
+        # through the nested entry and through the bound entry that contains it
+        result("nested kept " + label, "missing", p.callFunction("lookup", "getResource", i.name));
+        result("nested kept through the bound entry " + label, "missing",
+            p.callFunction("lookup", "getResource", "denied/nested.txt"));
+        # the parent class loader is searched too for the global route; its own entry is a plain one
+        if (i.route == "addParentPathIntern") {
+            result("nested kept in the derived loader " + label, "missing",
+                ClasspathLookupProbe::lookup(ClasspathLookupProbe::derived(loader), "getResource", i.name));
+        }
+    }
+
+    # an entry of such a caller that no bound entry contains is used as it is
+    {
+        Program p = new_program(get_policy(root, ("allowed",)), root + "/allowed");
+        result("network-only own entry", "ok", ClasspathLookupProbe::addRouteUnder(policy,
+            p.callFunction("own_loader"), "addPath", root + "/jars/src"));
+        result("network-only own entry found", True,
+            p.callFunction("lookup", "getResource", "denied/JB.class") != "missing");
+    }
+
+    # the control: an entry that code no sandbox restricts adds below a bound entry is a grant of the host
+    {
+        Program p = new_program(get_policy(root, ("allowed",)), root + "/allowed");
+        result("nested host add", "ok", ClasspathLookupProbe::addPath(p.callFunction("own_loader"),
+            root + "/allowed/denied"));
+        result("nested host grant", True, p.callFunction("lookup", "getResource", "nested.txt") != "missing");
+    }
+}
+
+#! a jar whose path holds the separator of a jar URL is not used below the entries of restricted code, as a
+#! connection to its URLs would open another archive than the one that was judged
+sub jar_separator_case(string root) {
+    string dir = root + "/bang!";
+    mkdir(dir, 0700);
+    ClasspathLookupProbe::writeJar(root + "/jars/src", dir + "/b.jar", "");
+    Program p = new_program(get_policy(root, ("allowed", "bang!")), dir + "/b.jar");
+    result("jar separator", "missing", p.callFunction("lookup", "getResource", "denied/JB.class"));
+    # the control: the same jar at a path without the separator is used
+    mkdir(root + "/bang", 0700);
+    ClasspathLookupProbe::writeJar(root + "/jars/src", root + "/bang/b.jar", "");
+    Program q = new_program(get_policy(root, ("allowed", "bang")), root + "/bang/b.jar");
+    result("jar separator control", True, q.callFunction("lookup", "getResource", "denied/JB.class") != "missing");
 }
 
 #! each new Program of a class loader has a budget of its own
@@ -469,6 +547,8 @@ switch (case_name) {
     case "tmpdir-owner": tmpdir_owner_case(root, ARGV[2]); exit(0);
     case "blocked": blocked_case(root); exit(0);
     case "network-readd": network_readd_case(root); exit(0);
+    case "network-nested": network_nested_case(root); exit(0);
+    case "jar-separator": jar_separator_case(root); exit(0);
 }
 if (ClasspathLookupProbe::fileNameEncoding() != "UTF-8") {
     printf("result: skipped: the file names of the JVM are in %s\n", ClasspathLookupProbe::fileNameEncoding());

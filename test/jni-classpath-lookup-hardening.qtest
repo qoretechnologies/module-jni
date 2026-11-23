@@ -88,6 +88,8 @@ object sub derived() {
         addTestCase("a copy needs a temporary directory of the JVM's UID or root", \copyTempDirOwnerTest());
         addTestCase("a private directory that takes no more copies can recover", \copyBlockedTest());
         addTestCase("a caller restricted only for the network makes no grant of the host", \networkReaddTest());
+        addTestCase("an entry of such a caller below a bound entry keeps its policy", \networkNestedTest());
+        addTestCase("a jar whose path holds the separator of a jar URL", \jarSeparatorTest());
         addTestCase("each new Program of a class loader has a budget of its own", \copyProgramSwitchTest());
         addTestCase("a compile whose Program ends while it runs", \compileProgramEndTest());
         addTestCase("the end of a Program ends the copies of its class loaders", \copyProgramEndTest());
@@ -402,6 +404,16 @@ object sub derived() {
     #! a re-add or a refused add by a caller restricted only for the network leaves a bound policy in place
     networkReaddTest() {
         runChildCase("network-readd", True);
+    }
+
+    #! an entry that a caller restricted only for the network adds below a bound entry does not end its policy
+    networkNestedTest() {
+        runChildCase("network-nested", True);
+    }
+
+    #! a jar whose path holds the separator of a jar URL is not used below the entries of restricted code
+    jarSeparatorTest() {
+        runChildCase("jar-separator", True);
     }
 
     #! each new Program of a class loader has a budget of its own
