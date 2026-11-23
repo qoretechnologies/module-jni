@@ -14,8 +14,11 @@
     - <b>Behavior change</b> (qore#7068): the constructors of \c QoreObject, \c QoreObjectBase, \c QoreClosure and
       \c QoreJavaObjectPtr that take a \c long, \c get(), \c qoreJniEnterHandle() and \c qoreJniExitHandle() of
       \c QoreObjectBase and \c QoreClosure, and the \c obj field of \c QoreObjectBase, are no longer part of the public
-      Java API, and \c QoreJavaObjectPtr is now final; objects and closures are obtained from %Qore, and Java code
-      that used these members must be changed
+      Java API, and \c QoreJavaObjectPtr is now final, with no public constructor or field; objects and closures are
+      obtained from %Qore, and Java code that used these members must be changed.  The \c queue and the
+      \c register() and \c shutdown() methods of \c NativeCleanup are no longer public, and
+      \c NativeCleanup.setReleaseWaitHook(), a test hook that takes effect only in a debug build of the module, now
+      returns whether the hook was set
     - <b>Behavior change</b> (qore#7068): a method of a generated class called on an object of a class injected in
       place of the method's class now runs the injected class's own method of that name.  Before, the call ran the
       replaced class's method body on the object if that class was a user class, and failed with

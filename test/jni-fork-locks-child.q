@@ -65,7 +65,9 @@ our *Program p = new Program(PO_NEW_STYLE);
 try {
     p.parse(Source, "fork-locks-fixture");
 } catch (hash<ExceptionInfo> ex) {
-    if (ex.desc =~ /dbg_jni_hold_fork_locks/) {
+    # only the hook's absence from a build that is not a debug build is a skip
+    if (ex.err == "PARSE-EXCEPTION"
+        && ex.desc =~ /^cannot resolve call 'Jni::org::qore::jni::dbg_jni_hold_fork_locks\(\)'/) {
         printf("skip: the module has no test hook (not a debug build)\n");
         exit(0);
     }
@@ -112,7 +114,8 @@ if (!pid) {
 } else {
     uncollected = pid;
     pipe.write.close();
-    bool ended = wait_fork_child(pipe.read, pid);
+    # the stages that the child reports are printed for the test to check
+    bool ended = wait_fork_child(pipe.read, pid, sub (binary data) { print(data.toString()); });
     string result;
     if (ended) {
         result = call_function(WaitChild, pid);

@@ -67,6 +67,7 @@ class JniForkTest inherits QUnit::Test {
         addTestCase("a child ends its script, and the module is deleted", \moduleCleanupTest());
         addTestCase("a child that blocks in its cleanup is reported", \blockedCleanupTest());
         addTestCase("a child that crashes after writing its result is reported", \crashAfterResultTest());
+        addTestCase("a child whose result cannot be written exits at once", \writeFailureTest());
         addTestCase("a child exits while a thread of the parent held the module's locks", \heldLocksTest());
         addTestCase("a child ends while another thread holds the context lock", \contextLockTest());
         addTestCase("a child ends while another thread holds the context Program", \contextProgramTest());
@@ -84,24 +85,30 @@ class JniForkTest inherits QUnit::Test {
     heldLocksTest() {
         checkFork();
         # a status other than 0 shows that the status of a child is read
-        string control = runLocksChild("exit", 7);
-        if (control =~ /^skip:/) {
-            testSkip(trim(control));
+        hash<auto> control = runLocksChild("exit", 7);
+        if (control.status =~ /^skip:/) {
+            testSkip(trim(control.status));
         }
-        assertEq("status: exited 7", control);
-        assertEq("status: exited 0", runLocksChild("exit", 0));
-        assertEq("status: exited 0", runLocksChild("end", 0));
+        checkLocksChild(control, "status: exited 7");
+        checkLocksChild(runLocksChild("exit", 0), "status: exited 0");
+        checkLocksChild(runLocksChild("end", 0), "status: exited 0");
     }
 
-    #! runs the child script of heldLocksTest() and returns the line with its result
+    #! checks how the child of heldLocksTest() ended, and that it reported finishing the deletion of its Program
+    private checkLocksChild(hash<auto> child, string status) {
+        assertEq(status, child.status);
+        assertRegex("(?s)child: ending\n.*child: deleted the Program\n", child.output, status);
+    }
+
+    #! runs the child script of heldLocksTest() and returns its output and the line with its result
     /** The script reports a child that is blocked; see wait_fork_child()
     */
-    private string runLocksChild(string route, int status) {
+    private hash<auto> runLocksChild(string route, int status) {
         string script = get_script_dir() + "/jni-fork-locks-child.q";
         string output = backquote(sprintf("%s -b --enable-debug %s %s %d 2>&1",
             shellQuote(QORE_ARGV[0]), shellQuote(script), route, status));
         *list<*string> m = (output =~ x/^((?:status|skip): .*)$/m);
-        return exists m ? m[0] : "no result: " + output;
+        return {"status": exists m ? m[0] : "no result: " + output, "output": output};
     }
 
     # the child exits with exit(), which runs the module's exit handler; it waited forever for the NativeCleanup
@@ -209,9 +216,21 @@ class JniForkTest inherits QUnit::Test {
         if (!is_dir("/proc/self/task")) {
             testSkip("the exit status of a child is not known without /proc");
         }
-        hash<auto> h = runChildStatus(string sub () { return "written"; }, NOTHING, True);
+        hash<auto> h = runChildStatus(string sub () { return "written"; }, NOTHING, "crash");
         assertEq("written", h.result);
         assertEq(SIGKILL, h.status & 0x7f, "the status shows the signal that ended the child");
+    }
+
+    # a child whose result cannot be written exits at once with an error status: it must not unwind into the test
+    # framework, which would run the remaining tests in the child
+    writeFailureTest() {
+        checkFork();
+        if (!is_dir("/proc/self/task")) {
+            testSkip("the exit status of a child is not known without /proc");
+        }
+        hash<auto> h = runChildStatus(string sub () { return "unwritten"; }, NOTHING, "write-fails");
+        assertNothing(h.result, "the child wrote no result");
+        assertEq(1 << 8, h.status, "the child exited with status 1");
     }
 
     # the module's cleanup in a child does not wait for a lock or a holder that a thread of the parent left: that thread
@@ -263,7 +282,11 @@ class JniForkTest inherits QUnit::Test {
         try {
             call_function("Jni::org::qore::jni::dbg_jni_context_program_counts");
         } catch (hash<ExceptionInfo> ex) {
-            testSkip("the jni module's debug hooks require a debug build");
+            # only the hook's absence from a build that is not a debug build is a skip
+            if (ex.err == "NO-FUNCTION" && ex.desc =~ /dbg_jni_context_program_counts/) {
+                testSkip("the jni module's debug hooks require a debug build");
+            }
+            rethrow;
         }
     }
 
@@ -331,11 +354,12 @@ class JniForkTest inherits QUnit::Test {
     #! runs the code in a child process as runChild() does, and returns its result and its wait status
     /** @param child the code run in the child
         @param parent code run in the parent after fork(), before the result is read
-        @param crash if True, the child is killed after it has written its result, instead of exiting
+        @param mode \c "crash": the child is killed after it has written its result, instead of exiting;
+        \c "write-fails": the write of the result fails, while the child still holds the pipe
 
         @return a hash with \c result and \c status, the wait status of the child, if it is known
     */
-    private hash<auto> runChildStatus(code child, *code parent, *bool crash) {
+    private hash<auto> runChildStatus(code child, *code parent, *string mode) {
         # an anonymous pipe needs no file, and the parent cannot block in the open of a named pipe that a child
         # ending early never opens
         hash<PipeInfo> pipe = File::getPipe();
@@ -345,17 +369,27 @@ class JniForkTest inherits QUnit::Test {
         if (!pid) {
             # the child holds the write end until it has exited: if it ends before it has written its result, the
             # parent reads to the end of what it wrote
-            pipe.read.close();
-            string result;
+            # nothing here may unwind into the test framework, which would run the remaining tests in this process
             try {
-                result = child();
+                pipe.read.close();
+                string result;
+                try {
+                    result = child();
+                } catch (hash<ExceptionInfo> ex) {
+                    result = "exception: " + ex.err;
+                }
+                if (mode == "write-fails") {
+                    # a file that is not open: the write end of the pipe stays open until this process has exited
+                    File unopened();
+                    unopened.write(result);
+                }
+                pipe.write.write(result);
+                if (mode == "crash") {
+                    # a signal that cannot be handled or blocked, and that leaves no core file
+                    kill(getpid(), SIGKILL);
+                }
             } catch (hash<ExceptionInfo> ex) {
-                result = "exception: " + ex.err;
-            }
-            pipe.write.write(result);
-            if (crash) {
-                # a signal that cannot be handled or blocked, and that leaves no core file
-                kill(getpid(), SIGKILL);
+                Qore::exit(1);
             }
             Qore::exit(0);
         }

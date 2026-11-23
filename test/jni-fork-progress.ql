@@ -102,16 +102,25 @@ bool sub wait_fork_child(ReadOnlyFile pipe, int pid, *code on_data) {
     the code is set once wait_fork_child() has seen the end of the pipe.
 
     @return the wait status (the exit code in the high byte, or the signal in the low byte), or nothing without \c /proc
+
+    @throw FORK-TEST-ERROR \c /proc exists, and the status of the child cannot be read from it
 */
 *int sub fork_child_exit_status(int pid) {
+    if (!is_dir("/proc/self/task")) {
+        return;
+    }
     string stat;
     try {
         stat = ReadOnlyFile::readTextFile(sprintf("/proc/%d/stat", pid));
     } catch (hash<ExceptionInfo> ex) {
-        return;
+        throw "FORK-TEST-ERROR", sprintf("cannot read the exit status of child %d: %s: %s", pid, ex.err, ex.desc);
     }
     # the exit code is field 52 of the file
-    return stat.substr(stat.rfind(")") + 2).split(" ")[49].toInt();
+    list<string> fields = stat.substr(stat.rfind(")") + 2).split(" ");
+    if (fields.size() < 50) {
+        throw "FORK-TEST-ERROR", sprintf("cannot parse the exit status of child %d: %y", pid, stat);
+    }
+    return fields[49].toInt();
 }
 
 #! Waits for a Java thread to signal that it holds its state, or raises an exception if it ended without doing so
