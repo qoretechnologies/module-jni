@@ -372,10 +372,10 @@ class Outer {
     verifies (its type, owner, mode or identity changed), nothing below it is touched and its copies keep their share
     of the limits.  On a platform without POSIX file attributes or a secure directory stream in the JDK, a retry does
     not walk the directory, so such a copy keeps its share of the limits until the process ends.  A compile that
-    needs a copy is refused unless the real path of the JVM's temporary directory is a directory owned by the JVM's user or by
-    root that is not writable by group or others or that has the sticky bit; compiles that make no copy are not
-    affected.  On a platform without POSIX file attributes this cannot be checked and a copy is made, and if the JVM's
-    user has no name that can be looked up, only the mode is judged.  Its parent directories and ACLs are not judged.
+    needs a copy is refused unless the real path of the JVM's temporary directory is a directory owned by the JVM's numeric UID
+    or by root that is not writable by group or others or that has the sticky bit; no user name is needed, and a compile
+    is also refused if a UID cannot be read, which includes a Java runtime image without the \c jdk.security.auth module.  Compiles that make no copy are not affected.  Only on a platform without
+    POSIX file attributes can this not be checked, and a copy is made.  Its parent directories and ACLs are not judged.
     These checks do not defend against Java code in the same JVM.  Once the module's shutdown has started, closing a class loader does
     nothing, so a copy of a compile that is still running is then removed only when that compile ends.  A process that
     ends with the \c exit() function while a compile is running does not remove that compile's copy, which stays in

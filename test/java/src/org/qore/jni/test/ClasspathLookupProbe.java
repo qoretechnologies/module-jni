@@ -427,6 +427,12 @@ public class ClasspathLookupProbe {
         volatile Path rootName;
         //! runs once, just before the root of the copy is deleted relative to its parent
         volatile Runnable onRootDelete;
+        //! reading a numeric UID raises an I/O error
+        static final int UID_ERROR = 1;
+        //! reading a numeric UID finds no unix attribute view
+        static final int UID_NO_VIEW = 2;
+        //! how reading a numeric UID fails, or 0
+        volatile int failUid;
         //! the deletions made by path
         int pathDeletes;
         int failures;
@@ -525,6 +531,14 @@ public class ClasspathLookupProbe {
         }
         @Override public java.util.Map<String, Object> readAttributes(Path path, String attributes,
                 java.nio.file.LinkOption... options) throws IOException {
+            if (attributes.contains("uid")) {
+                if (failUid == UID_ERROR) {
+                    throw new IOException("injected attribute failure");
+                }
+                if (failUid == UID_NO_VIEW) {
+                    throw new UnsupportedOperationException("injected: no such view");
+                }
+            }
             return real.readAttributes(unwrap(path), attributes, options);
         }
         @Override public void setAttribute(Path path, String attribute, Object value,
@@ -856,65 +870,116 @@ public class ClasspathLookupProbe {
 
     //! the owner that setUnexpectedTempOwner() changed, or null
     private static java.nio.file.attribute.UserPrincipal savedTempOwner;
-    //! the JVM's user before setUnexpectedTempOwner()
-    private static Object savedProcessUser;
+    //! the JVM's UID before a simulation
+    private static Object savedProcessUid;
+    //! the private parent whose recorded UID a simulation changed, and that UID
+    private static Object savedParent;
+    private static long savedParentUid;
 
-    //! Returns the field of the private parent class that has the JVM's user
-    private static java.lang.reflect.Field processUserField() throws Exception {
-        java.lang.reflect.Field f = Class.forName("org.qore.jni.QoreCompilerClasspath$PrivateParent", true,
-            QoreURLClassLoader.class.getClassLoader()).getDeclaredField("processUser");
+    //! Returns the private parent class
+    private static Class<?> parentClass() throws Exception {
+        return Class.forName("org.qore.jni.QoreCompilerClasspath$PrivateParent", true,
+            QoreURLClassLoader.class.getClassLoader());
+    }
+
+    //! Returns a private static field of the private parent class
+    private static java.lang.reflect.Field parentStatic(String name) throws Exception {
+        java.lang.reflect.Field f = parentClass().getDeclaredField(name);
         f.setAccessible(true);
         return f;
     }
 
-    //! Makes the owner of a directory that the JVM owns differ from the JVM's user, with no second user needed
-    /** A JVM of root really changes the owner; any other JVM is told that its user is another one
+    //! Returns the numeric UID of a path
+    private static long uidOf(Path path) throws IOException {
+        return Integer.toUnsignedLong((Integer) Files.getAttribute(path, "unix:uid",
+            java.nio.file.LinkOption.NOFOLLOW_LINKS));
+    }
+
+    //! Makes the UID of a directory that the JVM owns differ from the JVM's, with no second user needed
+    /** A JVM of root really changes the owner; any other JVM is told that its UID, and the one that its current private
+        parent recorded, is another one
     */
     public static void setUnexpectedTempOwner(String dir) throws Exception {
         Path path = Path.of(dir);
-        java.nio.file.attribute.UserPrincipal owner = Files.getOwner(path, java.nio.file.LinkOption.NOFOLLOW_LINKS);
-        java.lang.reflect.Field user = processUserField();
-        savedProcessUser = user.get(null);
-        if ((Integer) Files.getAttribute(path, "unix:uid", java.nio.file.LinkOption.NOFOLLOW_LINKS) == 0) {
+        savedProcessUid = parentStatic("processUid").get(null);
+        long dirUid = uidOf(path);
+        if (dirUid == 0) {
+            java.nio.file.attribute.UserPrincipal owner = Files.getOwner(path,
+                java.nio.file.LinkOption.NOFOLLOW_LINKS);
             savedTempOwner = owner;
             Files.setOwner(path, otherUser(owner));
-        } else {
-            user.set(null, otherUser(owner));
+            return;
+        }
+        parentStatic("processUid").set(null, Long.valueOf(dirUid + 1));
+        Object current = parentStatic("current").get(null);
+        if (current != null) {
+            savedParent = current;
+            savedParentUid = (long) field(current, "uid");
+            java.lang.reflect.Field uid = parentClass().getDeclaredField("uid");
+            uid.setAccessible(true);
+            uid.setLong(current, dirUid + 1);
         }
     }
 
-    //! Undoes setUnexpectedTempOwner()
+    //! Makes the UID of the JVM unreadable, as for a platform where the JDK cannot give it
+    public static void setUnknownJvmUid() throws Exception {
+        savedProcessUid = parentStatic("processUid").get(null);
+        parentStatic("processUid").set(null, null);
+    }
+
+    //! Undoes setUnexpectedTempOwner() or setUnknownJvmUid()
     public static void restoreTempOwner(String dir) throws Exception {
         if (savedTempOwner != null) {
             Files.setOwner(Path.of(dir), savedTempOwner);
             savedTempOwner = null;
         }
-        processUserField().set(null, savedProcessUser);
+        if (savedParent != null) {
+            java.lang.reflect.Field uid = parentClass().getDeclaredField("uid");
+            uid.setAccessible(true);
+            uid.setLong(savedParent, savedParentUid);
+            savedParent = null;
+        }
+        parentStatic("processUid").set(null, savedProcessUid);
     }
 
-    //! Applies the owner rule to the real root-owned directory "/" for a JVM whose user is not root
-    /** Unit level: the JVM cannot make a root-owned directory that it can write to without being root
-        @return "allowed", "refused", or why the rule could not be applied
+    //! Applies the rule for the temporary directory by numeric UID; no user name is involved
+    /** Unit level for root: the real root-owned directory "/" is judged, as a JVM that is not root cannot make a
+        root-owned directory that it can write to
+        @return "clean", or what is wrong
     */
-    public static String rootOwnerRule(String dir) throws Exception {
+    public static String uidRule(String dir) throws Exception {
+        java.lang.reflect.Method rule = parentClass().getDeclaredMethod("safeDirectory", Path.class, Long.class);
+        rule.setAccessible(true);
+        Path path = Path.of(dir);
+        long own = uidOf(path);
+        if (!(boolean) rule.invoke(null, path, Long.valueOf(own))) {
+            return "the same UID was refused";
+        }
+        if (own != 0 && (boolean) rule.invoke(null, path, Long.valueOf(own + 1))) {
+            return "another UID was allowed";
+        }
+        if ((boolean) rule.invoke(null, path, (Long) null)) {
+            return "an unreadable JVM UID was allowed";
+        }
         Path top = Path.of("/");
-        if ((Integer) Files.getAttribute(top, "unix:uid", java.nio.file.LinkOption.NOFOLLOW_LINKS) != 0) {
+        if (uidOf(top) != 0) {
             return "no root-owned directory";
         }
-        java.nio.file.attribute.UserPrincipal rootUser = Files.getOwner(top, java.nio.file.LinkOption.NOFOLLOW_LINKS);
-        java.nio.file.attribute.UserPrincipal owner = Files.getOwner(Path.of(dir),
-            java.nio.file.LinkOption.NOFOLLOW_LINKS);
-        java.lang.reflect.Field user = processUserField();
-        Object saved = user.get(null);
-        user.set(null, owner.equals(rootUser) ? otherUser(rootUser) : owner);
-        try {
-            java.lang.reflect.Method rule = user.getDeclaringClass().getDeclaredMethod("ownerAllowed", Path.class,
-                java.nio.file.attribute.UserPrincipal.class);
-            rule.setAccessible(true);
-            return (boolean) rule.invoke(null, top, rootUser) ? "allowed" : "refused";
-        } finally {
-            user.set(null, saved);
+        if (!(boolean) rule.invoke(null, top, Long.valueOf(own + 1))) {
+            return "a directory of root was refused";
         }
+        FailingProvider provider = new FailingProvider();
+        Path wrapped = provider.wrap(path);
+        provider.failUid = FailingProvider.UID_ERROR;
+        if ((boolean) rule.invoke(null, wrapped, Long.valueOf(own))) {
+            return "an unreadable directory UID was allowed";
+        }
+        provider.failUid = FailingProvider.UID_NO_VIEW;
+        if ((boolean) rule.invoke(null, wrapped, Long.valueOf(own))) {
+            return "a POSIX platform with no unix attribute view was allowed";
+        }
+        provider.failUid = 0;
+        return (boolean) rule.invoke(null, wrapped, Long.valueOf(own)) ? "clean" : "the provider refused a readable UID";
     }
 
     //! Opens and closes a compiler classpath: returns "copies=<n>", or the message of the refusal

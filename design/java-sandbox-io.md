@@ -131,11 +131,14 @@ are `static_assert`ed to match) and calls `QoreSandboxManager::checkFilesystemAc
   and if that is not possible the next copy reuses it.  If the JVM's user has no name that can be looked up, the
   parent's owner is taken from the directory when it is created.  A copy is made and read by path, so a restricted
   copy is refused unless the real path of the JVM's `java.io.tmpdir`, read once, is a directory owned by the JVM's
-  user or by root that is not writable by group or others or that has the sticky bit.  This is checked when a parent is
-  created and each time one is used for a new copy, and the refusal names no path.  Trusted and permissive compiles make
-  no copy and are not affected.  Where the platform has no POSIX attributes, the mode and owner cannot be checked, a copy
-  is made, and a retry stays fail-closed as above; where the JVM's user has no name that can be looked up, the owner
-  cannot be compared and only the mode is judged.  The directories above it and ACLs are not judged.  Code in the same JVM is not
+  numeric UID or by root that is not writable by group or others or that has the sticky bit.  The JVM's UID comes from
+  the JDK (`com.sun.security.auth.module.UnixSystem`), so no user name is needed and nothing is created to find it; a new
+  parent must then have that UID, which is recorded and used when the parent is reused.  This is checked when a parent
+  is created and each time one is used for a new copy, and the refusal names no path.  If a UID cannot be read or the
+  `unix` attribute view is missing on a POSIX platform, the copy is refused; this includes a runtime image without the
+  `jdk.security.auth` module, and a process whose effective UID differs from its real UID.  Trusted and permissive compiles make no
+  copy and are not affected.  Only where the platform has no POSIX attributes at all are the mode and owner not checked:
+  a copy is made, and a retry stays fail-closed as above.  The directories above it and ACLs are not judged.  Code in the same JVM is not
   defended against.  A
   removal that keeps failing is logged once, with no path, through the class loader's error log.  A cleanup failure is suppressed in an error that is being raised and never replaces it;
   a compile does not raise a failure to remove its own copy, which stays charged and is retried.  Closing a class loader ends

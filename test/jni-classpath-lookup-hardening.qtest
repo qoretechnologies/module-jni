@@ -85,7 +85,7 @@ object sub derived() {
         addTestCase("a retry only removes the directory it created", \copyRemovalFailureTest());
         addTestCase("a copy needs a temporary directory that other users cannot change", \copyTempDirTest());
         addTestCase("the temporary directory is checked when a private directory is reused", \copyTempDirReuseTest());
-        addTestCase("a copy needs a temporary directory of the JVM's user or root", \copyTempDirOwnerTest());
+        addTestCase("a copy needs a temporary directory of the JVM's UID or root", \copyTempDirOwnerTest());
         addTestCase("each new Program of a class loader has a budget of its own", \copyProgramSwitchTest());
         addTestCase("a compile whose Program ends while it runs", \compileProgramEndTest());
         addTestCase("the end of a Program ends the copies of its class loaders", \copyProgramEndTest());

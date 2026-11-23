@@ -8,7 +8,6 @@ import java.io.OutputStream;
 import java.nio.file.DirectoryIteratorException;
 import java.nio.file.DirectoryStream;
 import java.nio.file.FileAlreadyExistsException;
-import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.NoSuchFileException;
@@ -28,7 +27,6 @@ import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Set;
 
 //! The classpath of one compilation for a caller that a filesystem policy restricts
@@ -476,11 +474,12 @@ public final class QoreCompilerClasspath implements AutoCloseable {
         nothing below it is touched and its copies stay charged.  The check and the removal act on one opened directory.
 
         A copy is made and read by path, so it is only made in a temporary directory that other users cannot change: its
-        real path must be a directory owned by the JVM's user or by root, that is not writable by group or others or
-        that has the sticky bit.  This is checked when this directory is created and each time it is used for a new
-        copy; a copy is refused otherwise.  Where the platform has no POSIX attributes, or the JVM's user has no name
-        that can be looked up, what depends on them cannot be checked and a copy is made.  The directories above it and
-        ACLs are not judged.
+        real path must be a directory owned by the JVM's numeric UID or by root, that is not writable by group or others
+        or that has the sticky bit.  User names are not used, and nothing is created to find the UID.  This is checked
+        when this directory is created, whose UID must then be the JVM's, and against that recorded UID each time it is
+        used for a new copy; a copy is refused otherwise, also if a UID cannot be read.  Only where the platform has no
+        POSIX attributes at all can this not be checked, and a copy is made.  The directories above it and ACLs are not
+        judged.
 
         Where the platform has no POSIX attributes or no secure directory stream, only the first removal of a copy walks
         it by path, and a retry leaves it charged.  Code of the same JVM is not defended against.
@@ -501,8 +500,8 @@ public final class QoreCompilerClasspath implements AutoCloseable {
             + "cannot be checked, so a private compiler classpath copy cannot be made";
         //! the sticky bit of a Unix file mode
         private static final int STICKY = 01000;
-        //! the user of this process, or null if it has no name that can be looked up; guarded by LOCK
-        private static UserPrincipal processUser = jvmUser();
+        //! the numeric UID of this process, or null if it cannot be read; guarded by LOCK
+        private static Long processUid = jvmUid();
         //! the directory that new copies use; guarded by LOCK
         private static PrivateParent current;
 
@@ -512,6 +511,8 @@ public final class QoreCompilerClasspath implements AutoCloseable {
         private final Path container;
         //! the owner of the directory, or null if the platform has no POSIX attributes
         private UserPrincipal owner;
+        //! the numeric UID of the directory when it was created, or -1 if the platform has no POSIX attributes
+        private long uid = -1;
         //! the identity of the directory when it was created, or null if the platform has none
         private final Object key;
         //! true if the directory can be fully verified
@@ -530,26 +531,37 @@ public final class QoreCompilerClasspath implements AutoCloseable {
                 return;
             }
             PosixFileAttributes attrs = view.readAttributes();
-            UserPrincipal user = processUser;
-            if (!attrs.isDirectory() || !OWNER_ONLY.equals(attrs.permissions())
-                    || (user != null && !user.equals(attrs.owner()))) {
-                throw new IOException("the private directory of the compiler classpath could not be verified");
+            long created = uidOf(path);
+            if (!attrs.isDirectory() || !OWNER_ONLY.equals(attrs.permissions()) || processUid == null
+                    || created != processUid) {
+                throw new IOException(TEMP_REFUSAL);
             }
+            uid = created;
             owner = attrs.owner();
             key = attrs.fileKey();
             posix = key != null;
         }
 
-        //! Returns the user of this process, or null if it has no name that can be looked up
-        private static UserPrincipal jvmUser() {
+        //! Returns the numeric UID of this process from the JDK, or null if it is not available
+        private static Long jvmUid() {
             try {
-                Optional<String> name = ProcessHandle.current().info().user();
-                return name.isPresent()
-                    ? FileSystems.getDefault().getUserPrincipalLookupService().lookupPrincipalByName(name.get())
-                    : null;
-            } catch (IOException | RuntimeException e) {
+                // by name: this class exists only in a JDK for a Unix platform
+                Class<?> cls = Class.forName("com.sun.security.auth.module.UnixSystem", true,
+                    ClassLoader.getPlatformClassLoader());
+                long rv = (Long) cls.getMethod("getUid").invoke(cls.getConstructor().newInstance());
+                return rv < 0 ? null : Long.valueOf(rv);
+            } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
                 return null;
             }
+        }
+
+        //! Returns the numeric UID of the owner of a path, without following a link
+        /** @throw IOException the UID cannot be read
+            @throw UnsupportedOperationException the platform has no unix attribute view
+            @throw IllegalArgumentException the platform has no unix attribute view
+        */
+        private static long uidOf(Path path) throws IOException {
+            return Integer.toUnsignedLong((Integer) Files.getAttribute(path, "unix:uid", LinkOption.NOFOLLOW_LINKS));
         }
 
         //! Returns the directory for a new copy, with the copy counted; a directory that fails verification is left
@@ -574,18 +586,8 @@ public final class QoreCompilerClasspath implements AutoCloseable {
             boolean safe = false;
             try {
                 real = Path.of(TEMP_DIR).toRealPath();
-                PosixFileAttributeView view = Files.getFileAttributeView(real, PosixFileAttributeView.class,
-                    LinkOption.NOFOLLOW_LINKS);
-                if (view == null) {
-                    safe = Files.isDirectory(real, LinkOption.NOFOLLOW_LINKS);
-                } else {
-                    PosixFileAttributes attrs = view.readAttributes();
-                    Set<PosixFilePermission> perms = attrs.permissions();
-                    safe = attrs.isDirectory() && ownerAllowed(real, attrs.owner())
-                        && ((!perms.contains(PosixFilePermission.GROUP_WRITE)
-                        && !perms.contains(PosixFilePermission.OTHERS_WRITE))
-                        || ((Integer) Files.getAttribute(real, "unix:mode", LinkOption.NOFOLLOW_LINKS) & STICKY) != 0);
-                }
+                // an existing parent is compared with the UID that was recorded when it was created
+                safe = safeDirectory(real, current != null ? Long.valueOf(current.uid) : processUid);
             } catch (IOException | RuntimeException e) {
                 // refused below, without the text of this error, which can name a path
             }
@@ -595,13 +597,30 @@ public final class QoreCompilerClasspath implements AutoCloseable {
             return real;
         }
 
-        //! Returns true if the owner of a directory is the JVM's user or root, or if the JVM's user is not known
-        private static boolean ownerAllowed(Path real, UserPrincipal dirOwner) throws IOException {
-            UserPrincipal user = processUser;
-            if (user == null || user.equals(dirOwner)) {
-                return true;
+        //! Returns true if other users cannot change a directory, for a JVM with the given UID
+        /** @param real the real path of the directory
+            @param expected the UID of the JVM; null if it cannot be read, which refuses on a POSIX platform
+            @return false also if anything that the rule needs cannot be read
+        */
+        private static boolean safeDirectory(Path real, Long expected) {
+            try {
+                PosixFileAttributeView view = Files.getFileAttributeView(real, PosixFileAttributeView.class,
+                    LinkOption.NOFOLLOW_LINKS);
+                if (view == null) {
+                    return Files.isDirectory(real, LinkOption.NOFOLLOW_LINKS);
+                }
+                PosixFileAttributes attrs = view.readAttributes();
+                long dirUid = uidOf(real);
+                if (!attrs.isDirectory() || expected == null || (dirUid != expected && dirUid != 0)) {
+                    return false;
+                }
+                Set<PosixFilePermission> perms = attrs.permissions();
+                return (!perms.contains(PosixFilePermission.GROUP_WRITE)
+                        && !perms.contains(PosixFilePermission.OTHERS_WRITE))
+                    || ((Integer) Files.getAttribute(real, "unix:mode", LinkOption.NOFOLLOW_LINKS) & STICKY) != 0;
+            } catch (IOException | RuntimeException e) {
+                return false;
             }
-            return (Integer) Files.getAttribute(real, "unix:uid", LinkOption.NOFOLLOW_LINKS) == 0;
         }
 
         //! Creates a new private directory in a temporary directory that has been checked
@@ -614,7 +633,11 @@ public final class QoreCompilerClasspath implements AutoCloseable {
             }
             try {
                 return new PrivateParent(dir, temp);
-            } catch (Throwable e) {
+            } catch (IOException | RuntimeException e) {
+                // its text can name a path
+                cleanup(e, () -> removeEmpty(dir));
+                throw new IOException(TEMP_REFUSAL);
+            } catch (Error e) {
                 cleanup(e, () -> removeEmpty(dir));
                 throw e;
             }

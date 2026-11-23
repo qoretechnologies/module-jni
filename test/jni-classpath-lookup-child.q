@@ -264,7 +264,7 @@ sub tmpdir_reuse_case(string root, string tmp) {
     result("reuse left", 0, ClasspathLookupProbe::copyDirectories());
 }
 
-#! the temporary directory must be owned by the JVM's user or by root, when a parent is created and when it is reused
+#! the temporary directory must be owned by the JVM's numeric UID or by root, when a parent is created and when it is reused
 sub tmpdir_owner_case(string root, string tmp) {
     Program p = new_program(get_policy(root, ("ending",)), root + "/ending");
     result("owner JVM user", "copies=1", p.callFunction("copy_outcome"));
@@ -286,7 +286,14 @@ sub tmpdir_owner_case(string root, string tmp) {
         result("owner refused at creation", TempRefusal, q.callFunction("copy_outcome"));
         result("owner nothing created", 0, ClasspathLookupProbe::copyDirectories());
     }
-    result("owner root", "allowed", ClasspathLookupProbe::rootOwnerRule(tmp));
+    {
+        ClasspathLookupProbe::setUnknownJvmUid();
+        on_exit ClasspathLookupProbe::restoreTempOwner(tmp);
+        result("owner unreadable JVM UID", TempRefusal, q.callFunction("copy_outcome"));
+        result("owner unreadable nothing created", 0, ClasspathLookupProbe::copyDirectories());
+    }
+    result("owner by UID", "clean", ClasspathLookupProbe::uidRule(tmp));
+    result("owner allowed at the end", "copies=1", q.callFunction("copy_outcome"));
 }
 
 #! each new Program of a class loader has a budget of its own
