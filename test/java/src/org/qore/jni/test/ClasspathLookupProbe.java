@@ -854,6 +854,69 @@ public class ClasspathLookupProbe {
         return chargesReturned(budget) ? "clean" : "the charges were not returned";
     }
 
+    //! the owner that setUnexpectedTempOwner() changed, or null
+    private static java.nio.file.attribute.UserPrincipal savedTempOwner;
+    //! the JVM's user before setUnexpectedTempOwner()
+    private static Object savedProcessUser;
+
+    //! Returns the field of the private parent class that has the JVM's user
+    private static java.lang.reflect.Field processUserField() throws Exception {
+        java.lang.reflect.Field f = Class.forName("org.qore.jni.QoreCompilerClasspath$PrivateParent", true,
+            QoreURLClassLoader.class.getClassLoader()).getDeclaredField("processUser");
+        f.setAccessible(true);
+        return f;
+    }
+
+    //! Makes the owner of a directory that the JVM owns differ from the JVM's user, with no second user needed
+    /** A JVM of root really changes the owner; any other JVM is told that its user is another one
+    */
+    public static void setUnexpectedTempOwner(String dir) throws Exception {
+        Path path = Path.of(dir);
+        java.nio.file.attribute.UserPrincipal owner = Files.getOwner(path, java.nio.file.LinkOption.NOFOLLOW_LINKS);
+        java.lang.reflect.Field user = processUserField();
+        savedProcessUser = user.get(null);
+        if ((Integer) Files.getAttribute(path, "unix:uid", java.nio.file.LinkOption.NOFOLLOW_LINKS) == 0) {
+            savedTempOwner = owner;
+            Files.setOwner(path, otherUser(owner));
+        } else {
+            user.set(null, otherUser(owner));
+        }
+    }
+
+    //! Undoes setUnexpectedTempOwner()
+    public static void restoreTempOwner(String dir) throws Exception {
+        if (savedTempOwner != null) {
+            Files.setOwner(Path.of(dir), savedTempOwner);
+            savedTempOwner = null;
+        }
+        processUserField().set(null, savedProcessUser);
+    }
+
+    //! Applies the owner rule to the real root-owned directory "/" for a JVM whose user is not root
+    /** Unit level: the JVM cannot make a root-owned directory that it can write to without being root
+        @return "allowed", "refused", or why the rule could not be applied
+    */
+    public static String rootOwnerRule(String dir) throws Exception {
+        Path top = Path.of("/");
+        if ((Integer) Files.getAttribute(top, "unix:uid", java.nio.file.LinkOption.NOFOLLOW_LINKS) != 0) {
+            return "no root-owned directory";
+        }
+        java.nio.file.attribute.UserPrincipal rootUser = Files.getOwner(top, java.nio.file.LinkOption.NOFOLLOW_LINKS);
+        java.nio.file.attribute.UserPrincipal owner = Files.getOwner(Path.of(dir),
+            java.nio.file.LinkOption.NOFOLLOW_LINKS);
+        java.lang.reflect.Field user = processUserField();
+        Object saved = user.get(null);
+        user.set(null, owner.equals(rootUser) ? otherUser(rootUser) : owner);
+        try {
+            java.lang.reflect.Method rule = user.getDeclaringClass().getDeclaredMethod("ownerAllowed", Path.class,
+                java.nio.file.attribute.UserPrincipal.class);
+            rule.setAccessible(true);
+            return (boolean) rule.invoke(null, top, rootUser) ? "allowed" : "refused";
+        } finally {
+            user.set(null, saved);
+        }
+    }
+
     //! Opens and closes a compiler classpath: returns "copies=<n>", or the message of the refusal
     public static String copyOutcome(QoreURLClassLoader loader) throws Exception {
         Object handle;

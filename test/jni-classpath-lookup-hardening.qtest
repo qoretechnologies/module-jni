@@ -85,6 +85,7 @@ object sub derived() {
         addTestCase("a retry only removes the directory it created", \copyRemovalFailureTest());
         addTestCase("a copy needs a temporary directory that other users cannot change", \copyTempDirTest());
         addTestCase("the temporary directory is checked when a private directory is reused", \copyTempDirReuseTest());
+        addTestCase("a copy needs a temporary directory of the JVM's user or root", \copyTempDirOwnerTest());
         addTestCase("each new Program of a class loader has a budget of its own", \copyProgramSwitchTest());
         addTestCase("a compile whose Program ends while it runs", \compileProgramEndTest());
         addTestCase("the end of a Program ends the copies of its class loaders", \copyProgramEndTest());
@@ -368,6 +369,13 @@ object sub derived() {
         string dir = "tmpdir-reuse";
         mkdir(root + "/" + dir, 0700);
         runTempDirChild("tmpdir-reuse", dir, root + "/" + dir, "reuse");
+    }
+
+    #! the owner of the temporary directory is checked when a private directory is created and when it is reused
+    copyTempDirOwnerTest() {
+        string dir = "tmpdir-owner";
+        mkdir(root + "/" + dir, 0700);
+        runTempDirChild("tmpdir-owner", dir, root + "/" + dir, "owner");
     }
 
     #! runs a case with \a tmp, relative to the test tree, as the JVM's temporary directory

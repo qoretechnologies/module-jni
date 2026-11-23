@@ -264,6 +264,31 @@ sub tmpdir_reuse_case(string root, string tmp) {
     result("reuse left", 0, ClasspathLookupProbe::copyDirectories());
 }
 
+#! the temporary directory must be owned by the JVM's user or by root, when a parent is created and when it is reused
+sub tmpdir_owner_case(string root, string tmp) {
+    Program p = new_program(get_policy(root, ("ending",)), root + "/ending");
+    result("owner JVM user", "copies=1", p.callFunction("copy_outcome"));
+    string held = p.callFunction("hold_derived", root + "/ending");
+    {
+        ClasspathLookupProbe::setUnexpectedTempOwner(tmp);
+        on_exit ClasspathLookupProbe::restoreTempOwner(tmp);
+        result("owner refused on reuse", TempRefusal, p.callFunction("copy_outcome"));
+        result("owner keeps the held copy", True, is_dir(held));
+    }
+    result("owner allowed again", "copies=1", p.callFunction("copy_outcome"));
+    delete p;
+    result("owner parent removed", 0, ClasspathLookupProbe::copyDirectories());
+
+    Program q = new_program(get_policy(root, ("ending",)), root + "/ending");
+    {
+        ClasspathLookupProbe::setUnexpectedTempOwner(tmp);
+        on_exit ClasspathLookupProbe::restoreTempOwner(tmp);
+        result("owner refused at creation", TempRefusal, q.callFunction("copy_outcome"));
+        result("owner nothing created", 0, ClasspathLookupProbe::copyDirectories());
+    }
+    result("owner root", "allowed", ClasspathLookupProbe::rootOwnerRule(tmp));
+}
+
 #! each new Program of a class loader has a budget of its own
 sub program_switch_case(string root) {
     Program p = new_empty_program(get_policy(root, ("ending",)));
@@ -344,6 +369,7 @@ switch (case_name) {
     case "compile-end": compile_end_case(root); exit(0);
     case "tmpdir": tmpdir_case(root, ARGV[2]); exit(0);
     case "tmpdir-reuse": tmpdir_reuse_case(root, ARGV[2]); exit(0);
+    case "tmpdir-owner": tmpdir_owner_case(root, ARGV[2]); exit(0);
 }
 if (ClasspathLookupProbe::fileNameEncoding() != "UTF-8") {
     printf("result: skipped: the file names of the JVM are in %s\n", ClasspathLookupProbe::fileNameEncoding());

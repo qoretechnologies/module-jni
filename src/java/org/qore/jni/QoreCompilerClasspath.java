@@ -476,9 +476,11 @@ public final class QoreCompilerClasspath implements AutoCloseable {
         nothing below it is touched and its copies stay charged.  The check and the removal act on one opened directory.
 
         A copy is made and read by path, so it is only made in a temporary directory that other users cannot change: its
-        real path must be a directory that is not writable by group or others, or that has the sticky bit.  This is
-        checked when this directory is created and each time it is used for a new copy; a copy is refused otherwise.
-        Where the platform has no POSIX attributes, the mode cannot be checked and a copy is made.
+        real path must be a directory owned by the JVM's user or by root, that is not writable by group or others or
+        that has the sticky bit.  This is checked when this directory is created and each time it is used for a new
+        copy; a copy is refused otherwise.  Where the platform has no POSIX attributes, or the JVM's user has no name
+        that can be looked up, what depends on them cannot be checked and a copy is made.  The directories above it and
+        ACLs are not judged.
 
         Where the platform has no POSIX attributes or no secure directory stream, only the first removal of a copy walks
         it by path, and a retry leaves it charged.  Code of the same JVM is not defended against.
@@ -499,6 +501,8 @@ public final class QoreCompilerClasspath implements AutoCloseable {
             + "cannot be checked, so a private compiler classpath copy cannot be made";
         //! the sticky bit of a Unix file mode
         private static final int STICKY = 01000;
+        //! the user of this process, or null if it has no name that can be looked up; guarded by LOCK
+        private static UserPrincipal processUser = jvmUser();
         //! the directory that new copies use; guarded by LOCK
         private static PrivateParent current;
 
@@ -526,7 +530,7 @@ public final class QoreCompilerClasspath implements AutoCloseable {
                 return;
             }
             PosixFileAttributes attrs = view.readAttributes();
-            UserPrincipal user = jvmUser();
+            UserPrincipal user = processUser;
             if (!attrs.isDirectory() || !OWNER_ONLY.equals(attrs.permissions())
                     || (user != null && !user.equals(attrs.owner()))) {
                 throw new IOException("the private directory of the compiler classpath could not be verified");
@@ -577,7 +581,8 @@ public final class QoreCompilerClasspath implements AutoCloseable {
                 } else {
                     PosixFileAttributes attrs = view.readAttributes();
                     Set<PosixFilePermission> perms = attrs.permissions();
-                    safe = attrs.isDirectory() && ((!perms.contains(PosixFilePermission.GROUP_WRITE)
+                    safe = attrs.isDirectory() && ownerAllowed(real, attrs.owner())
+                        && ((!perms.contains(PosixFilePermission.GROUP_WRITE)
                         && !perms.contains(PosixFilePermission.OTHERS_WRITE))
                         || ((Integer) Files.getAttribute(real, "unix:mode", LinkOption.NOFOLLOW_LINKS) & STICKY) != 0);
                 }
@@ -588,6 +593,15 @@ public final class QoreCompilerClasspath implements AutoCloseable {
                 throw new IOException(TEMP_REFUSAL);
             }
             return real;
+        }
+
+        //! Returns true if the owner of a directory is the JVM's user or root, or if the JVM's user is not known
+        private static boolean ownerAllowed(Path real, UserPrincipal dirOwner) throws IOException {
+            UserPrincipal user = processUser;
+            if (user == null || user.equals(dirOwner)) {
+                return true;
+            }
+            return (Integer) Files.getAttribute(real, "unix:uid", LinkOption.NOFOLLOW_LINKS) == 0;
         }
 
         //! Creates a new private directory in a temporary directory that has been checked
