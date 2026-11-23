@@ -479,18 +479,24 @@ public final class QoreCompilerClasspath implements AutoCloseable {
         when this directory is created, whose UID must then be the JVM's, and against that recorded UID each time it is
         used for a new copy.  The root of each new copy must also have the recorded UID, so a process whose effective UID
         changed before this copy's root is created makes no copy under another identity.  A copy is refused otherwise,
-        also if a UID cannot be read.  The removal of a refused root is attempted; a root that cannot be removed stays
-        inside this directory, keeps it in place, and stops new copies in it, so that such roots cannot accumulate.
+        also if a UID cannot be read.
+
+        The removal of a refused root is attempted.  A root that cannot be removed stays inside this directory, keeps it
+        in place, and blocks it: while it is the current directory, compiles that need a copy are refused, and the first
+        block is logged once.  Blocking, and the check, creation and discard of a root, are made under one lock, so a
+        directory holds at most one such root.  When no copy is in flight, the next copy recovers: if this directory no
+        longer exists a new one is made, and if it verifies and is empty it is used again.  A leftover that never goes
+        means refusal until the process restarts.
         Only where the platform has no POSIX attributes at all can this not be checked, and a copy is made.  The
         directories above it and ACLs are not judged.
 
         Where the platform has no POSIX attributes or no secure directory stream, only the first removal of a copy walks
         it by path, and a retry leaves it charged.  Code of the same JVM is not defended against.
 
-        It is removed when its last copy is gone, under the lock that a new copy takes, so a new copy never uses a
-        directory that is being removed.  Removing it needs a secure directory stream on the temporary directory, so it
-        stays, empty, where the JVM cannot read that directory (ex: mode 1733 of another owner, or 0300 owned by the JVM's
-        user) or the JDK has no such stream; the next copy then uses it.
+        It is removed when its last copy is gone, if it is then empty, under the lock that a new copy takes, so a new copy
+        never uses a directory that is being removed.  Removing it needs a secure directory stream on the temporary
+        directory, so it stays, empty, where the JVM cannot read that directory (ex: mode 1733 of another owner, or 0300
+        owned by the JVM's user) or the JDK has no such stream; the next copy then uses it, also after it was blocked.
     */
     static final class PrivateParent {
         //! guards #current and the number of copies of each parent
@@ -503,6 +509,9 @@ public final class QoreCompilerClasspath implements AutoCloseable {
         //! the refusal for the temporary directory or the identity of the JVM; it names no path
         private static final String TEMP_REFUSAL = "the JVM's temporary directory can be changed by other users, or it "
             + "or the JVM's user ID cannot be verified, so a private compiler classpath copy cannot be made";
+        //! the refusal while this directory holds a refused root; it names no path
+        private static final String BLOCKED_REFUSAL = "a refused private compiler classpath directory could not be "
+            + "removed, so no new copy can be made until it is gone";
         //! the sticky bit of a Unix file mode
         private static final int STICKY = 01000;
         //! the numeric UID of this process, or null if it cannot be read; guarded by LOCK
@@ -526,6 +535,8 @@ public final class QoreCompilerClasspath implements AutoCloseable {
         private int copies;
         //! a refused root could not be removed, so no further copies are made here; guarded by LOCK
         private boolean blocked;
+        //! the current block has been logged; guarded by LOCK
+        private boolean blockReported;
 
         private PrivateParent(Path path, Path container) throws IOException {
             this.path = path;
@@ -573,20 +584,59 @@ public final class QoreCompilerClasspath implements AutoCloseable {
 
         //! Returns the directory for a new copy, with the copy counted; a directory that fails verification is left
         /** @throw IOException the temporary directory can be changed by other users, it or the JVM's user ID cannot be
-            verified, or the current directory takes no more copies
+            verified, or the current directory holds a refused root
         */
         static PrivateParent acquire() throws IOException {
             synchronized (LOCK) {
                 Path temp = checkedTempDirectory();
-                // never replaced by a new directory, which could then collect another root that cannot be removed
-                if (current != null && current.blocked) {
-                    throw new IOException(TEMP_REFUSAL);
+                // never replaced while its leftover remains, as a new directory could collect another one
+                if (current != null && current.blocked && !current.recoverBlocked()) {
+                    throw new IOException(BLOCKED_REFUSAL);
                 }
                 if (current == null || !temp.equals(current.container) || !current.isIntact()) {
                     current = create(temp);
                 }
                 ++current.copies;
                 return current;
+            }
+        }
+
+        //! Ends the block of the current directory if no copy is in flight and it is gone, or verified and empty
+        /** Called with LOCK held, which a new copy needs in order to be counted
+            @return true if a copy can now be made; #current is null if the directory is gone
+        */
+        private boolean recoverBlocked() {
+            if (copies != 0) {
+                return false;
+            }
+            if (Files.notExists(path, LinkOption.NOFOLLOW_LINKS)) {
+                current = null;
+                return true;
+            }
+            if (!isVerifiedEmpty()) {
+                return false;
+            }
+            blocked = false;
+            blockReported = false;
+            return true;
+        }
+
+        //! Returns true if this directory verifies and has no entries
+        /** Through the opened and verified directory where there is a secure directory stream.  Elsewhere the directory
+            is verified by name and then listed, which needs no access to the temporary directory.
+        */
+        private boolean isVerifiedEmpty() {
+            if (!isIntact()) {
+                return false;
+            }
+            try (DirectoryStream<Path> stream = Files.newDirectoryStream(path)) {
+                if (posix && stream instanceof SecureDirectoryStream && !matches(((SecureDirectoryStream<Path>) stream)
+                        .getFileAttributeView(PosixFileAttributeView.class).readAttributes())) {
+                    return false;
+                }
+                return !stream.iterator().hasNext();
+            } catch (IOException | RuntimeException e) {
+                return false;
             }
         }
 
@@ -657,51 +707,73 @@ public final class QoreCompilerClasspath implements AutoCloseable {
         }
 
         //! Creates the root of a new copy, which must have the UID recorded for this directory
-        /** @throw IOException it could not be created, this directory takes no more copies, or it has another UID or its
+        /** The check, the creation, the check of its UID and its discard are made under LOCK, so no root is created in a
+            directory after it is blocked.  A root is empty here, so no content is copied or removed under the lock.
+
+            @throw IOException it could not be created, this directory holds a refused root, or it has another UID or its
             UID cannot be read, in which case its removal is attempted
         */
         Path newRoot() throws IOException {
-            synchronized (LOCK) {
-                if (blocked) {
-                    throw new IOException(TEMP_REFUSAL);
+            try {
+                synchronized (LOCK) {
+                    if (blocked) {
+                        throw new IOException(BLOCKED_REFUSAL);
+                    }
+                    Path root;
+                    try {
+                        root = Files.createTempDirectory(path, "qore-classpath-");
+                    } catch (IOException e) {
+                        throw new IOException("a private directory for the compiler classpath could not be created");
+                    }
+                    if (uid < 0) {
+                        return root;
+                    }
+                    boolean same = false;
+                    try {
+                        same = uidOf(root) == uid;
+                    } catch (IOException | RuntimeException e) {
+                        // refused below, without the text of this error, which can name a path
+                    } catch (Error e) {
+                        cleanup(e, () -> discardRoot(root));
+                        throw e;
+                    }
+                    if (!same) {
+                        discardRoot(root);
+                        throw new IOException(TEMP_REFUSAL);
+                    }
+                    return root;
                 }
+            } finally {
+                // outside the lock: logging does not run under it
+                reportBlocked();
             }
-            Path root;
-            try {
-                root = Files.createTempDirectory(path, "qore-classpath-");
-            } catch (IOException e) {
-                throw new IOException("a private directory for the compiler classpath could not be created");
-            }
-            if (uid < 0) {
-                return root;
-            }
-            boolean same = false;
-            try {
-                same = uidOf(root) == uid;
-            } catch (IOException | RuntimeException e) {
-                // refused below, without the text of this error, which can name a path
-            } catch (Error e) {
-                cleanup(e, () -> discardRoot(root));
-                throw e;
-            }
-            if (!same) {
-                discardRoot(root);
-                throw new IOException(TEMP_REFUSAL);
-            }
-            return root;
         }
 
-        //! Removes a root that was refused; if it cannot be removed, no further copies are made in this directory
+        //! Removes a root that was refused, with LOCK held; if it cannot be removed, this directory is blocked
         private void discardRoot(Path root) {
             boolean removed = false;
             try {
                 removed = removeEntry(root.getFileName(), false);
             } finally {
                 if (!removed) {
-                    synchronized (LOCK) {
-                        blocked = true;
-                    }
+                    blocked = true;
                 }
+            }
+        }
+
+        //! Logs a block once, with no path; never raises an error
+        private void reportBlocked() {
+            try {
+                boolean report;
+                synchronized (LOCK) {
+                    report = blocked && !blockReported;
+                    blockReported = blockReported || report;
+                }
+                if (report) {
+                    QoreURLClassLoader.errorLog(BLOCKED_REFUSAL);
+                }
+            } catch (RuntimeException | Error e) {
+                // the state of the directory does not depend on the report
             }
         }
 

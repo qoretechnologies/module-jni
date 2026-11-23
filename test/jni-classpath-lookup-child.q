@@ -44,6 +44,9 @@ string sub copy_outcome() {
 string sub root_refusals() {
     return ClasspathLookupProbe::rootRefusals(get_class_loader());
 }
+string sub blocked_recovery(string scenario) {
+    return ClasspathLookupProbe::blockedRecovery(get_class_loader(), scenario);
+}
 string sub compiler_cleanup() {
     return ClasspathLookupProbe::compilerCleanupContained(get_class_loader());
 }
@@ -301,6 +304,16 @@ sub tmpdir_owner_case(string root, string tmp) {
     result("owner allowed at the end", "copies=1", q.callFunction("copy_outcome"));
 }
 
+#! a private directory that takes no more copies recovers once it is empty or gone, and refuses until then
+sub blocked_case(string root) {
+    foreach string scenario in ("after-release", "parent-removed", "stays", "not-intact", "in-flight", "newroot-check",
+            "discard-verifies") {
+        Program p = new_program(get_policy(root, ("ending",)), root + "/ending");
+        result("blocked " + scenario, "clean", p.callFunction("blocked_recovery", scenario));
+    }
+    result("blocked left", 0, ClasspathLookupProbe::copyDirectories());
+}
+
 #! each new Program of a class loader has a budget of its own
 sub program_switch_case(string root) {
     Program p = new_empty_program(get_policy(root, ("ending",)));
@@ -382,6 +395,7 @@ switch (case_name) {
     case "tmpdir": tmpdir_case(root, ARGV[2]); exit(0);
     case "tmpdir-reuse": tmpdir_reuse_case(root, ARGV[2]); exit(0);
     case "tmpdir-owner": tmpdir_owner_case(root, ARGV[2]); exit(0);
+    case "blocked": blocked_case(root); exit(0);
 }
 if (ClasspathLookupProbe::fileNameEncoding() != "UTF-8") {
     printf("result: skipped: the file names of the JVM are in %s\n", ClasspathLookupProbe::fileNameEncoding());

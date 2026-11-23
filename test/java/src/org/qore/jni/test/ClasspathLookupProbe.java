@@ -1200,8 +1200,9 @@ public class ClasspathLookupProbe {
         if (countTree(real) != entries + 1) {
             return "the root that could not be removed is not there";
         }
+        String blockedRefusal = (String) parentStatic("BLOCKED_REFUSAL").get(null);
         for (int i = 0; i < 3; ++i) {
-            rv = openRefused(open, loader, refusal);
+            rv = openRefused(open, loader, blockedRefusal);
             if (rv != null) {
                 return "the next copy after a root that cannot be removed: " + rv;
             }
@@ -1214,6 +1215,192 @@ public class ClasspathLookupProbe {
             }
         }
         return "clean";
+    }
+
+    //! Opens a compiler classpath that must work, in the given parent or in another one; returns "clean" or the problem
+    private static String copyWorks(java.lang.reflect.Method open, QoreURLClassLoader loader, Object parent,
+            boolean sameParent) throws Exception {
+        Object handle;
+        try {
+            handle = open.invoke(loader);
+        } catch (java.lang.reflect.InvocationTargetException e) {
+            return "a copy was refused: " + e.getCause().getMessage();
+        }
+        try {
+            Object used = field(((List<?>) field(handle, "copies")).get(0), "parent");
+            if ((used == parent) != sameParent) {
+                return sameParent ? "the copy did not reuse the parent" : "the copy used the old parent";
+            }
+        } finally {
+            handle.getClass().getMethod("close").invoke(handle);
+        }
+        return "clean";
+    }
+
+    //! Returns the entry of a directory other than \a kept, or null
+    private static Path otherEntry(Path dir, Path kept) throws IOException {
+        try (java.nio.file.DirectoryStream<Path> entries = Files.newDirectoryStream(dir)) {
+            for (Path entry : entries) {
+                if (!entry.getFileName().equals(kept.getFileName())) {
+                    return entry;
+                }
+            }
+        }
+        return null;
+    }
+
+    //! Blocks the private parent with a root that cannot be removed, and checks how it recovers or keeps refusing
+    /** @param scenario "after-release": the leftover goes after the last release; "parent-removed": the whole parent is
+        removed; "stays": a parent that holds the leftover refuses, in acquire() too, and logs once; "not-intact": an empty
+        parent that does not verify refuses; "in-flight": no recovery while a copy is held; "newroot-check": a compile
+        that is past acquire() makes no root; "discard-verifies": a refused root is not removed from an unverified parent
+        @return "clean", or what is wrong
+    */
+    public static String blockedRecovery(QoreURLClassLoader loader, String scenario) throws Exception {
+        java.lang.reflect.Method open = QoreURLClassLoader.class.getMethod("openCompilerClasspath");
+        Object held = open.invoke(loader);
+        java.lang.reflect.Method close = held.getClass().getMethod("close");
+        Object copy = ((List<?>) field(held, "copies")).get(0);
+        Object parent = field(copy, "parent");
+        Path heldRoot = (Path) field(copy, "root");
+        Class<?> cls = parentClass();
+        java.lang.reflect.Field pathField = cls.getDeclaredField("path");
+        java.lang.reflect.Field ownerField = cls.getDeclaredField("owner");
+        java.lang.reflect.Method newRoot = cls.getDeclaredMethod("newRoot");
+        java.lang.reflect.Method acquire = cls.getDeclaredMethod("acquire");
+        java.lang.reflect.Method release = cls.getDeclaredMethod("release");
+        for (java.lang.reflect.AccessibleObject o : new java.lang.reflect.AccessibleObject[] {pathField, ownerField,
+                newRoot, acquire, release}) {
+            o.setAccessible(true);
+        }
+        Path real = (Path) pathField.get(parent);
+        Object savedOwner = ownerField.get(parent);
+        String tempRefusal = (String) parentStatic("TEMP_REFUSAL").get(null);
+        int before = countTree(real);
+        FailingProvider provider = new FailingProvider();
+        provider.fail = false;
+        provider.wrapDerived = true;
+        boolean heldOpen = true;
+        java.io.PrintStream savedOut = System.out;
+        java.io.ByteArrayOutputStream captured = new java.io.ByteArrayOutputStream();
+        System.setOut(new java.io.PrintStream(captured, true));
+        try {
+            if (scenario.equals("discard-verifies")) {
+                // nothing fails but the verification of the parent
+                ownerField.set(parent, otherUser(savedOwner));
+                pathField.set(parent, provider.wrap(real));
+                provider.failUid = FailingProvider.UID_ERROR;
+                String rv = refused(newRoot, parent, tempRefusal);
+                provider.failUid = 0;
+                pathField.set(parent, real);
+                ownerField.set(parent, savedOwner);
+                if (rv != null) {
+                    return rv;
+                }
+                return countTree(real) == before + 1 ? "clean" : "a root was removed from a parent that does not verify";
+            }
+            pathField.set(parent, provider.wrap(real));
+            provider.failUid = FailingProvider.UID_ERROR;
+            provider.fail = true;
+            String rv = openRefused(open, loader, tempRefusal);
+            provider.fail = false;
+            provider.failUid = 0;
+            pathField.set(parent, real);
+            if (rv != null) {
+                return "blocking the parent: " + rv;
+            }
+            Path leftover = otherEntry(real, heldRoot);
+            if (leftover == null) {
+                return "no root was left";
+            }
+            switch (scenario) {
+                case "after-release":
+                    close.invoke(held);
+                    heldOpen = false;
+                    Files.delete(leftover);
+                    return copyWorks(open, loader, parent, true);
+                case "parent-removed":
+                    close.invoke(held);
+                    heldOpen = false;
+                    removeTestTree(real);
+                    return copyWorks(open, loader, parent, false);
+                case "stays": {
+                    close.invoke(held);
+                    heldOpen = false;
+                    String blocked = (String) parentStatic("BLOCKED_REFUSAL").get(null);
+                    int left = countTree(real);
+                    for (int i = 0; i < 3; ++i) {
+                        rv = openRefused(open, loader, blocked);
+                        if (rv == null) {
+                            rv = refused(acquire, null, blocked);
+                        }
+                        if (rv != null) {
+                            return rv;
+                        }
+                        if (countTree(real) != left) {
+                            return "leftovers accumulate";
+                        }
+                    }
+                    System.out.flush();
+                    String text = captured.toString();
+                    int count = text.split(java.util.regex.Pattern.quote(blocked), -1).length - 1;
+                    if (count != 1) {
+                        return "logged " + count + " times";
+                    }
+                    return text.contains(real.getFileName().toString()) ? "the log names the path" : "clean";
+                }
+                case "not-intact": {
+                    close.invoke(held);
+                    heldOpen = false;
+                    Files.delete(leftover);
+                    String blocked = (String) parentStatic("BLOCKED_REFUSAL").get(null);
+                    Files.setPosixFilePermissions(real,
+                        java.nio.file.attribute.PosixFilePermissions.fromString("rwxr-x---"));
+                    rv = openRefused(open, loader, blocked);
+                    Files.setPosixFilePermissions(real,
+                        java.nio.file.attribute.PosixFilePermissions.fromString("rwx------"));
+                    return rv != null ? rv : copyWorks(open, loader, parent, true);
+                }
+                case "in-flight": {
+                    Files.delete(leftover);
+                    rv = openRefused(open, loader, (String) parentStatic("BLOCKED_REFUSAL").get(null));
+                    if (rv != null) {
+                        return "with a copy in flight: " + rv;
+                    }
+                    close.invoke(held);
+                    heldOpen = false;
+                    return copyWorks(open, loader, parent, false);
+                }
+                case "newroot-check": {
+                    int left = countTree(real);
+                    rv = refused(newRoot, parent, (String) parentStatic("BLOCKED_REFUSAL").get(null));
+                    if (rv != null) {
+                        return rv;
+                    }
+                    return countTree(real) == left ? "clean" : "a root was made in a blocked parent";
+                }
+                default:
+                    return "unknown scenario " + scenario;
+            }
+        } finally {
+            System.setOut(savedOut);
+            provider.fail = false;
+            provider.failUid = 0;
+            pathField.set(parent, real);
+            ownerField.set(parent, savedOwner);
+            if (Files.isDirectory(real, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+                Files.setPosixFilePermissions(real,
+                    java.nio.file.attribute.PosixFilePermissions.fromString("rwx------"));
+            }
+            if (heldOpen) {
+                close.invoke(held);
+            }
+            removeTestTree(real);
+            java.lang.reflect.Field current = parentStatic("current");
+            if (current.get(null) == parent) {
+                current.set(null, null);
+            }
+        }
     }
 
     //! Opens and closes a compiler classpath: returns "copies=<n>", or the message of the refusal

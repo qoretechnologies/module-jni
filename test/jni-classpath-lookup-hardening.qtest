@@ -86,6 +86,7 @@ object sub derived() {
         addTestCase("a copy needs a temporary directory that other users cannot change", \copyTempDirTest());
         addTestCase("the temporary directory is checked when a private directory is reused", \copyTempDirReuseTest());
         addTestCase("a copy needs a temporary directory of the JVM's UID or root", \copyTempDirOwnerTest());
+        addTestCase("a private directory that takes no more copies can recover", \copyBlockedTest());
         addTestCase("each new Program of a class loader has a budget of its own", \copyProgramSwitchTest());
         addTestCase("a compile whose Program ends while it runs", \compileProgramEndTest());
         addTestCase("the end of a Program ends the copies of its class loaders", \copyProgramEndTest());
@@ -390,6 +391,11 @@ object sub derived() {
         list<string> lines = select out.split("\n"), $1 =~ /^result: /;
         assertTrue(lines.size() > 0, label + ": " + out);
         map assertRegex(": OK$", $1, label + ": " + $1), lines;
+    }
+
+    #! a private directory that takes no more copies recovers once it is empty or gone, and refuses until then
+    copyBlockedTest() {
+        runChildCase("blocked", True);
     }
 
     #! each new Program of a class loader has a budget of its own
