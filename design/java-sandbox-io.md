@@ -116,9 +116,13 @@ are `static_assert`ed to match) and calls `QoreSandboxManager::checkFilesystemAc
   charged to a `Budget` object that the class loader of a Program shares with the class loaders derived from it, so the
   limits hold across a chain, no Program pointer is a key, and clearing the Program ends the copies of all of them.
   Derived loaders keep the Program's copy budget also when their own pointer is cleared; only a new Program gets a new
-  one, and a budget whose Program has ended refuses new copies.  A failure while a copy is removed still returns its
-  charges, and the other copies are still ended.  Closing a class loader ends its own copies, except once the module's
-  shutdown has started, when `close()` does nothing and a running compile removes its copies when it ends.  A copy over
+  one, and a budget whose Program has ended refuses new copies.  A copy's charges are returned only once its directory
+  is confirmed to be gone: a failed removal leaves it charged and live in a retryable state, the other copies are still
+  ended, and the removal is tried again when its classpath or class loader is closed and at the end of its Program.  A
+  cleanup failure is suppressed in the error that is being raised and never replaces it.  Closing a class loader ends
+  its own copies, except once the module's shutdown has started, when `close()` does nothing and a running compile
+  removes its copies when it ends.  A process that ends with `exit()` while a handle is open leaves that copy in the
+  JVM's temporary directory.  A copy over
   a limit fails closed (the system property
   `qore.jni.compiler.maxEntries` can only lower the entries limit).  The default scripting plugin
   is disabled for a restricted compile, as it discovers script definitions on the classpath and runs their code.  The

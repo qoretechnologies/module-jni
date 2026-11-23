@@ -220,7 +220,7 @@ public class ClasspathLookupProbe {
                 releaseLocations(other, checkedLocations(other, null));
                 another = "ok";
             } catch (java.lang.reflect.InvocationTargetException e) {
-                another = "refused";
+                another = "refused: " + e.getCause().getMessage();
             }
             return "held " + held + "; another " + another;
         } finally {
@@ -238,13 +238,39 @@ public class ClasspathLookupProbe {
         throw new IllegalStateException("no copy");
     }
 
-    //! Tries to make a copy on the class loader of detachedLimit(); returns "ok" or "refused"
+    //! Tries to make a copy on the class loader of detachedLimit(); returns "ok" or "refused: <the reason>"
     public static String detachedCopy() throws Exception {
         try {
             releaseLocations(detached, checkedLocations(detached, null));
             return "ok";
         } catch (java.lang.reflect.InvocationTargetException e) {
-            return "refused";
+            return "refused: " + e.getCause().getMessage();
+        }
+    }
+
+    //! Returns whether each new Program of a class loader gets a budget of its own, also when it returns to the first
+    public static String programSwitchBudget(QoreURLClassLoader parent) throws Exception {
+        Object[] context = QoreURLClassLoader.saveContext();
+        try {
+            QoreURLClassLoader loader = QoreURLClassLoader.createDerived(parent);
+            java.lang.reflect.Method set = QoreURLClassLoader.class.getDeclaredMethod("setPtrIntern", long.class,
+                boolean.class);
+            set.setAccessible(true);
+            java.lang.reflect.Field budget = QoreURLClassLoader.class.getDeclaredField("copy_budget");
+            budget.setAccessible(true);
+            long first = loader.getPtr();
+            Object inherited = budget.get(loader);
+            // the class loader is not used with this value, which only has to differ from the first
+            set.invoke(loader, first + 16, false);
+            Object second = budget.get(loader);
+            set.invoke(loader, first, false);
+            Object third = budget.get(loader);
+            if (second == inherited) {
+                return "a new Program kept the budget";
+            }
+            return third == second ? "a return to the first Program kept the budget of the second" : "own budgets";
+        } finally {
+            QoreURLClassLoader.restoreContext(context);
         }
     }
 
@@ -261,15 +287,16 @@ public class ClasspathLookupProbe {
                 releaseLocations(loader, checkedLocations(loader, null));
                 return "ok";
             } catch (java.lang.reflect.InvocationTargetException e) {
-                return "refused";
+                return "refused: " + e.getCause().getMessage();
             }
         } finally {
             QoreURLClassLoader.restoreContext(context);
         }
     }
 
-    //! Ends two copies whose removal raises an error; returns "clean" or what is wrong
-    /** @param mode "close" for the handle, "abort" for the failure path of the handle, "program" for the Program's end
+    //! Ends two copies whose removal fails, then retries once it can succeed; returns "clean" or what is wrong
+    /** @param mode the first attempt and the retry: "close" and "abort" are retried by closing the handle, "program"
+        (the end of the Program) too, and "close-program" is a close that is retried by the end of the Program
     */
     public static String endCopiesWithError(QoreURLClassLoader parent, String dir, String mode) throws Exception {
         Object[] context = QoreURLClassLoader.saveContext();
@@ -305,6 +332,7 @@ public class ClasspathLookupProbe {
             try {
                 switch (mode) {
                     case "close":
+                    case "close-program":
                         handle.getClass().getMethod("close").invoke(handle);
                         break;
                     case "abort": {
@@ -322,50 +350,64 @@ public class ClasspathLookupProbe {
             } catch (InjectedError e) {
                 raised = true;
             }
-            for (Path root : roots) {
-                deleteTree(root);
-            }
             if (!raised) {
                 return "the error was not raised";
             }
             if (attempts.get() != 2) {
-                return "removed " + attempts.get() + " of 2 copies";
+                return "tried to remove " + attempts.get() + " of 2 copies";
             }
             java.lang.reflect.Field liveField = budget.getClass().getDeclaredField("live");
             liveField.setAccessible(true);
             java.lang.reflect.Field usedField = budget.getClass().getDeclaredField("used");
             usedField.setAccessible(true);
+            // a failed removal keeps what the copies use charged
+            long[] heldCharges;
             synchronized (budget) {
-                if (!((java.util.Set<?>) liveField.get(budget)).isEmpty()) {
-                    return "a copy is still live";
+                if (((java.util.Set<?>) liveField.get(budget)).size() != 2) {
+                    return "a failed removal released a copy";
                 }
-                for (long used : (long[]) usedField.get(budget)) {
-                    if (used != 0) {
-                        return "a charge was not returned";
-                    }
+                heldCharges = ((long[]) usedField.get(budget)).clone();
+            }
+            if (heldCharges[2] == 0) {
+                return "a failed removal returned its charges";
+            }
+            for (Path root : roots) {
+                if (!Files.isDirectory(root)) {
+                    return "a directory is gone after a failed removal";
                 }
             }
             if (mode.equals("program") && parent.getPtr() != 0) {
                 return "the Program pointer was not cleared";
             }
+            // the cause of the failure has gone: the removal is retried
+            for (int i = 0; i < copies.size(); ++i) {
+                rootField.set(copies.get(i), roots.get(i));
+            }
+            if (mode.equals("close-program")) {
+                parent.clearProgramPtr();
+            } else {
+                handle.getClass().getMethod("close").invoke(handle);
+            }
+            for (Path root : roots) {
+                if (Files.exists(root, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+                    return "the retry left a directory";
+                }
+            }
+            // a further close returns nothing a second time
+            handle.getClass().getMethod("close").invoke(handle);
+            synchronized (budget) {
+                if (!((java.util.Set<?>) liveField.get(budget)).isEmpty()) {
+                    return "a copy is still live after the retry";
+                }
+                for (long used : (long[]) usedField.get(budget)) {
+                    if (used != 0) {
+                        return "the charges were not returned exactly once: " + used;
+                    }
+                }
+            }
             return "clean";
         } finally {
             QoreURLClassLoader.restoreContext(context);
-        }
-    }
-
-    //! Deletes a directory tree of a test
-    private static void deleteTree(Path path) throws IOException {
-        if (!Files.exists(path, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
-            return;
-        }
-        try (Stream<Path> walk = Files.walk(path)) {
-            List<Path> entries = new ArrayList<>();
-            walk.forEach(entries::add);
-            Collections.reverse(entries);
-            for (Path entry : entries) {
-                Files.delete(entry);
-            }
         }
     }
 

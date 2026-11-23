@@ -133,6 +133,9 @@ public class QoreURLClassLoader extends URLClassLoader {
     //! ptr_lock
     private boolean owns_budget = true;
 
+    //! the last non-zero Program pointer set with setPtrIntern(), or 0 if none has been; guarded by ptr_lock
+    private long last_ptr;
+
     //! true while pgm_ptr is the holder of the parent class loader; guarded by ptr_lock
     private boolean shared_ptr = false;
 
@@ -316,6 +319,7 @@ public class QoreURLClassLoader extends URLClassLoader {
                 pgm_ptr = parent.pgm_ptr;
                 pgm_cleared = parent.pgm_cleared;
                 copy_budget = parent.copy_budget;
+                last_ptr = parent.last_ptr;
                 origin_ptr = parent.origin_ptr != 0L ? parent.origin_ptr : parent.pgm_ptr.get();
             }
             shared_ptr = true;
@@ -676,7 +680,8 @@ public class QoreURLClassLoader extends URLClassLoader {
             // no copy is ready before all of them are, so that no location that is returned has been removed
             rv.ready();
         } catch (Throwable e) {
-            rv.abort();
+            // a failure of the cleanup is suppressed in the original error
+            QoreCompilerClasspath.cleanup(e, rv::abort);
             throw e;
         }
         return rv;
@@ -1784,10 +1789,15 @@ public class QoreURLClassLoader extends URLClassLoader {
     @Override
     public void close() throws IOException {
         if (checkAccessUnlessShutDown0(getOriginPtr())) {
+            // a failure to end a copy never replaces a failure to close
+            Throwable failure = null;
             try {
                 super.close();
+            } catch (IOException | RuntimeException | Error e) {
+                failure = e;
+                throw e;
             } finally {
-                endCompilerCopies();
+                QoreCompilerClasspath.cleanup(failure, this::endCompilerCopies);
             }
         }
     }
@@ -1804,16 +1814,20 @@ public class QoreURLClassLoader extends URLClassLoader {
         if (!checkAccessUnlessShutDown0(getOriginPtr())) {
             return false;
         }
+        Throwable failure = null;
         try {
             super.close();
         } catch (IOException e) {
             // every JAR file has been tried; the class loader is being discarded, and there is no recovery action
+        } catch (RuntimeException | Error e) {
+            failure = e;
+            throw e;
         } finally {
             pendingClasses.clear();
             classCache.clear();
             classes.clear();
             classInProgress.get().clear();
-            clearProgramPtrIntern();
+            QoreCompilerClasspath.cleanup(failure, this::clearProgramPtrIntern);
         }
         return true;
     }
@@ -1908,19 +1922,32 @@ public class QoreURLClassLoader extends URLClassLoader {
                 program_budget = copy_budget;
             }
         }
-        // the pointer is cleared also if the removal of a copy raises an error
+        // every step runs also if an earlier one fails; the first failure is raised at the end, with the others
+        // suppressed in it
+        Throwable failure = null;
         try {
-            try {
-                endCompilerCopies();
-            } finally {
-                if (program_budget != null) {
-                    program_budget.closeAll();
-                }
-            }
-        } finally {
-            setPtrIntern(0, true);
-            sharedDynamicClassLoaders.entrySet().removeIf(entry -> entry.getValue() == this);
+            endCompilerCopies();
+        } catch (RuntimeException | Error e) {
+            failure = e;
         }
+        if (program_budget != null) {
+            try {
+                program_budget.closeAll();
+            } catch (RuntimeException | Error e) {
+                failure = QoreCompilerClasspath.combine(failure, e);
+            }
+        }
+        try {
+            setPtrIntern(0, true);
+        } catch (RuntimeException | Error e) {
+            failure = QoreCompilerClasspath.combine(failure, e);
+        }
+        try {
+            sharedDynamicClassLoaders.entrySet().removeIf(entry -> entry.getValue() == this);
+        } catch (RuntimeException | Error e) {
+            failure = QoreCompilerClasspath.combine(failure, e);
+        }
+        QoreCompilerClasspath.rethrow(failure);
     }
 
     //! Returns the program pointer from the current thread's classloader context
@@ -1957,7 +1984,8 @@ public class QoreURLClassLoader extends URLClassLoader {
     */
     private void setPtrIntern(long ptr, boolean cleared) {
         synchronized (ptr_lock) {
-            long previous_origin = origin_ptr;
+            // the Program that the budget belongs to: the last one that this class loader had
+            long budget_program = last_ptr != 0L ? last_ptr : origin_ptr;
             if (origin_ptr == 0L && ptr != 0L) {
                 origin_ptr = ptr;
             }
@@ -1970,9 +1998,12 @@ public class QoreURLClassLoader extends URLClassLoader {
                 pgm_cleared.set(cleared);
             }
             // only a new Program has a budget of its own: clearing the pointer keeps the budget of the Program
-            if (ptr != 0L && (ptr != previous_origin || copy_budget.isClosed())) {
-                copy_budget = new QoreCompilerClasspath.Budget();
-                owns_budget = true;
+            if (ptr != 0L) {
+                if (ptr != budget_program || copy_budget.isClosed()) {
+                    copy_budget = new QoreCompilerClasspath.Budget();
+                    owns_budget = true;
+                }
+                last_ptr = ptr;
             }
         }
     }

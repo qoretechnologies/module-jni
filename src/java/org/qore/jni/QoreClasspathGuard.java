@@ -340,7 +340,8 @@ final class QoreClasspathGuard {
             }
         } catch (Throwable e) {
             if (copy != null) {
-                copy.abort();
+                // a failure of the cleanup is suppressed in the original error
+                QoreCompilerClasspath.cleanup(e, copy::abort);
             }
             throw e;
         }

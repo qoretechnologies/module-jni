@@ -81,7 +81,8 @@ object sub derived() {
         addTestCase("a class from a later trusted entry with no local file", \laterServedUrlTest());
         addTestCase("a copy ended by closing its class loader while it is made", \copyEndedByCloseTest());
         addTestCase("derived loaders keep the Program's copy budget", \copyDetachedBudgetTest());
-        addTestCase("a failed removal of a copy still returns its charges", \copyRemovalErrorTest());
+        addTestCase("a failed removal of a copy stays charged and is retried", \copyRemovalErrorTest());
+        addTestCase("each new Program of a class loader has a budget of its own", \copyProgramSwitchTest());
         addTestCase("a compile whose Program ends while it runs", \compileProgramEndTest());
         addTestCase("the end of a Program ends the copies of its class loaders", \copyProgramEndTest());
         addTestCase("the file name encoding is fixed at startup", \charsetTest());
@@ -326,9 +327,14 @@ object sub derived() {
         runChildCase("detached", True);
     }
 
-    #! an error while a copy is removed does not stop the removal of the others or lose a charge
+    #! a failed removal keeps its charges, does not stop the removal of the others, and is retried
     copyRemovalErrorTest() {
         runChildCase("removal-error", True);
+    }
+
+    #! each new Program of a class loader has a budget of its own
+    copyProgramSwitchTest() {
+        runChildCase("program-switch", True);
     }
 
     #! a compile whose Program ends while it runs fails cleanly and leaves nothing

@@ -35,6 +35,9 @@ string sub detached_limit(string dir) {
 object sub capture_policy() {
     return ClasspathLookupProbe::capturePolicy();
 }
+string sub program_switch() {
+    return ClasspathLookupProbe::programSwitchBudget(get_class_loader());
+}
 string sub end_with_error(string dir, string mode) {
     return ClasspathLookupProbe::endCopiesWithError(get_class_loader(), dir, mode);
 }
@@ -56,6 +59,10 @@ int sub hold_copies(int max) {
 const EndingEntries = 5;
 #! the compiler copies that a Program can hold at once
 const MaxOutstandingCopies = 32;
+#! the refusal of a copy over the limit of the copies of a Program
+const LimitRefusal = "the Program has as many compiler classpath copies as it can have at the same time";
+#! the refusal of a copy from the closed budget of a Program that has ended
+const EndedRefusal = "the Program of the class loader has ended";
 #! how many new Programs are tried for one at the address of a Program that has ended
 const AddressTries = 64;
 
@@ -177,22 +184,30 @@ Program sub new_empty_program(SandboxManager sm) {
 sub detached_case(string root) {
     Program p = new_empty_program(get_policy(root, ("ending",)));
     object policy = p.callFunction("capture_policy");
-    result("detached limit", sprintf("held %d; another refused", MaxOutstandingCopies),
+    result("detached limit", sprintf("held %d; another refused: %s", MaxOutstandingCopies, LimitRefusal),
         p.callFunction("detached_limit", root + "/ending"));
     string copy = ClasspathLookupProbe::lastKeptCopy();
     result("detached held", True, is_dir(copy));
     delete p;
     result("detached removed", False, is_dir(copy));
-    result("detached new copy", "refused", ClasspathLookupProbe::detachedCopy());
-    result("detached new guard", "refused", ClasspathLookupProbe::copyWithNewGuard(policy, root + "/ending"));
+    result("detached new copy", "refused: " + EndedRefusal, ClasspathLookupProbe::detachedCopy());
+    result("detached new guard", "refused: " + EndedRefusal,
+        ClasspathLookupProbe::copyWithNewGuard(policy, root + "/ending"));
 }
 
 #! an error while a copy is removed does not stop the removal of the others or lose a charge
 sub removal_error_case(string root) {
-    foreach string mode in ("close", "abort", "program") {
+    foreach string mode in ("close", "abort", "program", "close-program") {
         Program p = new_empty_program(get_policy(root, ("ending",)));
         result("removal-error " + mode, "clean", p.callFunction("end_with_error", root + "/ending", mode));
     }
+    result("removal-error left", 0, ClasspathLookupProbe::copyDirectories());
+}
+
+#! each new Program of a class loader has a budget of its own
+sub program_switch_case(string root) {
+    Program p = new_empty_program(get_policy(root, ("ending",)));
+    result("program-switch", "own budgets", p.callFunction("program_switch"));
 }
 
 #! a compile whose Program ends while its classpath is made, or while the compiler runs
@@ -260,6 +275,7 @@ switch (case_name) {
     case "program-end": program_end_case(root); exit(0);
     case "detached": detached_case(root); exit(0);
     case "removal-error": removal_error_case(root); exit(0);
+    case "program-switch": program_switch_case(root); exit(0);
     case "compile-end": compile_end_case(root); exit(0);
 }
 if (ClasspathLookupProbe::fileNameEncoding() != "UTF-8") {

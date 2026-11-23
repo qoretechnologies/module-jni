@@ -357,6 +357,9 @@ public class QoreKotlinCompiler implements AutoCloseable {
                 if (compilerClasspath != null) {
                     compilerClasspath.close();
                 }
+            } catch (RuntimeException | Error e) {
+                // never replaces the result or the error of the compilation: a copy that could not be removed stays
+                // charged, and is removed again when its class loader is closed or its Program ends
             } finally {
                 // Clean up temp directory
                 cleanupTempDir();

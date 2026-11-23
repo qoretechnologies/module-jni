@@ -76,18 +76,49 @@ public final class QoreCompilerClasspath implements AutoCloseable {
                     copy.release();
                 }
             } catch (RuntimeException | Error e) {
-                if (first == null) {
-                    first = e;
-                } else if (e != first) {
-                    first.addSuppressed(e);
-                }
+                first = combine(first, e);
             }
         }
-        if (first instanceof Error) {
-            throw (Error) first;
+        rethrow(first);
+    }
+
+    //! Returns the first failure, with a later one suppressed in it; recording it can never raise an error
+    static Throwable combine(Throwable first, Throwable later) {
+        if (first == null) {
+            return later;
         }
-        if (first != null) {
-            throw (RuntimeException) first;
+        if (later != first) {
+            try {
+                first.addSuppressed(later);
+            } catch (RuntimeException | Error e) {
+                // the first failure is still the one that is raised
+            }
+        }
+        return first;
+    }
+
+    //! Raises a failure that was caught as a RuntimeException or an Error; does nothing for null
+    static void rethrow(Throwable failure) {
+        if (failure instanceof Error) {
+            throw (Error) failure;
+        }
+        if (failure != null) {
+            throw (RuntimeException) failure;
+        }
+    }
+
+    //! Runs a cleanup action while \a primary, if any, is being raised: a failure of the action never replaces it
+    /** @param primary the failure that is being raised, in which a failure of the action is suppressed; if null, a
+        failure of the action is raised
+    */
+    static void cleanup(Throwable primary, Runnable action) {
+        try {
+            action.run();
+        } catch (RuntimeException | Error e) {
+            if (primary == null) {
+                throw e;
+            }
+            combine(primary, e);
         }
     }
 
@@ -146,7 +177,7 @@ public final class QoreCompilerClasspath implements AutoCloseable {
                 // only its owner can use it
                 copy.root = Files.createTempDirectory("qore-classpath-");
             } catch (Throwable e) {
-                copy.abort();
+                cleanup(e, copy::abort);
                 throw e;
             }
             return copy;
@@ -170,15 +201,21 @@ public final class QoreCompilerClasspath implements AutoCloseable {
 
     //! One private copy, with one owner at each moment and one return of what it used
     /** The thread that makes a copy owns it until it is ready.  A release while it is being made only marks it: the next
-        charge fails, and the making thread removes it.  After it is ready, the first release removes it.  Only the
-        transition to DONE removes the directory and returns the charges, so that happens once.  Directories are only
-        created below a root that exists and that this object owns, by the thread that owns it.
+        charge fails, and the making thread removes it.  After it is ready, a release removes it.  What the copy uses is
+        returned only once its directory is confirmed to be gone, in the transition to DONE, so that happens once.  A
+        removal that fails leaves the copy charged and live in the FAILED state, and the next release (closing its
+        classpath or its class loader, or the end of its Program) tries again.  Directories are only created below a root
+        that exists and that this object owns, by the thread that owns it.
     */
     static final class Copy {
         private static final int MAKING = 0;
         private static final int READY = 1;
         private static final int ENDING = 2;
-        private static final int DONE = 3;
+        //! one thread is removing the directory
+        private static final int REMOVING = 3;
+        //! a removal failed: still charged, and removed again by the next release
+        private static final int FAILED = 4;
+        private static final int DONE = 5;
 
         private final Budget budget;
         private final QoreClasspathGuard owner;
@@ -278,10 +315,10 @@ public final class QoreCompilerClasspath implements AutoCloseable {
                     state = ENDING;
                     return;
                 }
-                if (state != READY) {
+                if (state != READY && state != FAILED) {
                     return;
                 }
-                state = DONE;
+                state = REMOVING;
             }
             remove();
         }
@@ -289,38 +326,49 @@ public final class QoreCompilerClasspath implements AutoCloseable {
         //! Called by the thread that makes the copy when it fails, also after a release marked it
         void abort() {
             synchronized (budget) {
-                if (state == DONE) {
+                if (state == DONE || state == REMOVING) {
                     return;
                 }
-                state = DONE;
+                state = REMOVING;
             }
             remove();
         }
 
-        //! Removes the directory and returns the charges; runs once, after the transition to DONE
-        /** The charges are returned and the copy is forgotten also if removing the directory raises an error
+        //! Removes the directory; what the copy uses is returned only if the directory is confirmed to be gone
+        /** Runs on the one thread that moved the copy to REMOVING.  A failed removal never frees any of the budget.
         */
         private void remove() {
+            boolean gone = false;
             try {
                 if (root != null) {
                     deleteTree(root);
                 }
+                gone = root == null || Files.notExists(root, LinkOption.NOFOLLOW_LINKS);
             } finally {
-                try {
-                    synchronized (budget) {
-                        for (int i = 0; i < KINDS; ++i) {
-                            budget.used[i] -= charged[i];
-                            charged[i] = 0;
-                        }
-                        budget.live.remove(this);
-                    }
-                } finally {
-                    owner.forgetCopy(this);
-                }
+                finishRemoval(gone);
             }
         }
 
-        //! Deletes what it can of a directory tree, without following links; never throws
+        //! Ends a removal: returns the charges once if the directory is gone, or else leaves the copy to be retried
+        private void finishRemoval(boolean gone) {
+            synchronized (budget) {
+                if (!gone) {
+                    state = FAILED;
+                    return;
+                }
+                state = DONE;
+                for (int i = 0; i < KINDS; ++i) {
+                    budget.used[i] -= charged[i];
+                    charged[i] = 0;
+                }
+                budget.live.remove(this);
+            }
+            owner.forgetCopy(this);
+        }
+
+        //! Deletes what it can of a directory tree, without following links
+        /** An I/O error is left for the caller to find, as the directory then still exists
+        */
         private static void deleteTree(Path path) {
             try {
                 if (Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)) {
