@@ -142,6 +142,16 @@ hash<auto> sub add_classpath(string path) {
                 "entry": "file://~{X}/dep.jar"},
             <ClasspathUrlCase>{"label": "authority 11", "archive": True, "target": "dep.jar",
                 "entry": "file://localhost:2121{X}/dep.jar"},
+            <ClasspathUrlCase>{"label": "authority 12", "archive": True, "target": "dep.jar",
+                "entry": "file://user@localhost{X}/dep.jar"},
+            <ClasspathUrlCase>{"label": "authority 13", "archive": False, "target": "d",
+                "entry": "file://user@{X}/d/"},
+            <ClasspathUrlCase>{"label": "authority 14", "archive": True, "target": "dep.jar",
+                "entry": "file://user@{X}/dep.jar"},
+            <ClasspathUrlCase>{"label": "authority 15", "archive": False, "target": "d",
+                "entry": "file://:2121{X}/d/"},
+            <ClasspathUrlCase>{"label": "authority 16", "archive": True, "target": "dep.jar",
+                "entry": "file://:2121{X}/dep.jar"},
         );
 
         #! entries with the local host as their authority: followed on a verified JDK
@@ -355,7 +365,7 @@ hash<auto> sub add_classpath(string path) {
     otherAuthorityTest() {
         foreach hash<ClasspathUrlCase> c in (OtherAuthorityCases) {
             string x = makeCase(c);
-            # the policy does not allow the target: the refusal names the entry, so the target was not resolved first
+            # the policy does not allow the target: the refusal names the jar, as the target is not resolved first
             Program p = getProgram((x + "/main",));
             assertRefused(p, hostAdd(p, x + "/main/main.jar"), c.label);
         }
@@ -396,6 +406,26 @@ hash<auto> sub add_classpath(string path) {
     permissiveTest() {
         foreach bool open_network in ((True, False)) {
             string mode = open_network ? "restricts nothing" : "restricts only the network";
+            foreach hash<ClasspathUrlCase> c in (usable(ExactCases)) {
+                string x = makeCase(c);
+                Program p = getPermissiveProgram(open_network);
+                hash<auto> rv = hostAdd(p, x + "/main/main.jar");
+                string label = sprintf("%s: %s", mode, c.label);
+                assertNRegex("cannot be checked exactly", rv.desc, label);
+                if (verified()) {
+                    assertEq("ok", rv.err, label + ": " + rv.desc);
+                    assertEq((Allowed, Allowed, Allowed, Allowed), p.callFunction("read_all"), label);
+                }
+            }
+            # a directory and an archive with no manifest Class-Path, which are followed on every JDK
+            foreach hash<ClasspathUrlCase> c in ((ExactCases[0], ExactCases[2])) {
+                string x = makeCase(c);
+                Program p = getPermissiveProgram(open_network);
+                string label = sprintf("%s: no manifest entry: %s", mode, c.target);
+                hash<auto> rv = hostAdd(p, x + "/" + c.target);
+                assertEq("ok", rv.err, label + ": " + rv.desc);
+                assertEq((Allowed, Allowed, Allowed, Allowed), p.callFunction("read_all"), label);
+            }
             foreach hash<ClasspathUrlCase> c in (InexactCases + OtherAuthorityCases) {
                 string x = makeCase(c);
                 Program p = getPermissiveProgram(open_network);
