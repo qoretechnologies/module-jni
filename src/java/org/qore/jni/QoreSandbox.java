@@ -147,6 +147,22 @@ public final class QoreSandbox {
             }
         }
 
+        //! Returns true if a network policy applies to a check made with the policy on the current thread
+        public boolean restrictsNetwork() {
+            lock.readLock().lock();
+            try {
+                long p = enterPtr();
+                try {
+                    return restrictsNetwork0(p);
+                } finally {
+                    ref.exit();
+                }
+            } finally {
+                lock.readLock().unlock();
+                Reference.reachabilityFence(this);
+            }
+        }
+
         //! Checks a TCP connection with the captured policy; see QoreSandbox.checkNetworkAccess(String, int, int)
         public InetAddress[] checkNetworkAccess(String host, int port) {
             return checkNetworkAccess(host, port, TCP);
@@ -348,14 +364,32 @@ public final class QoreSandbox {
         return p != null ? p.restrictsFilesystem() : restrictsFilesystem0(0);
     }
 
+    //! Returns true if a sandbox network policy restricts the code governing the current thread
+    /** As restrictsFilesystem() does for a filesystem policy; a sandbox that allows all network access does not count.
+
+        @throw JNI-SANDBOX-ERROR the policy of the thread's caller cannot be determined
+
+        @since jni 3.0
+    */
+    public static boolean restrictsNetwork() {
+        Policy p = current.get();
+        return p != null ? p.restrictsNetwork() : restrictsNetwork0(0);
+    }
+
+    //! Returns true if a classpath that the current thread adds must be checked: its filesystem or network is restricted
+    static boolean restrictsClasspath() {
+        return restrictsFilesystem() || restrictsNetwork();
+    }
+
     //! Checks a classpath for a compiler and returns the files to give it, with symbolic links resolved
     /** The classpath is resolved as for the \c add-classpath module command: each entry, the files that a wildcard
         selects, and the jars and directories that manifest \c Class-Path attributes name, and the policy is applied to
         each.  For a directory, the policy is applied to the directory itself and not to the files below it; the Java
         compiler checks those as it lists them for a restricted caller, but the class loader and the Kotlin compiler
         do not (qore#7276).  A compiler that is
-        given the returned files resolves the manifest entries of a jar where they were checked.  It resolves them as
-        paths and not as URLs, so a jar whose manifest has an entry for which the two can differ is refused.  A file
+        given the returned files resolves the manifest entries of a jar where they were checked.  A compiler does not
+        resolve every entry as the class loader does, so a jar whose manifest has an entry for which the two can differ
+        is refused.  A file
         whose real name, after symbolic links are resolved, is not an archive name is refused as well, as its manifest
         is not checked, and so is a special file, whatever its name.
 
@@ -416,7 +450,8 @@ public final class QoreSandbox {
         if (classpath == null) {
             throw argumentError0("classpath must not be null");
         }
-        QoreURLClassLoader.ResolvedClasspath rc = resolveClasspath(classpath, 0, true);
+        QoreURLClassLoader.ResolvedClasspath rc = resolveClasspath(classpath, 0, restrictsFilesystem(),
+            restrictsNetwork());
         // the elements grow as they are checked: a manifest is read only after its jar has been allowed
         for (int i = 0; i < rc.size(); ++i) {
             checkNamed(rc.encodedPath(i), rc.givenEntry(i), READ);
@@ -556,11 +591,14 @@ public final class QoreSandbox {
         the running JDK's, which can only make the check stricter, or 0 for none (only a debug build of the module
         passes one, for its tests; see QoreURLClassLoader.isVerifiedClassPathJdk())
         @param restricted true if a filesystem policy restricts the caller: a special file is then refused whatever its
-        name; otherwise only one with an archive name is refused
+        name, otherwise only one with an archive name is refused, and a manifest Class-Path entry whose path cannot
+        be checked exactly is refused (qore#7349)
+        @param networkRestricted true if a network policy restricts the caller: a manifest Class-Path entry that the
+        class loader could read from another location is refused (qore#7195)
     */
     static QoreURLClassLoader.ResolvedClasspath resolveClasspath(String classpath, int jdkFeature,
-            boolean restricted) {
-        return QoreURLClassLoader.resolveClasspath(classpath, jdkFeature, restricted);
+            boolean restricted, boolean networkRestricted) {
+        return QoreURLClassLoader.resolveClasspath(classpath, jdkFeature, restricted, networkRestricted);
     }
 
     //! Called by the module after element \a i of a resolved classpath has been checked (qore#6822)
@@ -652,6 +690,9 @@ public final class QoreSandbox {
 
     //! Returns true if a filesystem policy applies to the policy \a ptr, or to the current thread if 0
     private static native boolean restrictsFilesystem0(long ptr);
+
+    //! Returns true if a network policy applies to the policy \a ptr, or to the current thread if 0
+    private static native boolean restrictsNetwork0(long ptr);
 
     //! Checks a network destination; returns the checked addresses (see makeAddresses())
     private static native byte[][] checkNetworkAccess0(long ptr, byte[] host, int port, int proto);

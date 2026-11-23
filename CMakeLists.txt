@@ -1278,6 +1278,7 @@ set(JAVA_TEST_JAR_SRC
     test/java/src/org/qore/jni/test/JdbcConnectionDriver.java
     test/java/src/org/qore/jni/test/Callbacks.java
     test/java/src/org/qore/jni/test/ClassPtrProbe.java
+    test/java/src/org/qore/jni/test/ClasspathUrlProbe.java
     test/java/src/org/qore/jni/test/GovernedProgramProbe.java
     test/java/src/org/qore/jni/test/HostObjectProbe.java
     test/java/src/org/qore/jni/test/SandboxIo.java

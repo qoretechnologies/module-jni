@@ -272,14 +272,14 @@ static jboolean JNICALL qore_sandbox_is_sandboxed(JNIEnv* jenv, jclass, jlong pt
     });
 } JNI_NATIVE_CATCH(jenv, JNI_FALSE)
 
-//! QoreSandbox.restrictsFilesystem0(): returns true if a filesystem policy restricts the policy \a ptr or the caller
+//! Returns true if any sandbox manager of the policy \a ptr or of the caller has the given restriction
 /** The Qore caller of a thread with no captured policy is not known.  If such a thread could have been started or
     given its work by code that a sandbox governs, JNI-SANDBOX-ERROR is raised; otherwise it is a thread of the trusted
-    host, which no filesystem policy restricts.
+    host, which no policy restricts.
 */
-static jboolean JNICALL qore_sandbox_restricts_filesystem(JNIEnv* jenv, jclass, jlong ptr) try {
+static jboolean sandbox_restricts(JNIEnv* jenv, jlong ptr, bool (QoreSandboxManager::*restricts)() const) {
     return sandbox_native<jboolean>(jenv, JNI_FALSE,
-            [ptr](Env&, SandboxCallScope& scope, ExceptionSink* xsink) -> jboolean {
+            [ptr, restricts](Env&, SandboxCallScope& scope, ExceptionSink* xsink) -> jboolean {
         if (scope.enter(ptr, xsink)) {
             if (jni_governed_caller_reaches_intern(nullptr)) {
                 xsink->clear();
@@ -287,12 +287,22 @@ static jboolean JNICALL qore_sandbox_restricts_filesystem(JNIEnv* jenv, jclass, 
             return JNI_FALSE;
         }
         for (const QoreSandboxManager* sm : scope.managers()) {
-            if (sm->filesystemRestricts()) {
+            if ((sm->*restricts)()) {
                 return JNI_TRUE;
             }
         }
         return JNI_FALSE;
     });
+}
+
+//! QoreSandbox.restrictsFilesystem0(): returns true if a filesystem policy restricts the policy \a ptr or the caller
+static jboolean JNICALL qore_sandbox_restricts_filesystem(JNIEnv* jenv, jclass, jlong ptr) try {
+    return sandbox_restricts(jenv, ptr, &QoreSandboxManager::filesystemRestricts);
+} JNI_NATIVE_CATCH(jenv, JNI_FALSE)
+
+//! QoreSandbox.restrictsNetwork0(): returns true if a network policy restricts the policy \a ptr or the caller
+static jboolean JNICALL qore_sandbox_restricts_network(JNIEnv* jenv, jclass, jlong ptr) try {
+    return sandbox_restricts(jenv, ptr, &QoreSandboxManager::networkRestricts);
 } JNI_NATIVE_CATCH(jenv, JNI_FALSE)
 
 //! QoreSandbox.checkNetworkAccess0(): checks a network destination and returns the checked addresses
@@ -496,6 +506,8 @@ JNINativeMethod qoreSandboxNativeMethods[] = {
         reinterpret_cast<void*>(qore_sandbox_is_sandboxed)},
     {const_cast<char*>("restrictsFilesystem0"), const_cast<char*>("(J)Z"),
         reinterpret_cast<void*>(qore_sandbox_restricts_filesystem)},
+    {const_cast<char*>("restrictsNetwork0"), const_cast<char*>("(J)Z"),
+        reinterpret_cast<void*>(qore_sandbox_restricts_network)},
     {const_cast<char*>("checkNetworkAccess0"), const_cast<char*>("(J[BII)[[B"),
         reinterpret_cast<void*>(qore_sandbox_check_network_access)},
     {const_cast<char*>("checkFileAccess0"), const_cast<char*>("(J[BI)V"),
