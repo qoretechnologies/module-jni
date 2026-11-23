@@ -127,10 +127,8 @@ final class QoreClasspathGuard {
             // restricted code only adds files: anything else can only come from an entry of trusted code
             return isTrustedUrl(url.toString(), loaderUrls);
         }
-        File file;
-        try {
-            file = new File(new URI(spec));
-        } catch (URISyntaxException | IllegalArgumentException e) {
+        File file = localFile(spec);
+        if (file == null) {
             return false;
         }
         ArrayList<QoreSandbox.ClasspathPolicy[]> applied = enclosingPolicies(file, jar, trustedRoots(loaderUrls));
@@ -154,6 +152,28 @@ final class QoreClasspathGuard {
             return false;
         }
         return checkAll(real, applied);
+    }
+
+    //! Returns the local file of a file URL, or null if it names no local file
+    /** A manifest \c Class-Path entry can name the local host as its authority (\c "file://localhost/..."), and the
+        class loader then finds files below it with that authority; any other authority names no local file
+    */
+    static File localFile(String spec) {
+        try {
+            URI uri = new URI(spec);
+            String authority = uri.getRawAuthority();
+            if (authority != null && !authority.isEmpty()) {
+                // as new File(URI) refuses a query or fragment, which a URL of a file never has
+                if (!authority.equalsIgnoreCase("localhost") || uri.getRawQuery() != null
+                        || uri.getRawFragment() != null) {
+                    return null;
+                }
+                uri = new URI("file:" + uri.getRawPath());
+            }
+            return new File(uri);
+        } catch (URISyntaxException | IllegalArgumentException e) {
+            return null;
+        }
     }
 
     //! Returns the nearest entry of restricted code below which \a name is the normalized path \a file, or null

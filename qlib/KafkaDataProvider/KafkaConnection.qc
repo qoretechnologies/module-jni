@@ -26,6 +26,14 @@
 public namespace KafkaDataProvider {
 #! Class for Kafka connections
 public class KafkaConnection inherits ConnectionProvider::AbstractConnectionWithInfo {
+    #! Returns the functional domains of the connection's clients (qoretechnologies/qore#7096)
+    /** The clients connect to a Kafka broker and read the AsyncAPI schema of the \c asyncapi option, which can be a
+        file
+    */
+    private final int getConnectionDomainsImpl() {
+        return DOM_NETWORK | DOM_FILESYSTEM;
+    }
+
     public {
         #! Connection entry info
         const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("KafkaDataProvider",

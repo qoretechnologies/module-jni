@@ -20,10 +20,26 @@
       such a sandbox governs.  <b>Operator rule:</b> whoever adds a classpath entry owns its policy: an entry that
       restricted code adds carries that code's policy and fails closed, and an entry that a trusted host deliberately
       adds to the class loader of a sandboxed Program is a grant of the host, which is not also checked against the
-      policy of that Program.  An entry added before a Program's filesystem policy applied, or while its sandbox
+      policy of that Program.  A caller whose sandbox restricts only the network makes no such grant: a policy that is
+      bound to an entry stays when it adds the entry again.  An entry added before a Program's filesystem policy applied, or while its sandbox
       restricted nothing, stays unchecked when the policy is set or tightened later: configure the policy before the
       classpath is added.  On a JDK version whose manifest \c Class-Path handling has not been verified, what the
       manifests of trusted jars name is not found in a class loader that also has entries of restricted code
+    - The connection classes of the data provider modules declare the functional domains of their clients, so code
+      restricted only from other domains can create them; Camel connections use all of them, and JDBC connections
+      declare \c FILESYSTEM because their \c classpath option loads driver jars from the file system, unlike the
+      core's \c DatasourceConnection, which loads no files (qore#7096)
+    - <b>Security</b>: the @ref jnijdbc_driverguide "jdbc driver" masks the URL of a datasource, its password and
+      the credentials in the URL in the text of the Java exceptions that it raises for an operation on the datasource
+      and in their argument (ex: \c "No suitable driver found for jdbc:postgresql:****"), as a JDBC driver can name
+      the URL, which can hold credentials, in its messages (see @ref jdbc_exception_masking, qore#7344)
+    - <b>Security</b>: for a caller that a sandbox filesystem policy restricts, a manifest \c Class-Path entry whose
+      path cannot be checked exactly is refused with \c JNI-CLASSPATH-ERROR, on every JDK version, and nothing of the
+      classpath is added.  For a caller whose sandbox restricts only the network, an entry that names another
+      location, or whose location cannot be confirmed, is refused, also when Java code adds the classpath, which is
+      otherwise added as for a caller with no sandbox, and also for the \c global-* classpath module commands; a caller
+      whose sandbox restricts neither is not affected
+      (qore#7349, qore#7195)
     - A child process created with \c fork() could wait forever when it ended, if another thread of the parent held
       one of the module's locks on the child's exit path or the global context Program at the time of the fork, as that
       thread does not exist in the child.  The module's cleanup in a child no longer waits for that state (qore#7192)
@@ -148,10 +164,11 @@
       against the policy; they are now resolved as the class loader resolves them, recursively and each once, and
       checked as their real paths (with symbolic links resolved) together with the classpath's own entries; if the
       policy denies any of them, or one cannot be checked (ex: a jar that is not a regular file, or, before Java 22, a
-      jar with a jar index), the whole classpath is refused with \c JNI-CLASSPATH-ERROR, naming the file, and nothing
+      jar with a jar index, refused as a defense for other builds, as the JDK 21 builds that were tested have no jar
+      index support to enable), the whole classpath is refused with \c JNI-CLASSPATH-ERROR, naming the file, and nothing
       is added.  The class loader still follows the manifests, so the classpath that is used is unchanged.  The
-      resolution has been verified for JDK feature version 25; on any other JDK version, a governed classpath with a
-      jar that has a manifest \c Class-Path attribute is refused with \c JNI-CLASSPATH-ERROR, naming the reason (a
+      resolution has been verified for JDK feature versions 21 and 25; on any other JDK version, a governed classpath
+      with a jar that has a manifest \c Class-Path attribute is refused with \c JNI-CLASSPATH-ERROR, naming the reason (a
       classpath whose jars have no \c Class-Path attribute is not affected).  The \c add-classpath and
       \c add-relative-classpath module commands and the \c classpath option of the \c jdbc driver are affected; with
       no filesystem policy, classpaths are added as before (qore#6822, see @ref jni_sandbox)

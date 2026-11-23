@@ -99,6 +99,12 @@ are `static_assert`ed to match) and calls `QoreSandboxManager::checkFilesystemAc
   file is skipped, so a later entry can provide it, and a denial and a missing file have the same outcome.  A URL in no
   known entry is refused; on an unverified JDK this includes what the manifests of trusted jars name, in a class loader
   that also has entries of restricted code.
+- **Network-only callers.** A caller whose sandbox restricts the network but not the filesystem binds no filesystem
+  policy and makes no per-file check: its entries have only their location checked, on every route, also the
+  `global-*` module commands of a sandbox that allows uncontrolled APIs.  It is still sandboxed, so it makes
+  no grant of the host: re-adding a path that filesystem-restricted code bound leaves that policy in place, also when
+  the addition is refused or adds only part of a classpath, and a new entry of such a caller simply has no filesystem
+  policy.  Only a caller that no sandbox restricts for the filesystem or the network makes a grant of the host.
 - **Whose policy.** Only the captured manager is consulted (`checkClasspathRead0()`), never the thread's caller, so the
   result does not depend on the thread and a stricter thread cannot affect another lookup.
 - **No decision cache.** A `SandboxManager` can be changed at any time and has no change indicator, so a cached answer
@@ -162,6 +168,9 @@ are `static_assert`ed to match) and calls `QoreSandboxManager::checkFilesystemAc
   JSR-223 script engine takes its classpath from the class loaders and cannot be filtered, so a script of a restricted
   caller is refused while a guarded directory, added directly or named by a manifest, is on its classpath.  A jar is
   used whole once its policy has allowed it, and a directory with no bound policy does not refuse a script.
+- **Jars with a manifest `Class-Path` in a Kotlin compile.** A restricted Kotlin compile leaves out a jar with a manifest
+  `Class-Path` attribute, which fails closed: the classes of that jar and of what its manifest names are not visible to
+  the compile, also when the class loader's check accepted them.
 - **File name encoding.** The bytes that a policy judges use the encoding that is read once when the class is
   initialized, as the file name encoding is fixed at startup.  In a JVM started first with Qore as a library, Java code
   that runs before the module is initialized is part of the trusted host.

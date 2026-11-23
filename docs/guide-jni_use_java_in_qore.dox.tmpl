@@ -385,7 +385,9 @@ class Outer {
     These checks do not defend against Java code in the same JVM.  Once the module's shutdown has started, closing a class loader does
     nothing, so a copy of a compile that is still running is then removed only when that compile ends.  A process that
     ends with the \c exit() function while a compile is running does not remove that compile's copy, which stays in
-    the JVM's temporary directory.  The Kotlin compiler also uses
+    the JVM's temporary directory.  A jar with a manifest \c Class-Path attribute is left out of a Kotlin compile for
+    such a caller, so the classes of that jar and of what its manifest names are not visible to the compile, also when
+    the class loader's check accepted them.  The Kotlin compiler also uses
     the host's %Qore and Kotlin jars and the entries that trusted code added.  A Kotlin script (\c kotlin_eval()) of such
     a caller is refused while a directory that restricted code added, directly or through a jar's manifest, is on its
     classpath, as the script compiler reads the files below it itself; use jars for that classpath.  The refusal
@@ -591,10 +593,20 @@ public class Fetcher {
       it (a relative entry resolved against the location of the jar that names it, as the class loader resolves it),
       with symbolic links resolved, before its own manifest is read.  If the policy denies any of them, or a
       \c Class-Path entry cannot be checked (ex: it is not a file, a jar is not a regular file, a manifest cannot be
-      read, or, before Java 22, a jar has a jar index), the whole classpath is refused with \c JNI-CLASSPATH-ERROR,
-      naming the file.  The class loader still follows the manifests itself, so the classpath that is used is the one
-      that was given, and every file of it is one that was checked.  That resolution follows the JDK's class loader,
-      and it has been verified for JDK feature version 25; on any other JDK version, a classpath with a jar that has a
+      read, or, before Java 22, a jar has a jar index, which is refused as a defense for other builds, as the JDK 21
+      builds that were tested have no jar index support to enable), the whole classpath is refused with
+      \c JNI-CLASSPATH-ERROR, naming the file.  A caller whose filesystem access is restricted needs a manifest
+      entry whose path can be checked exactly; a caller whose sandbox restricts only the network cannot use an entry
+      that names another location, or one that cannot be read, as its location cannot be confirmed.  For such a
+      caller, a manifest entry or a path given to \c addPathOrig(), \c addURL() or a compiler that does not exist is
+      refused as well, except for a file URL in the form of a directory, which only \c addURL() and a manifest entry
+      can give; \c addPath(), \c addParentPath() and \c addWildcard() leave out a top-level entry that does not exist.
+      Its Java classpath calls are otherwise those of a caller with no sandbox, so a refusal there can leave the
+      earlier entries of the classpath added.  A caller whose sandbox restricts neither is not affected.  The class
+      loader still follows the manifests itself, so the classpath that is used is the one that was given, and every
+      jar and directory that it opens is one that was checked.  That resolution follows the JDK's class loader, and
+      it has been verified for JDK feature versions 21 and 25; on any other JDK version, a classpath with a jar that
+      has a
       manifest \c Class-Path attribute is refused with \c JNI-CLASSPATH-ERROR, naming the reason, while a classpath
       whose jars have no \c Class-Path attribute is checked and added as usual.  A denial refuses the whole classpath:
       nothing of it is added.  The policy is bound to the entries that are added, and applies to each file that the

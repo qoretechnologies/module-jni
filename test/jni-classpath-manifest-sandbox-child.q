@@ -22,7 +22,7 @@ const Pkg = "org.qore.jni.test.cpman.";
     must fail this test until the expectation is updated with it.  On any other JDK, a sandboxed classpath with a
     manifest Class-Path attribute is expected to be refused (qore#7204).
 */
-const VerifiedJdkFeatures = (25,);
+const VerifiedJdkFeatures = (21, 25);
 
 #! a sandboxed classpath that is expected to be refused on a JDK outside VerifiedJdkFeatures (qore#7204)
 hashdecl RefusedClasspath {
@@ -435,7 +435,7 @@ int sub feature() { return Jni::java::lang::Runtime::version().feature(); }", "j
 */
 string sub unverified_refusal(string jar, int feature, string cp) {
     return sprintf("cannot add the classpath: the classpath jar '%s' has a manifest Class-Path attribute, which "
-        "cannot be checked against the sandbox filesystem policy on an unverified JDK version %d for manifest "
+        "cannot be checked against the sandbox policy on an unverified JDK version %d for manifest "
         "Class-Path checking (verified: [%s]): module command error from command 'add-classpath %s'", jar, feature,
         join(", ", (map string($1), VerifiedJdkFeatures)), cp);
 }

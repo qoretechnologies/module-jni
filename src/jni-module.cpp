@@ -1351,7 +1351,7 @@ LocalReference<jobject> jni_check_classpath_policy(QoreSandboxManager* policy, E
     // against its user.dir, with symbolic links resolved), in the bytes that the JVM passes to the operating system
     // for it, so that the policy judges the representation that is used, and a wildcard entry is its directory and
     // each file that it selects
-    jvalue jargs[3];
+    jvalue jargs[4];
     jargs[0].l = classpath;
     // a JDK feature version for the check of manifest Class-Path attributes to assume as well as the running JDK's,
     // which can only make the check stricter: 0 for none; only a debug build can pass one, for its tests (qore#6822)
@@ -1360,11 +1360,14 @@ LocalReference<jobject> jni_check_classpath_policy(QoreSandboxManager* policy, E
     jargs[1].i = dbg_jni_classpath_jdk_feature.load(std::memory_order_acquire);
 #endif
     // a sandbox that does not restrict the filesystem (ex: one for interrupts or limits only) still refuses a special
-    // file with an archive name, which the class loader would open, but not one with another name, which it does not
-    // read once: the policy is bound to the entries below exactly when the classpath is resolved as restricted; an
-    // entry added while the policy restricts nothing is not bound, so tightening the policy later does not reach it
+    // file with an archive name, which the class loader would open, but not one with another name, which it does not;
+    // a manifest Class-Path entry must have an exact path only for a caller whose filesystem access is restricted
+    // (qore#7349), and cannot name another location for one whose network access is restricted (qore#7195).  The policy
+    // is bound to the entries below exactly when the classpath is resolved as restricted for the filesystem; an entry
+    // added while the policy restricts nothing there is not bound, so tightening the policy later does not reach it
     const bool restricts = policy->filesystemRestricts();
     jargs[2].z = restricts ? JNI_TRUE : JNI_FALSE;
+    jargs[3].z = policy->networkRestricts() ? JNI_TRUE : JNI_FALSE;
     LocalReference<jobject> rc = env.callStaticObjectMethod(Globals::classQoreSandbox,
         Globals::methodQoreSandboxResolveClasspath, jargs);
     // the elements grow as they are checked: after an element is allowed, the jars and directories that its manifest

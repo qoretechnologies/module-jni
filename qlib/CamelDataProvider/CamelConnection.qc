@@ -26,6 +26,13 @@
 public namespace CamelDataProvider {
 #! Class for Apache Camel connections
 public class CamelConnection inherits ConnectionProvider::AbstractConnectionWithInfo {
+    #! Returns the functional domains of the connection's clients (qoretechnologies/qore#7096)
+    /** The client is a Camel context, which routes to any endpoint: network, file system and database ones
+    */
+    private final int getConnectionDomainsImpl() {
+        return DOM_NETWORK | DOM_FILESYSTEM | DOM_DATABASE;
+    }
+
     public {
         #! Connection entry info
         const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("CamelDataProvider",

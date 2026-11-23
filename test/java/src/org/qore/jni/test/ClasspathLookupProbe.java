@@ -1897,6 +1897,60 @@ public class ClasspathLookupProbe {
         return Files.exists(Path.of(path));
     }
 
+    //! Adds a path by one route of the class loader under a captured policy; returns "ok" or "refused"
+    /** @param route "addPath", "addPathOrig", "addURL", "addWildcard" (\a path is the pattern in its directory),
+        "addParentPathIntern" (the route of the global module commands, on a class
+        loader derived from \a loader) or "resolved" (the route of the \c add-classpath module command)
+    */
+    public static String addRouteUnder(QoreSandbox.Policy policy, QoreURLClassLoader loader, String route, String path) {
+        try {
+            policy.call(() -> {
+                switch (route) {
+                    case "addPath":
+                        loader.addPath(path);
+                        break;
+                    case "addPathOrig":
+                        loader.addPathOrig(path);
+                        break;
+                    case "addURL": {
+                        java.lang.reflect.Method add = QoreURLClassLoader.class.getDeclaredMethod(route, URL.class);
+                        add.setAccessible(true);
+                        add.invoke(loader, new File(path).toURI().toURL());
+                        break;
+                    }
+                    case "addWildcard": {
+                        File file = new File(path);
+                        loader.addWildcard(file.getParentFile(), file.getName());
+                        break;
+                    }
+                    case "addParentPathIntern": {
+                        java.lang.reflect.Method add = QoreURLClassLoader.class.getDeclaredMethod(route, String.class);
+                        add.setAccessible(true);
+                        add.invoke(QoreURLClassLoader.createDerived(loader), path);
+                        break;
+                    }
+                    case "resolved": {
+                        java.lang.reflect.Method check = QoreSandbox.class.getDeclaredMethod("checkedClasspath",
+                            String.class);
+                        check.setAccessible(true);
+                        Object resolved = check.invoke(null, path);
+                        java.lang.reflect.Method add = QoreURLClassLoader.class.getDeclaredMethod("addResolvedPath",
+                            resolved.getClass());
+                        add.setAccessible(true);
+                        add.invoke(loader, resolved);
+                        break;
+                    }
+                    default:
+                        throw new IllegalArgumentException(route);
+                }
+                return null;
+            });
+            return "ok";
+        } catch (Throwable e) {
+            return "refused";
+        }
+    }
+
     //! Adds a classpath under a captured policy; returns "ok" or the error
     public static String addPathUnder(QoreSandbox.Policy policy, QoreURLClassLoader loader, String path) {
         try {

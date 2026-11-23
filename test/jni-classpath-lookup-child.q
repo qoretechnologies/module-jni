@@ -314,6 +314,78 @@ sub blocked_case(string root) {
     result("blocked left", 0, ClasspathLookupProbe::copyDirectories());
 }
 
+#! a caller that a sandbox restricts only for the network makes no grant of the host: a bound policy stays
+sub network_readd_case(string root) {
+    SandboxManager net();
+    net.setUncontrolledApiPolicy(True);
+    net.setFilesystemDefaultPolicy(True);
+    net.setNetworkDefaultPolicy(False);
+    Program np = new_empty_program(net);
+    object policy = np.callFunction("capture_policy");
+    result("network-only policy", True, policy.restrictsNetwork() && !policy.restrictsFilesystem());
+
+    foreach string route in ("addPath", "addPathOrig", "addURL", "addParentPathIntern", "resolved") {
+        Program p = new_program(get_policy(root, ("allowed",)), root + "/allowed");
+        result("readd before " + route, "missing", p.callFunction("lookup", "getResource", "denied/g.txt"));
+        result("readd added " + route, "ok", ClasspathLookupProbe::addRouteUnder(policy,
+            p.callFunction("own_loader"), route, root + "/allowed"));
+        result("readd kept " + route, "missing", p.callFunction("lookup", "getResource", "denied/g.txt"));
+    }
+
+    # a wildcard re-add of a bound jar: the policy is read for each lookup, so it applies only if the entry kept it
+    {
+        string wdir = root + "/netwild";
+        mkdir(wdir, 0700);
+        ClasspathLookupProbe::writeJar(root + "/jars/src", wdir + "/w.jar", "");
+        SandboxManager wsm = get_policy(root, ("netwild",));
+        Program p = new_program(wsm, wdir + "/w.jar");
+        result("readd before addWildcard", True,
+            p.callFunction("lookup", "getResource", "denied/JB.class") != "missing");
+        result("readd added addWildcard", "ok", ClasspathLookupProbe::addRouteUnder(policy,
+            p.callFunction("own_loader"), "addWildcard", wdir + "/*.jar"));
+        wsm.addFilesystemDeniedPath(wdir + "/w.jar");
+        result("readd kept addWildcard", "missing", p.callFunction("lookup", "getResource", "denied/JB.class"));
+    }
+
+    # the control: code that no sandbox restricts can still make a grant of the host
+    {
+        Program p = new_program(get_policy(root, ("allowed",)), root + "/allowed");
+        result("readd host add", "ok", ClasspathLookupProbe::addPath(p.callFunction("own_loader"), root + "/allowed"));
+        result("readd host grant", True, p.callFunction("lookup", "getResource", "denied/g.txt") != "missing");
+    }
+
+    # a classpath that re-adds a bound entry and is then refused at a later entry, whose manifest names another host,
+    # leaves the policy of the bound entry in place
+    string dir = root + "/netjar";
+    string jar = dir + "/n.jar";
+    mkdir(dir, 0700);
+    ClasspathLookupProbe::writeJar(root + "/jars/src", jar, "");
+    ClasspathLookupProbe::writeJar(root + "/jars/src", dir + "/bad.jar", "file://otherhost/x.jar");
+    SandboxManager sm = get_policy(root, ("netjar",));
+    Program p = new_program(sm, jar);
+    result("refused add found", True, p.callFunction("lookup", "getResource", "denied/JB.class") != "missing");
+    result("refused add", "refused", ClasspathLookupProbe::addRouteUnder(policy, p.callFunction("own_loader"),
+        "addPath", jar + PathSep + dir + "/bad.jar"));
+    # the policy is read for each lookup: it still applies only if the entry kept it
+    sm.addFilesystemDeniedPath(jar);
+    result("refused add kept", "missing", p.callFunction("lookup", "getResource", "denied/JB.class"));
+
+    # the global module commands check the location of each entry for such a caller, as add-classpath does
+    foreach string cmd in ("add-classpath", "global-add-classpath") {
+        Program g(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        g.parse(TenantSource, "network-only");
+        g.setSandboxManager(net);
+        string err;
+        try {
+            g.issueModuleCmd("jni", cmd + " " + dir + "/bad.jar");
+            err = "added";
+        } catch (hash<ExceptionInfo> ex) {
+            err = ex.err;
+        }
+        result("network-only " + cmd, "JNI-CLASSPATH-ERROR", err);
+    }
+}
+
 #! each new Program of a class loader has a budget of its own
 sub program_switch_case(string root) {
     Program p = new_empty_program(get_policy(root, ("ending",)));
@@ -396,6 +468,7 @@ switch (case_name) {
     case "tmpdir-reuse": tmpdir_reuse_case(root, ARGV[2]); exit(0);
     case "tmpdir-owner": tmpdir_owner_case(root, ARGV[2]); exit(0);
     case "blocked": blocked_case(root); exit(0);
+    case "network-readd": network_readd_case(root); exit(0);
 }
 if (ClasspathLookupProbe::fileNameEncoding() != "UTF-8") {
     printf("result: skipped: the file names of the JVM are in %s\n", ClasspathLookupProbe::fileNameEncoding());
