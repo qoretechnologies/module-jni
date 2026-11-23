@@ -506,7 +506,7 @@ public class Fetcher {
       checked in the same way, recursively and each once: each is checked as the file that the class loader opens for
       it (a relative entry resolved against the location of the jar that names it, as the class loader resolves it),
       with symbolic links resolved, before its own manifest is read.  If the policy denies any of them, or a
-      \c Class-Path entry cannot be checked (ex: it is not a file, it is a URL whose path cannot be checked exactly, a
+      \c Class-Path entry cannot be checked (ex: it is not a file, its path cannot be checked exactly, a
       jar is not a regular file, a manifest cannot be read, or, before Java 22, a jar has a jar index), the whole
       classpath is refused with \c JNI-CLASSPATH-ERROR,
       naming the file.  The class loader still follows the manifests itself, so the classpath that is used is the one

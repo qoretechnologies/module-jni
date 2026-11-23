@@ -6,9 +6,9 @@
 
     @section jni_3_0_0 jni Module Version 3.0.0
 
-    - <b>Security</b>: under a sandbox with a filesystem policy, a classpath URL whose path cannot be checked exactly
-      is refused with \c JNI-CLASSPATH-ERROR, on every JDK version, and nothing of the classpath is added; with no
-      filesystem policy, classpaths are added as before (qore#7349)
+    - <b>Security</b>: for a caller that a sandbox filesystem policy restricts, a manifest \c Class-Path entry whose
+      path cannot be checked exactly is refused with \c JNI-CLASSPATH-ERROR, on every JDK version, and nothing of the
+      classpath is added; a caller whose filesystem access is not restricted is not affected (qore#7349)
     - A child process created with \c fork() could wait forever when it ended, if another thread of the parent held
       one of the module's locks on the child's exit path or the global context Program at the time of the fork, as that
       thread does not exist in the child.  The module's cleanup in a child no longer waits for that state (qore#7192)

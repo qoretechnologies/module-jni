@@ -1845,13 +1845,19 @@ public class QoreURLClassLoader extends URLClassLoader {
         //! the JDK feature version whose class loader has not been verified for manifest Class-Path checking: the
         //! running JDK's, or else a version assumed as well; 0 if both have been verified
         private final int unverifiedFeature;
+        //! true if the policy restricts filesystem access, so that a manifest entry must have an exact path
+        private final boolean restricted;
 
         //! Makes a resolved classpath for the running JDK, or also assuming another JDK feature version (> 0)
         /** A version assumed instead (only a debug build of the module passes one, for its tests) can only make the
             check stricter: manifest Class-Path attributes are checked only if the running JDK's version has been
             verified as well.
+
+            @param assumedFeature the JDK feature version to assume as well, or 0
+            @param restricted true if the policy restricts filesystem access
         */
-        private ResolvedClasspath(int assumedFeature) {
+        private ResolvedClasspath(int assumedFeature, boolean restricted) {
+            this.restricted = restricted;
             int running = Runtime.version().feature();
             if (!isVerifiedClassPathJdk(running)) {
                 unverifiedFeature = running;
@@ -2034,8 +2040,8 @@ public class QoreURLClassLoader extends URLClassLoader {
                     + url + "', which is not a file, so it cannot be checked against the sandbox filesystem policy");
                 return;
             }
-            // before the URL is resolved to a path, on every JDK
-            if (!isExactFileUrl(url)) {
+            // before the URL is resolved to a path, on every JDK, for a caller whose filesystem access is restricted
+            if (restricted && !isExactFileUrl(url)) {
                 refuse(jar, referrer, "the manifest Class-Path attribute of the classpath jar '" + jar + "' names a "
                     + "URL whose path cannot be checked exactly against the sandbox filesystem policy");
                 return;
@@ -2123,20 +2129,23 @@ public class QoreURLClassLoader extends URLClassLoader {
         return sb.toString();
     }
 
-    //! Returns true if the path that is checked for a file URL is exactly the path that is read through it
-    /** The class loader and the URLs of the resources that it returns do not all take the path of a URL from the same
-        components, so a classpath URL whose path cannot be checked exactly is refused for a caller that a filesystem
+    //! Returns true if the path that is checked for a manifest Class-Path entry is exactly the path that is read
+    /** A manifest Class-Path entry whose path cannot be checked exactly is refused for a caller that a filesystem
         policy restricts (qore#7349).
     */
     static boolean isExactFileUrl(URL url) {
         if (url.getQuery() != null || url.getRef() != null) {
             return false;
         }
+        String authority = url.getAuthority();
+        if (authority != null && !authority.isEmpty() && !authority.equalsIgnoreCase("localhost")) {
+            return false;
+        }
         String path = decodeUrlPath(url.getPath());
         if (path == null) {
             return false;
         }
-        for (String segment : path.split("/", -1)) {
+        for (String segment : path.replace(File.separatorChar, '/').split("/", -1)) {
             if (segment.equals(".") || segment.equals("..")) {
                 return false;
             }
@@ -2231,12 +2240,14 @@ public class QoreURLClassLoader extends URLClassLoader {
         @param classpath the classpath
         @param jdkFeature a JDK feature version for the check of manifest Class-Path attributes to assume as well as
         the running JDK's, which can only make the check stricter, or 0 for none
+        @param restricted true if the policy restricts filesystem access: a manifest Class-Path entry whose path cannot
+        be checked exactly is then refused (qore#7349)
     */
-    static ResolvedClasspath resolveClasspath(String classpath, int jdkFeature) {
+    static ResolvedClasspath resolveClasspath(String classpath, int jdkFeature, boolean restricted) {
         if (classpath == null) {
             throw new IllegalArgumentException("the classpath must not be null");
         }
-        ResolvedClasspath rc = new ResolvedClasspath(jdkFeature);
+        ResolvedClasspath rc = new ResolvedClasspath(jdkFeature, restricted);
         for (String pathentry : classpathEntries(classpath)) {
             File fileentry = resolveClasspathEntry(pathentry);
             if (fileentry.getName().indexOf('*') == -1) {

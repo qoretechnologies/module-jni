@@ -1350,7 +1350,7 @@ LocalReference<jobject> jni_check_classpath_policy(QoreSandboxManager* policy, E
     // against its user.dir, with symbolic links resolved), in the bytes that the JVM passes to the operating system
     // for it, so that the policy judges the representation that is used, and a wildcard entry is its directory and
     // each file that it selects
-    jvalue jargs[2];
+    jvalue jargs[3];
     jargs[0].l = classpath;
     // a JDK feature version for the check of manifest Class-Path attributes to assume as well as the running JDK's,
     // which can only make the check stricter: 0 for none; only a debug build can pass one, for its tests (qore#6822)
@@ -1358,6 +1358,9 @@ LocalReference<jobject> jni_check_classpath_policy(QoreSandboxManager* policy, E
 #ifdef DEBUG
     jargs[1].i = dbg_jni_classpath_jdk_feature.load(std::memory_order_acquire);
 #endif
+    // a manifest Class-Path entry must have an exact path only for a caller whose filesystem access is restricted
+    // (qore#7349)
+    jargs[2].z = policy->filesystemRestricts() ? JNI_TRUE : JNI_FALSE;
     LocalReference<jobject> rc = env.callStaticObjectMethod(Globals::classQoreSandbox,
         Globals::methodQoreSandboxResolveClasspath, jargs);
     // the elements grow as they are checked: after an element is allowed, the jars and directories that its manifest

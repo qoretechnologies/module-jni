@@ -6,7 +6,9 @@ package org.qore.jni.test;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.URI;
 import java.net.URL;
+import java.net.URLClassLoader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -78,6 +80,20 @@ public class ClasspathUrlProbe {
     */
     public static String[] reads(ClassLoader loader) {
         return new String[] {readStream(loader), readResource(loader), readResources(loader), readClass(loader)};
+    }
+
+    //! Returns what the same read APIs give for an archive in a class loader of the JDK with no parent classpath
+    public static String[] plainReads(String jar) throws IOException {
+        URL url = URI.create("jar:" + Path.of(jar).toUri() + "!/").toURL();
+        try (URLClassLoader loader = new URLClassLoader(new URL[] {url}, null)) {
+            return reads(loader);
+        }
+    }
+
+    //! Returns the absolute path as it is written in a file URL, with no trailing slash
+    public static String encodedPath(String path) {
+        String rv = Path.of(path).toUri().getRawPath();
+        return rv.endsWith("/") ? rv.substring(0, rv.length() - 1) : rv;
     }
 
     private static String text(InputStream stream) throws IOException {
