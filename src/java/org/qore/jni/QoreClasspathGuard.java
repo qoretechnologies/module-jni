@@ -23,14 +23,22 @@ import java.util.concurrent.ConcurrentHashMap;
 
     <b>Whose policy applies:</b> the policy of the code that added the entry, captured when it was added and kept with
     the entry.  A lookup can run on any thread, and the JVM makes lookups by itself, with no %Qore caller on the stack,
-    so the thread's caller is never consulted.  An entry with no policy is one of three kinds:
+    so the thread's caller is never consulted.  Each entry is one of three kinds, by the code that added it:
     - a grant of the host: added by code that no sandbox restricted for the filesystem or the network then (trusted
       code, no sandbox yet, or a sandbox that restricted neither); a lookup below it applies no policy, and a policy that
       is set or tightened later does not apply to it
     - transparent: added by code that a sandbox restricts for the network but not the filesystem, which binds no
       filesystem policy and makes no grant; a lookup below it applies the policies of the bound entries that enclose it,
       as if it were not there, and none if no bound entry encloses it
-    - bound: added by code that a filesystem policy restricts, with that policy (see bind())
+    - bound: added by code that a filesystem policy restricts, with that policy (see bind()); a lookup below it applies
+      that policy and the policies of the bound entries that enclose it
+
+    An entry encloses a file if the file is below the entry's path as the class loader's URLs name it, not its real
+    path.  The rule keeps an entry of other code from widening by accident what restricted code can read below its own
+    entries; it does not contain the code that adds an entry, which its own sandbox governs.
+
+    Below the entries of restricted code, a \c jar: URL with more than one \c "!/" is refused, as the class loader finds
+    an entry at the last separator and a connection to the URL opens the archive at the first one.
 
     <b>Each lookup</b> resolves the file that was found to its real path, with symbolic links resolved, and applies the
     policy to that path.  A file that the policy denies, or that cannot be checked for any reason, is treated as a file
@@ -133,13 +141,15 @@ final class QoreClasspathGuard {
     boolean allows(URL url, String name, URL[] loaderUrls) {
         String spec = url.toString();
         boolean jar = spec.startsWith("jar:");
+        // the class loader finds an entry at the last separator, but a connection to the URL opens the archive at the
+        // first one, so with two of them the file that is judged need not be the file that is read
+        boolean two_separators = false;
         if (jar) {
-            // the class loader finds an entry at the last separator, but a connection to the URL opens the archive at
-            // the first one: a URL with two names no file that both of them read, so it is refused
             int sep = spec.lastIndexOf("!/");
-            if (sep < 0 || spec.indexOf("!/") != sep) {
+            if (sep < 0) {
                 return false;
             }
+            two_separators = spec.indexOf("!/") != sep;
             spec = spec.substring(4, sep);
         }
         if (!spec.startsWith("file:")) {
@@ -157,6 +167,10 @@ final class QoreClasspathGuard {
         }
         if (applied.isEmpty()) {
             return true;
+        }
+        // only below the entries of restricted code, where a policy judges the file
+        if (two_separators) {
+            return false;
         }
         Path real;
         try {

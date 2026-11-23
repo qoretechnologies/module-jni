@@ -378,6 +378,15 @@ sub network_readd_case(string root) {
         result("global all or nothing added", "missing", q.callFunction("lookup", "getResource", "denied/JB.class"));
     }
 
+    # a global classpath of such a caller skips an entry that does not exist, as add-classpath does
+    {
+        Program q = new_program(get_policy(root, ("allowed",)), root + "/allowed");
+        result("global missing entry", "ok", ClasspathLookupProbe::addRouteUnder(policy, q.callFunction("own_loader"),
+            "addParentPathIntern", root + "/does-not-exist" + PathSep + root + "/jars/src"));
+        result("global missing entry added", True,
+            q.callFunction("lookup", "getResource", "denied/JB.class") != "missing");
+    }
+
     # the global module commands check the location of each entry for such a caller, as add-classpath does
     foreach string cmd in ("add-classpath", "global-add-classpath") {
         Program g(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
@@ -440,6 +449,19 @@ sub network_nested_case(string root) {
             p.callFunction("lookup", "getResource", "denied/JB.class") != "missing");
     }
 
+    # between the two steps of adding a new entry: a transparent entry is never seen as a grant, and a grant that such a
+    # caller adds at the same time stays a grant
+    {
+        Program p = new_program(get_policy(root, ("allowed",)), root + "/allowed");
+        result("nested step transparent", "missing", ClasspathLookupProbe::entryStep(policy,
+            p.callFunction("own_loader"), "transparent", root + "/allowed/denied", "denied/nested.txt"));
+    }
+    {
+        Program p = new_program(get_policy(root, ("allowed",)), root + "/allowed");
+        result("nested step grant", "found", ClasspathLookupProbe::entryStep(policy, p.callFunction("own_loader"),
+            "grant", root + "/allowed/denied", "nested.txt"));
+    }
+
     # the control: an entry that code no sandbox restricts adds below a bound entry is a grant of the host
     {
         Program p = new_program(get_policy(root, ("allowed",)), root + "/allowed");
@@ -462,6 +484,10 @@ sub jar_separator_case(string root) {
     ClasspathLookupProbe::writeJar(root + "/jars/src", root + "/bang/b.jar", "");
     Program q = new_program(get_policy(root, ("allowed", "bang")), root + "/bang/b.jar");
     result("jar separator control", True, q.callFunction("lookup", "getResource", "denied/JB.class") != "missing");
+    # a jar that the host adds at such a path is a grant: it is used in a class loader with entries of restricted code
+    Program h = new_program(get_policy(root, ("allowed",)), root + "/allowed");
+    result("jar separator host add", "ok", ClasspathLookupProbe::addPath(h.callFunction("own_loader"), dir + "/b.jar"));
+    result("jar separator host grant", True, h.callFunction("lookup", "getResource", "denied/JB.class") != "missing");
 }
 
 #! each new Program of a class loader has a budget of its own

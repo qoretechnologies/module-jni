@@ -1897,6 +1897,45 @@ public class ClasspathLookupProbe {
         return Files.exists(Path.of(path));
     }
 
+    //! Runs a step at the point between the two steps of adding an entry, through the class loader's test hook
+    /** "transparent": a caller restricted only for the network adds \a path, and the hook looks \a name up while the
+        new entry is being added; returns what it found.  "grant": the host adds \a path, and the hook makes the same
+        caller add it at that point; returns what a lookup of \a name finds once both have added it.
+    */
+    public static String entryStep(QoreSandbox.Policy policy, QoreURLClassLoader loader, String mode, String path,
+            String name) throws Exception {
+        java.lang.reflect.Field field = QoreURLClassLoader.class.getDeclaredField("entryStepHook");
+        field.setAccessible(true);
+        String[] seen = {"the hook did not run"};
+        java.util.function.Consumer<QoreURLClassLoader> hook = cl -> {
+            if (cl != loader) {
+                return;
+            }
+            // once: the step can add an entry itself
+            try {
+                field.set(null, null);
+            } catch (IllegalAccessException e) {
+                throw new IllegalStateException(e);
+            }
+            seen[0] = mode.equals("transparent") ? lookup(loader, "getResource", name)
+                : addRouteUnder(policy, loader, "addPath", path);
+        };
+        field.set(null, hook);
+        try {
+            if (mode.equals("transparent")) {
+                String rv = addRouteUnder(policy, loader, "addPath", path);
+                return rv.equals("ok") ? seen[0] : "the addition was " + rv;
+            }
+            loader.addPath(path);
+            if (!seen[0].equals("ok")) {
+                return "the step in the hook: " + seen[0];
+            }
+            return lookup(loader, "getResource", name);
+        } finally {
+            field.set(null, null);
+        }
+    }
+
     //! Adds a path by one route of the class loader under a captured policy; returns "ok" or "refused"
     /** @param route "addPath", "addPathOrig", "addURL", "addWildcard" (\a path is the pattern in its directory),
         "addParentPathIntern" (the route of the global module commands, on a class
