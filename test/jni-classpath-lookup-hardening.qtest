@@ -83,6 +83,8 @@ object sub derived() {
         addTestCase("derived loaders keep the Program's copy budget", \copyDetachedBudgetTest());
         addTestCase("a failed removal of a copy stays charged and is retried", \copyRemovalErrorTest());
         addTestCase("a retry only removes the directory it created", \copyRemovalFailureTest());
+        addTestCase("a copy needs a temporary directory that other users cannot change", \copyTempDirTest());
+        addTestCase("the temporary directory is checked when a private directory is reused", \copyTempDirReuseTest());
         addTestCase("each new Program of a class loader has a budget of its own", \copyProgramSwitchTest());
         addTestCase("a compile whose Program ends while it runs", \compileProgramEndTest());
         addTestCase("the end of a Program ends the copies of its class loaders", \copyProgramEndTest());
@@ -336,6 +338,50 @@ object sub derived() {
     #! a retry only removes the directory it created, and a removal counts only once the directory is gone
     copyRemovalFailureTest() {
         runChildCase("removal-failure", True);
+    }
+
+    #! a restricted copy is refused in a temporary directory that other users can change, also through a link
+    copyTempDirTest() {
+        foreach hash<auto> i in ((
+                {"name": "world", "mode": 0777, "expected": "refused"},
+                {"name": "group", "mode": 0770, "expected": "refused"},
+                {"name": "world-link", "mode": 0777, "link": True, "expected": "refused"},
+                {"name": "group-link", "mode": 0770, "link": True, "expected": "refused"},
+                {"name": "sticky", "mode": 01777, "expected": "allowed"},
+                {"name": "sticky-link", "mode": 01777, "link": True, "expected": "allowed"},
+                {"name": "private", "mode": 0700, "expected": "allowed"},
+                {"name": "private-link", "mode": 0700, "link": True, "expected": "allowed"}
+            )) {
+            string dir = "tmpdir-" + i.name;
+            string real = i.link ? dir + "-target" : dir;
+            mkdir(root + "/" + real, 0700);
+            chmod(root + "/" + real, i.mode);
+            if (i.link) {
+                symlink(root + "/" + real, root + "/" + dir);
+            }
+            runTempDirChild("tmpdir", dir, i.expected, i.name);
+        }
+    }
+
+    #! the check is made again when a private parent that already exists is used
+    copyTempDirReuseTest() {
+        string dir = "tmpdir-reuse";
+        mkdir(root + "/" + dir, 0700);
+        runTempDirChild("tmpdir-reuse", dir, root + "/" + dir, "reuse");
+    }
+
+    #! runs a case with \a tmp, relative to the test tree, as the JVM's temporary directory
+    private runTempDirChild(string name, string tmp, string arg, string label) {
+        string child = normalize_dir(get_script_dir() + "/jni-classpath-lookup-child.q");
+        string cmd = sprintf("unset JAVA_TOOL_OPTIONS _JAVA_OPTIONS JDK_JAVA_OPTIONS && cd %s && "
+            "QORE_JNI_JVM_ARGS=-Djava.io.tmpdir=%s %s -b --enable-debug %s %s %s %s 2>&1", shellQuote(root), tmp,
+            shellQuote(QORE_ARGV[0]), shellQuote(child), name, shellQuote(root), shellQuote(arg));
+        int rc;
+        string out = backquote(cmd, \rc);
+        assertEq(0, rc, label + ": " + out);
+        list<string> lines = select out.split("\n"), $1 =~ /^result: /;
+        assertTrue(lines.size() > 0, label + ": " + out);
+        map assertRegex(": OK$", $1, label + ": " + $1), lines;
     }
 
     #! each new Program of a class loader has a budget of its own

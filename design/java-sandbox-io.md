@@ -125,13 +125,16 @@ are `static_assert`ed to match) and calls `QoreSandboxManager::checkFilesystemAc
   created: before anything below the parent is removed, the parent is verified to be a directory and not a link, owned
   by the JVM's user, with mode 0700 and the `fileKey()` that it had when it was created.  If a check fails or cannot be
   made, nothing below it is touched, its copies stay charged, and a new copy uses a new parent.  The check and the
-  removal use one opened directory (`SecureDirectoryStream`), because the parent's own name is in the shared temporary
-  directory, which need not be sticky.  Where the platform has no POSIX attributes or no secure directory stream, only
+  removal use one opened directory (`SecureDirectoryStream`), and only a directory is removed at the name of a root.  Where the platform has no POSIX attributes or no secure directory stream, only
   the first removal walks the copy by path, and a retry leaves it charged until the process ends.  The parent is
   removed with its last copy, under the lock that a new copy takes; only an empty directory can be removed this way,
   and if that is not possible the next copy reuses it.  If the JVM's user has no name that can be looked up, the
-  parent's owner is taken from the directory when it is created.  The verification covers removal only: a copy is made
-  and read by path, so `java.io.tmpdir` must be sticky or not writable by other users.  Code in the same JVM is not
+  parent's owner is taken from the directory when it is created.  A copy is made and read by path, so a restricted
+  copy is refused unless the real path of the JVM's `java.io.tmpdir`, read once, is a directory that is not writable by
+  group or others or that has the sticky bit.  This is checked when a parent is created and each time one is used for a
+  new copy, and the refusal names no path.  Trusted and permissive compiles make no copy and are not affected.  Where
+  the platform has no POSIX attributes the mode cannot be checked, a copy is made, and a retry stays fail-closed as
+  above.  Only that directory's own mode is judged, not its owner, its ancestors or ACLs.  Code in the same JVM is not
   defended against.  A
   removal that keeps failing is logged once, with no path, through the class loader's error log.  A cleanup failure is suppressed in an error that is being raised and never replaces it;
   a compile does not raise a failure to remove its own copy, which stays charged and is retried.  Closing a class loader ends

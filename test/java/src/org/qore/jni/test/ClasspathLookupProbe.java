@@ -421,6 +421,14 @@ public class ClasspathLookupProbe {
         volatile Runnable onFailure;
         //! the attributes of an opened directory cannot be read while this is set
         volatile boolean failHandle;
+        //! opening the directory named #rootName fails while this is set
+        volatile boolean failOpen;
+        //! the name of the root of the copy
+        volatile Path rootName;
+        //! runs once, just before the root of the copy is deleted relative to its parent
+        volatile Runnable onRootDelete;
+        //! the deletions made by path
+        int pathDeletes;
         int failures;
 
         //! Returns a path for \a target whose operations go through this provider
@@ -487,6 +495,7 @@ public class ClasspathLookupProbe {
             real.createDirectory(unwrap(dir), attrs);
         }
         @Override public void delete(Path path) throws IOException {
+            ++pathDeletes;
             failDeletion();
             real.delete(unwrap(path));
         }
@@ -575,6 +584,9 @@ public class ClasspathLookupProbe {
         @Override public void close() throws IOException { real.close(); }
         @Override public java.nio.file.SecureDirectoryStream<Path> newDirectoryStream(Path path,
                 java.nio.file.LinkOption... options) throws IOException {
+            if (provider.failOpen && path.equals(provider.rootName)) {
+                throw new IOException("injected open failure");
+            }
             return new FailingStream(real.newDirectoryStream(path, options), provider);
         }
         @Override public java.nio.channels.SeekableByteChannel newByteChannel(Path path,
@@ -588,6 +600,13 @@ public class ClasspathLookupProbe {
         }
         @Override public void deleteDirectory(Path path) throws IOException {
             provider.failDeletion();
+            if (path.equals(provider.rootName)) {
+                Runnable hook = provider.onRootDelete;
+                provider.onRootDelete = null;
+                if (hook != null) {
+                    hook.run();
+                }
+            }
             real.deleteDirectory(path);
         }
         @Override public void move(Path source, java.nio.file.SecureDirectoryStream<Path> target, Path targetPath)
@@ -649,7 +668,8 @@ public class ClasspathLookupProbe {
     /** @param scenario "confirmed": a failed deletion keeps the charges, and a retry removes the copy; "during": a
         release arrives while a removal runs; "signal": a removal that keeps failing is reported, without its path;
         "parent-replaced", "parent-mode", "parent-owner", "parent-link", "parent-handle": the private parent no longer
-        verifies at a retry
+        verifies at a retry; "root-final", "root-file", "root-unverified", "root-open-fails": a retry does not remove
+        anything but the directory of the copy
     */
     public static String removalFailure(QoreURLClassLoader parent, String dir, String scenario) throws Exception {
         Object[] context = QoreURLClassLoader.saveContext();
@@ -731,6 +751,10 @@ public class ClasspathLookupProbe {
                     return "the report names the path";
                 }
             }
+            if (scenario.startsWith("root-")) {
+                return changedRoot(scenario, handle, copy, budget, parentObject, parentPath, realParent, root,
+                    provider);
+            }
             if (scenario.startsWith("parent-")) {
                 return tamperedParent(scenario, loader, handle, copy, budget, parentObject, parentPath, realParent,
                     root, provider);
@@ -747,6 +771,101 @@ public class ClasspathLookupProbe {
         } finally {
             System.setOut(savedOut);
             QoreURLClassLoader.restoreContext(context);
+        }
+    }
+
+    //! A retry where the name of the root is not the directory of the copy, or where it cannot be opened
+    /** "root-final": it becomes a file just before the final deletion; "root-file": it is a file when the retry starts;
+        "root-unverified": it is a file and the opened parent cannot be verified; "root-open-fails": the root cannot be
+        opened.  Nothing is removed by path, what is at the name stays, and the copy stays charged until it is restored.
+    */
+    private static String changedRoot(String scenario, Object handle, Object copy, Object budget, Object parentObject,
+            java.lang.reflect.Field parentPath, Path parent, Path root, FailingProvider provider) throws Exception {
+        java.lang.reflect.Method close = handle.getClass().getMethod("close");
+        int failedState = constant(copy.getClass(), "FAILED");
+        int doneState = constant(copy.getClass(), "DONE");
+        final String foreign = "not the copy's";
+        Path moved = parent.resolve(root.getFileName() + "-moved");
+        Runnable swap = () -> {
+            try {
+                Files.move(root, moved);
+                Files.writeString(root, foreign);
+            } catch (IOException e) {
+                throw new java.io.UncheckedIOException(e);
+            }
+        };
+        int entries = countTree(root);
+        provider.fail = false;
+        provider.rootName = root.getFileName();
+        provider.pathDeletes = 0;
+        String rv = "clean";
+        try {
+            switch (scenario) {
+                case "root-final":
+                    provider.onRootDelete = swap;
+                    break;
+                case "root-file":
+                    swap.run();
+                    break;
+                case "root-unverified":
+                    provider.failHandle = true;
+                    swap.run();
+                    break;
+                case "root-open-fails":
+                    provider.failOpen = true;
+                    break;
+                default:
+                    return "unknown scenario " + scenario;
+            }
+            close.invoke(handle);
+            boolean swapped = Files.exists(moved, java.nio.file.LinkOption.NOFOLLOW_LINKS);
+            if (provider.pathDeletes != 0) {
+                rv = "the retry deleted by path";
+            } else if ((int) field(copy, "state") != failedState) {
+                rv = "the retry did not leave the copy failed";
+            } else if (chargesReturned(budget)) {
+                rv = "the retry returned the charges";
+            } else if (swapped && (!Files.isRegularFile(root, java.nio.file.LinkOption.NOFOLLOW_LINKS)
+                    || !foreign.equals(Files.readString(root)))) {
+                rv = "the retry removed what was at the name of the root";
+            } else if (!swapped && countTree(root) != entries) {
+                rv = "the retry changed the copy";
+            }
+        } finally {
+            provider.failHandle = false;
+            provider.failOpen = false;
+            provider.onRootDelete = null;
+            if (Files.exists(moved, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+                Files.deleteIfExists(root);
+                Files.move(moved, root);
+            }
+            parentPath.set(parentObject, parent);
+        }
+        close.invoke(handle);
+        if (!rv.equals("clean")) {
+            return rv;
+        }
+        if ((int) field(copy, "state") != doneState) {
+            return "the copy did not end once its root was restored";
+        }
+        if (Files.exists(root, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+            return "the copy remains once its root was restored";
+        }
+        return chargesReturned(budget) ? "clean" : "the charges were not returned";
+    }
+
+    //! Opens and closes a compiler classpath: returns "copies=<n>", or the message of the refusal
+    public static String copyOutcome(QoreURLClassLoader loader) throws Exception {
+        Object handle;
+        try {
+            handle = QoreURLClassLoader.class.getMethod("openCompilerClasspath").invoke(loader);
+        } catch (java.lang.reflect.InvocationTargetException e) {
+            return String.valueOf(e.getCause().getMessage());
+        }
+        try {
+            return "copies=" + ((List<?>) field(handle, "copies")).size();
+        } finally {
+            handle.getClass().getMethod("close").invoke(handle);
         }
     }
 

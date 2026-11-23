@@ -473,8 +473,12 @@ public final class QoreCompilerClasspath implements AutoCloseable {
     /** Other users cannot create, rename or replace anything below it, so a copy's root needs no identity of its own.
         Before anything below it is removed, the directory is verified: not a link, a directory, owned by the JVM's
         user, with mode 0700 and the file key that it had when it was created.  If that fails or cannot be determined,
-        nothing below it is touched and its copies stay charged.  The check and the removal act on one opened directory,
-        as the name of this directory is in the shared temporary directory, which need not be sticky.
+        nothing below it is touched and its copies stay charged.  The check and the removal act on one opened directory.
+
+        A copy is made and read by path, so it is only made in a temporary directory that other users cannot change: its
+        real path must be a directory that is not writable by group or others, or that has the sticky bit.  This is
+        checked when this directory is created and each time it is used for a new copy; a copy is refused otherwise.
+        Where the platform has no POSIX attributes, the mode cannot be checked and a copy is made.
 
         Where the platform has no POSIX attributes or no secure directory stream, only the first removal of a copy walks
         it by path, and a retry leaves it charged.  Code of the same JVM is not defended against.
@@ -488,11 +492,20 @@ public final class QoreCompilerClasspath implements AutoCloseable {
         //! the only permissions of a verified directory
         private static final Set<PosixFilePermission> OWNER_ONLY = Collections.unmodifiableSet(EnumSet.of(
             PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE, PosixFilePermission.OWNER_EXECUTE));
+        //! the temporary directory of the JVM, read once
+        private static final String TEMP_DIR = System.getProperty("java.io.tmpdir");
+        //! the refusal of a temporary directory; it names no path
+        private static final String TEMP_REFUSAL = "the JVM's temporary directory can be changed by other users or "
+            + "cannot be checked, so a private compiler classpath copy cannot be made";
+        //! the sticky bit of a Unix file mode
+        private static final int STICKY = 01000;
         //! the directory that new copies use; guarded by LOCK
         private static PrivateParent current;
 
         //! the absolute path of the directory
         private Path path;
+        //! the real path of the temporary directory that contains it
+        private final Path container;
         //! the owner of the directory, or null if the platform has no POSIX attributes
         private UserPrincipal owner;
         //! the identity of the directory when it was created, or null if the platform has none
@@ -502,8 +515,9 @@ public final class QoreCompilerClasspath implements AutoCloseable {
         //! the copies that have a root in this directory; guarded by LOCK
         private int copies;
 
-        private PrivateParent(Path path) throws IOException {
+        private PrivateParent(Path path, Path container) throws IOException {
             this.path = path;
+            this.container = container;
             PosixFileAttributeView view = Files.getFileAttributeView(path, PosixFileAttributeView.class,
                 LinkOption.NOFOLLOW_LINKS);
             if (view == null) {
@@ -535,21 +549,57 @@ public final class QoreCompilerClasspath implements AutoCloseable {
         }
 
         //! Returns the directory for a new copy, with the copy counted; a directory that fails verification is left
+        /** @throw IOException the temporary directory can be changed by other users or cannot be checked
+        */
         static PrivateParent acquire() throws IOException {
             synchronized (LOCK) {
-                if (current == null || !current.isIntact()) {
-                    current = create();
+                Path temp = checkedTempDirectory();
+                if (current == null || !temp.equals(current.container) || !current.isIntact()) {
+                    current = create(temp);
                 }
                 ++current.copies;
                 return current;
             }
         }
 
-        //! Creates a new private directory
-        private static PrivateParent create() throws IOException {
-            Path dir = Files.createTempDirectory("qore-classpath-").toAbsolutePath();
+        //! Returns the real path of the JVM's temporary directory, if other users cannot change it
+        /** @throw IOException it can be changed by other users or cannot be checked; the error names no path
+        */
+        private static Path checkedTempDirectory() throws IOException {
+            Path real = null;
+            boolean safe = false;
             try {
-                return new PrivateParent(dir);
+                real = Path.of(TEMP_DIR).toRealPath();
+                PosixFileAttributeView view = Files.getFileAttributeView(real, PosixFileAttributeView.class,
+                    LinkOption.NOFOLLOW_LINKS);
+                if (view == null) {
+                    safe = Files.isDirectory(real, LinkOption.NOFOLLOW_LINKS);
+                } else {
+                    PosixFileAttributes attrs = view.readAttributes();
+                    Set<PosixFilePermission> perms = attrs.permissions();
+                    safe = attrs.isDirectory() && ((!perms.contains(PosixFilePermission.GROUP_WRITE)
+                        && !perms.contains(PosixFilePermission.OTHERS_WRITE))
+                        || ((Integer) Files.getAttribute(real, "unix:mode", LinkOption.NOFOLLOW_LINKS) & STICKY) != 0);
+                }
+            } catch (IOException | RuntimeException e) {
+                // refused below, without the text of this error, which can name a path
+            }
+            if (!safe) {
+                throw new IOException(TEMP_REFUSAL);
+            }
+            return real;
+        }
+
+        //! Creates a new private directory in a temporary directory that has been checked
+        private static PrivateParent create(Path temp) throws IOException {
+            Path dir;
+            try {
+                dir = Files.createTempDirectory(temp, "qore-classpath-");
+            } catch (IOException e) {
+                throw new IOException("a private directory for the compiler classpath could not be created");
+            }
+            try {
+                return new PrivateParent(dir, temp);
             } catch (Throwable e) {
                 cleanup(e, () -> removeEmpty(dir));
                 throw e;
@@ -558,7 +608,11 @@ public final class QoreCompilerClasspath implements AutoCloseable {
 
         //! Creates the root of a new copy
         Path newRoot() throws IOException {
-            return Files.createTempDirectory(path, "qore-classpath-");
+            try {
+                return Files.createTempDirectory(path, "qore-classpath-");
+            } catch (IOException e) {
+                throw new IOException("a private directory for the compiler classpath could not be created");
+            }
         }
 
         //! Called when a copy's root is gone: the last copy removes the directory
@@ -613,7 +667,12 @@ public final class QoreCompilerClasspath implements AutoCloseable {
                                 return false;
                             }
                             try {
-                                deleteEntry(dir, name);
+                                // only a directory is a root: anything else at its name stays
+                                if (!dir.getFileAttributeView(name, BasicFileAttributeView.class,
+                                        LinkOption.NOFOLLOW_LINKS).readAttributes().isDirectory()) {
+                                    return false;
+                                }
+                                deleteDirectoryAt(dir, name);
                             } catch (NoSuchFileException e) {
                                 // it is already gone
                             }
@@ -625,7 +684,9 @@ public final class QoreCompilerClasspath implements AutoCloseable {
                     return false;
                 }
                 Path target = path.resolve(name);
-                deleteTree(target);
+                if (Files.isDirectory(target, LinkOption.NOFOLLOW_LINKS)) {
+                    deleteTree(target);
+                }
                 return Files.notExists(target, LinkOption.NOFOLLOW_LINKS);
             } catch (IOException | RuntimeException e) {
                 return false;
@@ -639,10 +700,15 @@ public final class QoreCompilerClasspath implements AutoCloseable {
         private static void deleteEntry(SecureDirectoryStream<Path> dir, Path name) throws IOException {
             BasicFileAttributes attrs = dir.getFileAttributeView(name, BasicFileAttributeView.class,
                 LinkOption.NOFOLLOW_LINKS).readAttributes();
-            if (!attrs.isDirectory()) {
+            if (attrs.isDirectory()) {
+                deleteDirectoryAt(dir, name);
+            } else {
                 dir.deleteFile(name);
-                return;
             }
+        }
+
+        //! Deletes a directory of an opened directory and what is below it; it never removes anything but a directory
+        private static void deleteDirectoryAt(SecureDirectoryStream<Path> dir, Path name) throws IOException {
             try (SecureDirectoryStream<Path> sub = dir.newDirectoryStream(name, LinkOption.NOFOLLOW_LINKS)) {
                 for (Path entry : sub) {
                     try {
