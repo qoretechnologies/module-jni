@@ -18,6 +18,7 @@
 %module-cmd(jni) add-relative-classpath ../build/qore-jni-compiler.jar
 %module-cmd(jni) import org.qore.jni.compiler.QoreJavaCompiler
 %module-cmd(jni) import org.qore.jni.compiler.CompilerOutput
+%module-cmd(jni) import java.sql.SQLException
 
 %exec-class JdbcExceptionUrlTest
 
@@ -63,12 +64,36 @@ public class EchoDriver implements Driver {
         return url != null && url.startsWith(PREFIX);
     }
 
+    //! returns the value of a property of the URL, or null
+    static String param(String url, String name) {
+        for (String p : url.split(\"[;&?]\")) {
+            int i = p.indexOf('=');
+            if (i > 0 && p.substring(0, i).equals(name)) {
+                return p.substring(i + 1);
+            }
+        }
+        return null;
+    }
+
     public Connection connect(String url, Properties info) throws SQLException {
         if (!acceptsURL(url)) {
             return null;
         }
-        if (url.contains(\"mode=plain\")) {
+        String mode = param(url, \"mode\");
+        if (\"plain\".equals(mode)) {
             throw new SQLException(\"plain connection failure 42\", \"08001\", 42);
+        }
+        // the URL only in the next exception of an SQLException
+        if (\"next\".equals(mode)) {
+            SQLException e = new SQLException(\"plain next failure\", \"08001\", 1);
+            e.setNextException(new SQLException(\"next: \" + url));
+            throw e;
+        }
+        // the URL only in an exception suppressed by the cause of the exception
+        if (\"supp\".equals(mode)) {
+            SQLException cause = new SQLException(\"plain cause\");
+            cause.addSuppressed(new Exception(\"supp: \" + url));
+            throw new SQLException(\"plain supp failure\", \"08001\", 1, cause);
         }
         String rest = url.substring(5);
         String sub = url.substring(PREFIX.length());
@@ -109,6 +134,7 @@ public class EchoDriver implements Driver {
         addTestCase("credential forms", \credentialFormsTest());
         addTestCase("unrelated text", \unrelatedTextTest());
         addTestCase("short password", \shortPasswordTest());
+        addTestCase("exception chains", \exceptionChainsTest());
         set_return_value(main());
     }
 
@@ -136,6 +162,28 @@ public class EchoDriver implements Driver {
         return sprintf("%s://u:%s@127.0.0.1:1/db;password=%s;other=1", scheme, userInfoSecret, propSecret);
     }
 
+    #! returns the string forms of a Java exception, its causes, its next exceptions and its suppressed exceptions
+    private list<string> getThrowableTexts(object t, int depth = 0) {
+        list<string> rv = (t.toString(),);
+        if (depth > 8) {
+            return rv;
+        }
+        auto cause = t.getCause();
+        if (cause) {
+            rv += getThrowableTexts(cause, depth + 1);
+        }
+        if (t instanceof SQLException) {
+            auto next = t.getNextException();
+            if (next) {
+                rv += getThrowableTexts(next, depth + 1);
+            }
+        }
+        foreach auto s in (t.getSuppressed()) {
+            rv += getThrowableTexts(s, depth + 1);
+        }
+        return rv;
+    }
+
     #! checks that no secret is in the exception, its text or its argument, and returns its description
     private string checkMasked(hash<ExceptionInfo> ex, string label, *list<string> extra) {
         assertEq("JNI-ERROR", ex.err, label + ": code");
@@ -144,10 +192,7 @@ public class EchoDriver implements Driver {
         # AbstractConnection::ping() gives) and its causes
         list<string> texts = (desc, get_exception_string(ex));
         if (ex.arg) {
-            texts += ex.arg.toString();
-            for (auto cause = ex.arg.getCause(); cause; cause = cause.getCause()) {
-                texts += cause.toString();
-            }
+            texts += getThrowableTexts(ex.arg);
         }
         foreach string secret in ((userInfoSecret, propSecret, dsSecret) + (extra ?? ())) {
             string name = sprintf("secret %d", $# + 1);
@@ -276,6 +321,24 @@ public class EchoDriver implements Driver {
             assertEq("JNI-ERROR", ex.err);
             assertEq("java.sql.SQLException: plain connection failure 42", ex.desc);
             assertEq(42, ex.arg.getErrorCode());
+        }
+    }
+
+    exceptionChainsTest() {
+        # the URL is named only in the next exception of an SQLException or in an exception suppressed by a cause: the
+        # description is not changed, and the argument is a copy without them
+        foreach string mode in ("next", "supp") {
+            Datasource ds("jdbc", "u", dsSecret, getUrlBody("qore-echo7344") + ";mode=" + mode);
+            ds.setOption("classpath", tmp.path);
+            try {
+                ds.open();
+                fail("no exception");
+            } catch (hash<ExceptionInfo> ex) {
+                string desc = checkMasked(ex, mode);
+                assertEq(sprintf("java.sql.SQLException: plain %s failure", mode), desc);
+                assertEq("08001", ex.arg.getSQLState(), mode);
+                assertEq(1, ex.arg.getErrorCode(), mode);
+            }
         }
     }
 
