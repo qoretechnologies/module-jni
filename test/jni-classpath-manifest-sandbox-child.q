@@ -435,7 +435,7 @@ int sub feature() { return Jni::java::lang::Runtime::version().feature(); }", "j
 */
 string sub unverified_refusal(string jar, int feature, string cp) {
     return sprintf("cannot add the classpath: the classpath jar '%s' has a manifest Class-Path attribute, which "
-        "cannot be checked against the sandbox filesystem policy on an unverified JDK version %d for manifest "
+        "cannot be checked against the sandbox policy on an unverified JDK version %d for manifest "
         "Class-Path checking (verified: [%s]): module command error from command 'add-classpath %s'", jar, feature,
         join(", ", (map string($1), VerifiedJdkFeatures)), cp);
 }

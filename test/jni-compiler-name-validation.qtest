@@ -249,6 +249,7 @@ hash<auto> sub kotlin_compile(hash<auto> sources, *hash<auto> injected, *softlis
         addTestCase("the Java compiler checks the files below a directory", \directoryFilesTest());
         addTestCase("a manifest entry with the form of a directory", \manifestDirectoryFormTest());
         addTestCase("a manifest directory entry with another host", \manifestOtherHostTest());
+        addTestCase("a sandbox that restricts only the network compiles", \networkOnlyCompileTest());
         addTestCase("a wildcard link to an archive with another name", \wildcardLinkedArchiveTest());
         addTestCase("a special file on a classpath, whatever its name", \specialFileTest());
         addTestCase("an allowed output directory gets no file", \outputDirectoryTest());
@@ -855,7 +856,26 @@ public class %s extends AbstractProcessor {
             ManifestCheckedJdkFeatures));
     }
 
+    #! a caller whose sandbox restricts only the network compiles as a caller with no sandbox
+    networkOnlyCompileTest() {
+        string dir = realpath(scratch) + "/network-only-compile";
+        mkdir(dir, 0700);
+        string dep = getName("NetworkOnlyDep");
+        writeClass(dir + "/" + dep + ".class", dep);
+        Program p = getProgram(False, NOTHING, True, True, NOTHING, QSEC_READ, False);
+        string user = getName("NetworkOnlyUser");
+        hash<auto> rv = p.callFunction("java_compile", (), user, sprintf("public class %s { }", user));
+        assertTrue(rv.ok, rv.desc);
+        # a classpath option is not refused, as it is for a caller whose filesystem access is restricted
+        user = getName("NetworkOnlyUser");
+        rv = p.callFunction("java_compile", ("-cp", dir), user, sprintf("public class %s { %s d; }", user, dep));
+        assertTrue(rv.ok, rv.desc);
+    }
+
     #! an entry with another authority is refused on every JDK; one that names the local host is followed
+    /** This case assumes a caller whose filesystem access is restricted, as the sandbox of getProgram() is; a caller
+        whose sandbox restricts only the network is tested in test/jni-classpath-url-path.qtest
+    */
     manifestOtherHostTest() {
         assertManifestCheckedJdk();
         string dir = realpath(scratch) + "/manifest-other-host";

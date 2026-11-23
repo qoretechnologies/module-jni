@@ -69,7 +69,13 @@ hash<auto> sub add_classpath(string path) {
 string sub java_add(string route, string jar) {
     return Jni::org::qore::jni::test::ClasspathUrlProbe::add(Jni::org::qore::jni::get_class_loader(), route, jar);
 }
+bool sub captured_network() {
+    return Jni::org::qore::jni::test::ClasspathUrlProbe::capturedRestrictsNetwork();
+}
 ";
+
+        #! the refusal for a caller whose sandbox restricts only the network
+        const OtherLocation = "names another location";
 
         #! entries whose path is the path that is read: followed on a verified JDK
         const ExactCases = (
@@ -204,6 +210,13 @@ string sub java_add(string route, string jar) {
         addTestCase("a classpath with no sandbox is unchanged", \unsandboxedTest());
         addTestCase("a sandbox with no filesystem restriction", \permissiveTest());
         addTestCase("the Java routes apply the same rule", \javaRoutesTest());
+        addTestCase("network only: an archive with any name is added", \networkArchiveNameTest());
+        addTestCase("network only: a path that does not exist yet is added", \networkLaterPathTest());
+        addTestCase("network only: addPathOrig takes one path", \networkOnePathTest());
+        addTestCase("network only: a URL with the local host is added", \networkLocalUrlTest());
+        addTestCase("network only: a manifest entry that the loader ignores is ignored", \networkIgnoredEntryTest());
+        addTestCase("network only: an archive with a jar index is added", \networkJarIndexTest());
+        addTestCase("the network restriction of a captured policy", \capturedPolicyTest());
         set_return_value(main());
     }
 
@@ -251,10 +264,13 @@ string sub java_add(string route, string jar) {
     }
 
     #! returns a Program in a sandbox that allows reading only the given paths and this test's classes
-    private Program getProgram(list<string> allowed) {
+    private Program getProgram(list<string> allowed, bool open_network = False) {
         SandboxManager sm();
         sm.setUncontrolledApiPolicy(True);
         sm.setFilesystemDefaultPolicy(False);
+        if (open_network) {
+            sm.setNetworkDefaultPolicy(True);
+        }
         foreach string path in (allowed) {
             sm.addFilesystemAllowedPath(path, QSEC_READ);
         }
@@ -439,10 +455,11 @@ string sub java_add(string route, string jar) {
                 hash<auto> rv = hostAdd(p, x + "/main/main.jar");
                 string label = sprintf("%s: %s", mode, c.label);
                 bool other_authority = inlist_hard(c.label, (map $1.label, OtherAuthorityCases));
-                # a caller that restricts the network is refused a directory with another authority; it is not read
-                if (!open_network && other_authority && !c.archive) {
+                # a caller that restricts the network is refused an entry that names another location
+                if (!open_network && other_authority) {
                     assertEq("JNI-CLASSPATH-ERROR", rv.err, label + ": " + rv.desc);
-                    assertRegex(verified() ? "cannot be checked exactly" : "unverified JDK version", rv.desc, label);
+                    assertRegex(verified() ? OtherLocation : "unverified JDK version", rv.desc, label);
+                    assertNothingRead(p, label);
                     continue;
                 }
                 # otherwise the check of an exact path is for a caller whose filesystem access is restricted
@@ -455,7 +472,8 @@ string sub java_add(string route, string jar) {
                         continue;
                     }
                     assertEq("ok", rv.err, label + ": " + rv.desc);
-                    # an entry with another authority is never read here
+                    # an entry with another authority is added for a caller that restricts nothing, but not read here,
+                    # as a read could open a connection
                     if (!other_authority) {
                         list<string> expected = ClasspathUrlProbe::plainReads(x + "/main/main.jar");
                         assertEq(expected, p.callFunction("read_all"), label);
@@ -466,35 +484,103 @@ string sub java_add(string route, string jar) {
     }
 
     javaRoutesTest() {
-        hash<ClasspathUrlCase> other = OtherAuthorityCases[0];
         hash<ClasspathUrlCase> exact = ExactCases[0];
-        string refused = verified() ? "^refused: .*cannot be checked exactly" : "^refused: .*unverified JDK version";
+        string refused = "^refused: .*" + OtherLocation;
+        # a directory and an archive entry with another authority
+        list<hash<ClasspathUrlCase>> others = cast<list<hash<ClasspathUrlCase>>>((OtherAuthorityCases[0],
+            OtherAuthorityCases[6]));
         foreach string route in (JavaRoutes) {
-            # a caller that restricts only the network: refused before the class loader can use the entry
-            string x = makeCase(other);
-            Program p = getPermissiveProgram(False);
-            assertRegex(refused, p.callFunction("java_add", route, x + "/main/main.jar"), route);
-            assertNothingRead(p, route);
+            string x;
+            Program p;
+            foreach hash<ClasspathUrlCase> other in (others) {
+                # a caller that restricts only the network: refused before the class loader can use the entry
+                x = makeCase(other);
+                p = getPermissiveProgram(False);
+                assertRegex(refused, p.callFunction("java_add", route, x + "/main/main.jar"), route + ": " + other.label);
+                assertNothingRead(p, route + ": " + other.label);
 
-            # its positive control
-            x = makeCase(exact);
-            p = getPermissiveProgram(False);
-            string rv = p.callFunction("java_add", route, x + "/main/main.jar");
-            if (verified()) {
-                assertEq("ok", rv, route);
-                assertEq((Allowed, Allowed, Allowed, Allowed), p.callFunction("read_all"), route);
-            } else {
-                assertRegex(refused, rv, route);
+                # a caller that restricts nothing is not affected; the entry with another authority is not read
+                x = makeCase(other);
+                p = getPermissiveProgram(True);
+                assertEq("ok", p.callFunction("java_add", route, x + "/main/main.jar"), route + ": " + other.label);
             }
 
-            # a caller that restricts nothing is not affected; the entry with another authority is not read
-            x = makeCase(other);
-            p = getPermissiveProgram(True);
+            # the positive control of a caller that restricts only the network, on every JDK
+            x = makeCase(exact);
+            p = getPermissiveProgram(False);
             assertEq("ok", p.callFunction("java_add", route, x + "/main/main.jar"), route);
+            assertEq((Allowed, Allowed, Allowed, Allowed), p.callFunction("read_all"), route);
+
             x = makeCase(exact);
             p = getPermissiveProgram(True);
             assertEq("ok", p.callFunction("java_add", route, x + "/main/main.jar"), route);
             assertEq((Allowed, Allowed, Allowed, Allowed), p.callFunction("read_all"), route);
         }
+    }
+
+    #! returns a new directory for a case that makes its own files
+    private string newDir() {
+        string x = sprintf("%s/case%d", scratch, ++counter);
+        mkdir(x, 0700);
+        return x;
+    }
+
+    #! asserts that a caller that restricts only the network adds a path by a route, and reads the marker through it
+    private assertNetworkOnlyReads(string route, string path, string label) {
+        Program p = getPermissiveProgram(False);
+        assertEq("ok", p.callFunction("java_add", route, path), label);
+        assertEq((Allowed, Allowed, Allowed, Allowed), p.callFunction("read_all"), label);
+    }
+
+    networkArchiveNameTest() {
+        string x = newDir();
+        ClasspathUrlProbe::writeMarkerJar(x + "/archive.bin", Allowed);
+        assertNetworkOnlyReads("addPathOrig", x + "/archive.bin", "an archive with another name");
+    }
+
+    networkLaterPathTest() {
+        string x = newDir();
+        string path = x + "/later.jar";
+        Program p = getPermissiveProgram(False);
+        assertEq("ok", p.callFunction("java_add", "addPathOrig", path));
+        ClasspathUrlProbe::writeMarkerJar(path, Allowed);
+        assertEq((Allowed, Allowed, Allowed, Allowed), p.callFunction("read_all"));
+    }
+
+    networkOnePathTest() {
+        foreach string name in ("a;b.jar", "a:b.jar") {
+            string x = newDir();
+            ClasspathUrlProbe::writeMarkerJar(x + "/" + name, Allowed);
+            assertNetworkOnlyReads("addPathOrig", x + "/" + name, name);
+        }
+    }
+
+    networkLocalUrlTest() {
+        string x = newDir();
+        ClasspathUrlProbe::writeMarkerJar(x + "/dep.jar", Allowed);
+        string url = "file://localhost" + ClasspathUrlProbe::encodedPath(x) + "/dep.jar";
+        assertNetworkOnlyReads("addURLString", url, "a URL with the local host");
+    }
+
+    networkIgnoredEntryTest() {
+        string x = newDir();
+        ClasspathUrlProbe::writeMarkerJar(x + "/dep.jar", Allowed);
+        # the JDK's class loader does not follow the first entry, and opens no connection for it
+        ClasspathUrlProbe::writeManifestJar(x + "/main.jar", "http://example.invalid/x.jar dep.jar");
+        assertNetworkOnlyReads("addPath", x + "/main.jar", "a manifest entry that is not a file");
+    }
+
+    networkJarIndexTest() {
+        string x = newDir();
+        ClasspathUrlProbe::writeIndexedJar(x + "/indexed.jar", Allowed);
+        assertNetworkOnlyReads("addPath", x + "/indexed.jar", "an archive with a jar index");
+    }
+
+    capturedPolicyTest() {
+        assertTrue(getPermissiveProgram(False).callFunction("captured_network"), "restricts only the network");
+        assertFalse(getPermissiveProgram(True).callFunction("captured_network"), "restricts nothing");
+        assertFalse(getProgram((scratch,), True).callFunction("captured_network"), "restricts only the filesystem");
+        assertTrue(getProgram((scratch,)).callFunction("captured_network"), "restricts both");
+        assertFalse(newProgram().callFunction("captured_network"), "no sandbox");
     }
 }

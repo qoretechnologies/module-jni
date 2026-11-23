@@ -3,6 +3,7 @@
  */
 package org.qore.jni.test;
 
+import org.qore.jni.QoreSandbox;
 import org.qore.jni.QoreURLClassLoader;
 
 import java.io.File;
@@ -79,6 +80,37 @@ public class ClasspathUrlProbe {
         }
     }
 
+    //! Writes an archive with the marker resource and class and a jar index entry
+    public static void writeIndexedJar(String path, String marker) throws IOException {
+        Manifest m = new Manifest();
+        m.getMainAttributes().put(Attributes.Name.MANIFEST_VERSION, "1.0");
+        Path p = Path.of(path);
+        Files.createDirectories(p.getParent());
+        byte[] cls = markerClass(marker);
+        try (OutputStream os = Files.newOutputStream(p); JarOutputStream j = new JarOutputStream(os, m)) {
+            j.putNextEntry(new JarEntry("META-INF/INDEX.LIST"));
+            j.write("JarIndex-Version: 1.0\n\n".getBytes(StandardCharsets.UTF_8));
+            j.closeEntry();
+            j.putNextEntry(new JarEntry(MARKER_RESOURCE));
+            j.write(marker.getBytes(StandardCharsets.UTF_8));
+            j.closeEntry();
+            j.putNextEntry(new JarEntry(MARKER_CLASS + ".class"));
+            j.write(cls);
+            j.closeEntry();
+        }
+    }
+
+    //! Returns true if the policy captured on this thread restricts the network, and the static check agrees
+    public static boolean capturedRestrictsNetwork() {
+        try (QoreSandbox.Policy policy = QoreSandbox.capture()) {
+            boolean captured = policy.restrictsNetwork();
+            if (captured != QoreSandbox.restrictsNetwork()) {
+                throw new IllegalStateException("the captured policy and the current thread disagree");
+            }
+            return captured;
+        }
+    }
+
     //! Returns the marker that each read API of the class loader gives, or "none"
     /** The values are, in order: \c getResourceAsStream(), \c getResource(), \c getResources() (each distinct value,
         sorted and joined with a comma) and a class load.
@@ -97,8 +129,9 @@ public class ClasspathUrlProbe {
 
     //! Adds an archive to a class loader by one of its Java routes; returns "ok" or "refused: <exception>"
     /** @param loader the class loader
-        @param route \c addPath, \c addPathOrig, \c addURL, \c addWildcard (the archives of the directory of \a jar) or
-        \c addParentPath (of a class loader derived from \a loader, so that only \a loader changes)
+        @param route \c addPath, \c addPathOrig, \c addURL, \c addURLString (\a jar is the URL itself), \c addWildcard
+        (the archives of the directory of \a jar) or \c addParentPath (of a class loader derived from \a loader, so that
+        only \a loader changes)
         @param jar the path of the archive
     */
     public static String add(ClassLoader loader, String route, String jar) {
@@ -115,6 +148,12 @@ public class ClasspathUrlProbe {
                     Method m = QoreURLClassLoader.class.getDeclaredMethod("addURL", URL.class);
                     m.setAccessible(true);
                     m.invoke(target, Path.of(jar).toUri().toURL());
+                    break;
+                }
+                case "addURLString": {
+                    Method m = QoreURLClassLoader.class.getDeclaredMethod("addURL", URL.class);
+                    m.setAccessible(true);
+                    m.invoke(target, URI.create(jar).toURL());
                     break;
                 }
                 case "addWildcard":

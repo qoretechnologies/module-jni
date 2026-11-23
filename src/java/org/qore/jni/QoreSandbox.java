@@ -376,9 +376,10 @@ public final class QoreSandbox {
         return p != null ? p.restrictsNetwork() : restrictsNetwork0(0);
     }
 
-    //! Returns true if a classpath that the current thread adds must be checked: its filesystem or network is restricted
-    static boolean restrictsClasspath() {
-        return restrictsFilesystem() || restrictsNetwork();
+    //! Returns the exception for a classpath that names a location that a network policy does not allow
+    static RuntimeException classpathLocationError() {
+        return argumentError0("a classpath entry names another location, which a sandbox that restricts network "
+            + "access does not allow");
     }
 
     //! Checks a classpath for a compiler and returns the files to give it, with symbolic links resolved
@@ -450,8 +451,8 @@ public final class QoreSandbox {
         if (classpath == null) {
             throw argumentError0("classpath must not be null");
         }
-        QoreURLClassLoader.ResolvedClasspath rc = resolveClasspath(classpath, 0, restrictsFilesystem(),
-            restrictsNetwork());
+        // only for a caller whose filesystem access is restricted, for which an exact path has no other location
+        QoreURLClassLoader.ResolvedClasspath rc = resolveClasspath(classpath, 0, true, false);
         // the elements grow as they are checked: a manifest is read only after its jar has been allowed
         for (int i = 0; i < rc.size(); ++i) {
             checkNamed(rc.encodedPath(i), rc.givenEntry(i), READ);
@@ -576,7 +577,7 @@ public final class QoreSandbox {
     }
 
     //! Resolves a classpath once for its sandbox check and its use (qore#6818)
-    /** Called by the module for a classpath that a filesystem policy governs: the module checks each element of the
+    /** Called by the module for a classpath under a sandbox manager: the module checks each element of the
         result against the policy, calling expandClasspath() after each element is checked, and then gives the same
         object to QoreURLClassLoader.addResolvedPath(), which adds only files that were checked, so that the
         classpath is not resolved again between the check and the use.  The elements are those of
@@ -593,8 +594,8 @@ public final class QoreSandbox {
         @param restricted true if a filesystem policy restricts the caller: a special file is then refused whatever its
         name, otherwise only one with an archive name is refused, and a manifest Class-Path entry whose path cannot
         be checked exactly is refused (qore#7349)
-        @param networkRestricted true if a network policy restricts the caller: a manifest Class-Path entry that the
-        class loader could read from another location is refused (qore#7195)
+        @param networkRestricted true if a network policy restricts the caller: a manifest Class-Path entry that
+        names another location is refused (qore#7195)
     */
     static QoreURLClassLoader.ResolvedClasspath resolveClasspath(String classpath, int jdkFeature,
             boolean restricted, boolean networkRestricted) {

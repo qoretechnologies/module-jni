@@ -41,6 +41,7 @@ import java.nio.charset.CharacterCodingException;
 import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 
+import java.util.ArrayDeque;
 import java.util.Hashtable;
 import java.util.StringTokenizer;
 import java.util.HashSet;
@@ -161,6 +162,12 @@ public class QoreURLClassLoader extends URLClassLoader {
 
     // when used to bootstrap Java
     private static boolean static_bootstrap = false;
+
+    //! true on a thread that adds a classpath for a caller whose sandbox restricts only the network
+    private static final ThreadLocal<Boolean> locationChecked = new ThreadLocal<Boolean>();
+
+    //! true if the JDK's class loader, which reads the setting when it starts, follows entries that are not files
+    private static final boolean CLASS_PATH_URL_CHECK_DISABLED = isClassPathUrlCheckDisabled();
 
     //! static initialization
     static {
@@ -411,34 +418,169 @@ public class QoreURLClassLoader extends URLClassLoader {
     public void addPathOrig(String path) throws Exception {
         checkAccess();
         //debugLog("QoreURLClassLoader.addPath(): file://" + path);
-        if (path != null && QoreSandbox.restrictsClasspath()) {
+        if (path != null && QoreSandbox.restrictsFilesystem()) {
             addResolvedPath(QoreSandbox.checkedClasspath(path));
             return;
         }
-        super.addURL(new File(path).toURI().toURL());
+        URL url = new File(path).toURI().toURL();
+        if (QoreSandbox.restrictsNetwork()) {
+            checkClasspathLocation(url);
+        }
+        super.addURL(url);
     }
 
-    //! Adds a URL for a subclass; for a caller that a sandbox filesystem policy restricts, its file is checked
+    //! Adds a URL for a subclass; a sandbox filesystem policy checks its file, a network policy its location
     /** The class loader's own additions use addURLIntern()
     */
     @Override
     protected void addURL(URL url) {
         checkAccess();
-        if (url != null && QoreSandbox.restrictsClasspath()) {
+        if (url != null && QoreSandbox.restrictsFilesystem()) {
             File file = urlToFile(url);
             if (file == null || file.getPath().indexOf(File.pathSeparatorChar) >= 0
                     || file.getPath().indexOf(';') >= 0) {
-                throw new IllegalArgumentException("a class loader URL cannot be checked against the sandbox policy");
+                throw new IllegalArgumentException("a class loader URL cannot be checked against the sandbox "
+                    + "filesystem policy");
             }
             addResolvedPath(QoreSandbox.checkedClasspath(file.getPath()));
             return;
+        }
+        if (url != null && QoreSandbox.restrictsNetwork()) {
+            checkClasspathLocation(url);
         }
         super.addURL(url);
     }
 
     //! Adds a URL that the class loader has made from a path that it was given
     private void addURLIntern(URL url) {
+        if (locationChecked.get() != null) {
+            checkClasspathLocation(url);
+        }
         super.addURL(url);
+    }
+
+    //! Runs an addition; for a caller whose sandbox restricts the network, each URL added has its location checked
+    /** A caller whose sandbox restricts the network but not the filesystem takes the same path as a caller with no
+        sandbox, with this one check.
+    */
+    private static void addLocationChecked(boolean check, Runnable add) {
+        if (!check) {
+            add.run();
+            return;
+        }
+        Boolean previous = locationChecked.get();
+        locationChecked.set(Boolean.TRUE);
+        try {
+            add.run();
+        } finally {
+            if (previous == null) {
+                locationChecked.remove();
+            } else {
+                locationChecked.set(previous);
+            }
+        }
+    }
+
+    //! Returns true if the JDK's class loader follows manifest Class-Path entries that are not files
+    private static boolean isClassPathUrlCheckDisabled() {
+        String value = System.getProperty("jdk.net.URLClassPath.disableClassPathURLCheck");
+        return value != null && (value.isEmpty() || value.equals("true"));
+    }
+
+    //! Checks that a URL and the manifest Class-Path entries that it reaches name no other location
+    /** For a caller whose sandbox restricts the network but not the filesystem; nothing at another location is opened.
+        An entry that the class loader ignores or cannot open is not refused.
+
+        @throw JNI-SANDBOX-ERROR the URL or an entry names another location, or the manifests name too many entries to
+        check
+    */
+    @SuppressWarnings("deprecation")
+    private static void checkClasspathLocation(URL url) {
+        URL root = localFileUrl(url);
+        if (root == null) {
+            throw QoreSandbox.classpathLocationError();
+        }
+        boolean follows_non_file = CLASS_PATH_URL_CHECK_DISABLED || isClassPathUrlCheckDisabled();
+        ArrayDeque<URL> pending = new ArrayDeque<URL>();
+        HashSet<String> visited = new HashSet<String>();
+        pending.add(root);
+        visited.add(urlKey(root));
+        int entries = 0;
+        while (!pending.isEmpty()) {
+            URL base = pending.poll();
+            String classpath = manifestClassPath(base);
+            if (classpath == null) {
+                continue;
+            }
+            for (StringTokenizer st = new StringTokenizer(classpath); st.hasMoreTokens();) {
+                String token = st.nextToken();
+                if (++entries > MAX_MANIFEST_ENTRIES) {
+                    throw QoreSandbox.classpathLocationError();
+                }
+                URL entry;
+                try {
+                    entry = new URL(base, token);
+                } catch (MalformedURLException e) {
+                    continue;
+                }
+                if (!"file".equals(entry.getProtocol())) {
+                    if (follows_non_file) {
+                        throw QoreSandbox.classpathLocationError();
+                    }
+                    continue;
+                }
+                if (!hasLocalAuthority(entry)) {
+                    throw QoreSandbox.classpathLocationError();
+                }
+                if (visited.add(urlKey(entry))) {
+                    pending.add(entry);
+                }
+            }
+        }
+    }
+
+    //! Returns the local file URL of a class loader URL, or null if it names another location
+    @SuppressWarnings("deprecation")
+    private static URL localFileUrl(URL url) {
+        URL file = url;
+        if ("jar".equals(url.getProtocol())) {
+            String spec = url.getFile();
+            if (!spec.endsWith("!/")) {
+                return null;
+            }
+            try {
+                file = new URL(spec.substring(0, spec.length() - 2));
+            } catch (MalformedURLException e) {
+                return null;
+            }
+        }
+        return "file".equals(file.getProtocol()) && hasLocalAuthority(file) ? file : null;
+    }
+
+    //! Returns the manifest Class-Path attribute of the archive that a file URL names, or null if it has none
+    /** Also null for a directory and for a file that the class loader could not read as an archive
+    */
+    private static String manifestClassPath(URL url) {
+        String file = url.getFile();
+        if (file.endsWith("/")) {
+            return null;
+        }
+        String path = decodeUrlPath(file);
+        if (path == null || path.indexOf('\0') != -1) {
+            return null;
+        }
+        File archive = new File(path);
+        // a file that is not a regular file is not opened, as reading it may not return (ex: a FIFO)
+        if (!archive.isFile()) {
+            return null;
+        }
+        try (JarFile jf = new JarFile(archive, true, ZipFile.OPEN_READ, JarFile.runtimeVersion())) {
+            Manifest man = jf.getManifest();
+            Attributes attrs = man == null ? null : man.getMainAttributes();
+            return attrs == null ? null : attrs.getValue(Attributes.Name.CLASS_PATH);
+        } catch (IOException | RuntimeException e) {
+            return null;
+        }
     }
 
     //! Returns the file that a class loader URL names, or null if it names no local file
@@ -1506,13 +1648,14 @@ public class QoreURLClassLoader extends URLClassLoader {
         } else {
             checkAccess();
         }
-        if (classpath != null && QoreSandbox.restrictsClasspath()) {
+        if (classpath != null && QoreSandbox.restrictsFilesystem()) {
             // resolved once: the files that are added are the ones that were checked
             QoreURLClassLoader target = parent instanceof QoreURLClassLoader ? (QoreURLClassLoader)parent : this;
             target.addResolvedPath(QoreSandbox.checkedClasspath(classpath));
             return;
         }
-        addParentPathIntern(classpath);
+        addLocationChecked(classpath != null && QoreSandbox.restrictsNetwork(),
+            () -> addParentPathIntern(classpath));
     }
 
     //! Closes the class loader, for code that can reach its Program (qore#7131)
@@ -1580,25 +1723,25 @@ public class QoreURLClassLoader extends URLClassLoader {
         super.clearAssertionStatus();
     }
 
-    //! Adds a classpath; for a caller that a sandbox filesystem policy restricts, every file it reaches is checked
+    //! Adds a classpath; a sandbox filesystem policy checks every file it reaches, a network policy their locations
     public void addPath(String classpath) {
         checkAccess();
-        if (classpath != null && QoreSandbox.restrictsClasspath()) {
+        if (classpath != null && QoreSandbox.restrictsFilesystem()) {
             // resolved once: the files that are added are the ones that were checked
             addResolvedPath(QoreSandbox.checkedClasspath(classpath));
             return;
         }
-        addPathIntern(classpath);
+        addLocationChecked(classpath != null && QoreSandbox.restrictsNetwork(), () -> addPathIntern(classpath));
     }
 
     //! Adds the files of a directory that match a pattern; checked as addPath() checks a classpath
     public void addWildcard(File dir, String nam) {
         checkAccess();
-        if (QoreSandbox.restrictsClasspath()) {
+        if (QoreSandbox.restrictsFilesystem()) {
             addResolvedPath(QoreSandbox.checkedClasspath(new File(dir, nam).getPath()));
             return;
         }
-        addWildcardIntern(dir, nam);
+        addLocationChecked(QoreSandbox.restrictsNetwork(), () -> addWildcardIntern(dir, nam));
     }
 
     //! Returns the program pointer
@@ -1805,9 +1948,10 @@ public class QoreURLClassLoader extends URLClassLoader {
 
     //! Adds a path to the classpath
     /** An entry that does not exist or cannot be used is logged and left out; an error while an entry is added is
-        thrown to the caller (qore#6779).  A classpath that a sandbox filesystem policy governs is not added here, but
-        with resolveClasspath() and addResolvedPath(), so that every file that is added is one that the policy
-        checked (qore#6818).
+        thrown to the caller (qore#6779).  A classpath of a caller that a filesystem policy restricts, or that a
+        module command adds under a sandbox, is not added here, but with resolveClasspath() and addResolvedPath(), so
+        that every file that is added is one that the policy checked (qore#6818).  A caller whose sandbox restricts
+        only the network adds its classpath here, with the location of each URL checked.
     */
     void addPathIntern(String classpath) {
         //debugLog(String.format("%x: addPath(): %s", hashCode(), classpath));
@@ -2007,7 +2151,7 @@ public class QoreURLClassLoader extends URLClassLoader {
         */
         private void refuseSpecial(File real, String referrer) {
             refuse(real, referrer, "the classpath jar '" + real + "' is not a regular file, so the jars that its "
-                + "manifest Class-Path attribute could name cannot be checked against the sandbox filesystem policy");
+                + "manifest Class-Path attribute could name cannot be checked against the sandbox policy");
         }
 
         //! Returns the number of elements
@@ -2110,7 +2254,7 @@ public class QoreURLClassLoader extends URLClassLoader {
             if (url == null) {
                 // its manifest could not be resolved as the class loader resolves it
                 refuse(real, null, "the classpath jar '" + real + "' cannot be represented as a URL to check the "
-                    + "jars that its manifest Class-Path attribute names against the sandbox filesystem policy");
+                    + "jars that its manifest Class-Path attribute names against the sandbox policy");
                 return;
             }
             seen.add(urlKey(url));
@@ -2141,7 +2285,7 @@ public class QoreURLClassLoader extends URLClassLoader {
                 // enabled), which this check does not resolve
                 if (Runtime.version().feature() < 22 && jf.getEntry("META-INF/INDEX.LIST") != null) {
                     refuse(jar, null, "the classpath jar '" + jar + "' has a jar index, whose jars cannot be checked "
-                        + "against the sandbox filesystem policy");
+                        + "against the sandbox policy");
                     return;
                 }
                 Manifest man = jf.getManifest();
@@ -2149,7 +2293,7 @@ public class QoreURLClassLoader extends URLClassLoader {
                 classpath = attrs == null ? null : attrs.getValue(Attributes.Name.CLASS_PATH);
             } catch (IOException | RuntimeException e) {
                 refuse(jar, null, "cannot read the manifest of the classpath jar '" + jar + "' to check the jars that "
-                    + "its Class-Path attribute names against the sandbox filesystem policy: " + e);
+                    + "its Class-Path attribute names against the sandbox policy: " + e);
                 return;
             }
             // an attribute with no entries (as the class loader splits it) names nothing
@@ -2160,7 +2304,7 @@ public class QoreURLClassLoader extends URLClassLoader {
             // verified
             if (unverifiedFeature != 0) {
                 refuse(jar, null, "the classpath jar '" + jar + "' has a manifest Class-Path attribute, which cannot "
-                    + "be checked against the sandbox filesystem policy on an unverified JDK version "
+                    + "be checked against the sandbox policy on an unverified JDK version "
                     + unverifiedFeature + " for manifest Class-Path checking (verified: "
                     + Arrays.toString(VERIFIED_CLASS_PATH_JDK_FEATURES) + ")");
                 return;
@@ -2170,7 +2314,7 @@ public class QoreURLClassLoader extends URLClassLoader {
                 String entry = st.nextToken();
                 if (++manifestEntries > MAX_MANIFEST_ENTRIES) {
                     refuse(jar, jar.getPath(), "the manifest Class-Path attributes of the classpath name more than "
-                        + MAX_MANIFEST_ENTRIES + " entries, which cannot be checked against the sandbox filesystem "
+                        + MAX_MANIFEST_ENTRIES + " entries, which cannot be checked against the sandbox "
                         + "policy");
                     return;
                 }
@@ -2183,13 +2327,14 @@ public class QoreURLClassLoader extends URLClassLoader {
 
         //! Returns true if a manifest Class-Path entry can be used under the policy of the caller
         /** A caller whose filesystem access is restricted needs an exact path; a caller with only its network
-            restricted needs a directory entry to be local; a caller with neither restricted is not affected.
+            restricted cannot use an entry that names another location; a caller with neither restricted is not
+            affected.
         */
         private boolean isCheckableEntry(URL url) {
             if (restricted) {
                 return isExactFileUrl(url);
             }
-            return !networkRestricted || !url.getFile().endsWith("/") || hasLocalAuthority(url);
+            return !networkRestricted || hasLocalAuthority(url);
         }
 
         //! Adds an entry of the manifest Class-Path of a jar, as the path that the class loader opens for it
@@ -2209,7 +2354,7 @@ public class QoreURLClassLoader extends URLClassLoader {
             // only a file can be checked against the filesystem policy
             if (!"file".equals(url.getProtocol())) {
                 refuse(jar, referrer, "the manifest Class-Path attribute of the classpath jar '" + jar + "' names '"
-                    + url + "', which is not a file, so it cannot be checked against the sandbox filesystem policy");
+                    + url + "', which is not a file, so it cannot be checked against the sandbox policy");
                 return;
             }
             // checked before an entry that has been seen is skipped: a URL with a host is not a path for a compiler
@@ -2217,8 +2362,9 @@ public class QoreURLClassLoader extends URLClassLoader {
             ambiguousManifestEntry = ambiguousManifestEntry || (entry_host != null && !entry_host.isEmpty());
             // before the URL is resolved to a path, on every JDK
             if (!isCheckableEntry(url)) {
-                refuse(jar, referrer, "the manifest Class-Path entry of the classpath jar '" + jar + "' names a "
-                    + "URL whose path cannot be checked exactly against the sandbox policy");
+                refuse(jar, referrer, "the manifest Class-Path entry of the classpath jar '" + jar + "' names "
+                    + (restricted ? "a URL whose path cannot be checked exactly against the sandbox policy"
+                        : "another location, which a sandbox that restricts network access does not allow"));
                 return;
             }
             String key = urlKey(url);
@@ -2235,7 +2381,7 @@ public class QoreURLClassLoader extends URLClassLoader {
             String path = decodeUrlPath(file);
             if (path == null || path.indexOf('\0') != -1 || !new File(path).isAbsolute()) {
                 refuse(jar, referrer, "the manifest Class-Path attribute of the classpath jar '" + jar + "' names '"
-                    + url + "', which cannot be resolved to a file to check against the sandbox filesystem policy");
+                    + url + "', which cannot be resolved to a file to check against the sandbox policy");
                 return;
             }
             File f = new File(path);
@@ -2423,8 +2569,8 @@ public class QoreURLClassLoader extends URLClassLoader {
         @param restricted true if a filesystem policy restricts the caller: a special file is then refused whatever
         its name, otherwise one without an archive name is kept as an element, which the class loader does not open,
         and a manifest Class-Path entry whose path cannot be checked exactly is refused (qore#7349)
-        @param networkRestricted true if a network policy restricts the caller: a manifest Class-Path entry that the
-        class loader could read from another location is refused (qore#7195)
+        @param networkRestricted true if a network policy restricts the caller: a manifest Class-Path entry that
+        names another location is refused (qore#7195)
     */
     static ResolvedClasspath resolveClasspath(String classpath, int jdkFeature, boolean restricted,
             boolean networkRestricted) {
