@@ -27,6 +27,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Supplier;
 import java.util.jar.Attributes;
 import java.util.jar.JarEntry;
 import java.util.jar.JarOutputStream;
@@ -104,16 +105,31 @@ public class ClasspathUrlProbe {
 
     //! Adds an archive by a route as add() does, with no JDK version counted as verified for the duration of the call
     public static String addOnUnverifiedJdk(ClassLoader loader, String route, String jar) throws Exception {
+        return onUnverifiedJdk(() -> add(loader, route, jar));
+    }
+
+    //! Calls compilerClasspath() with no JDK version counted as verified for the duration of the call
+    public static String compilerClasspathOnUnverifiedJdk(String classpath) throws Exception {
+        return onUnverifiedJdk(() -> compilerClasspath(classpath));
+    }
+
+    //! Runs a call with no JDK version counted as verified
+    private static String onUnverifiedJdk(Supplier<String> call) throws Exception {
         Field field = QoreURLClassLoader.class.getDeclaredField("VERIFIED_CLASS_PATH_JDK_FEATURES");
         field.setAccessible(true);
         int[] features = (int[])field.get(null);
         int[] saved = features.clone();
         Arrays.fill(features, -1);
         try {
-            return add(loader, route, jar);
+            return call.get();
         } finally {
             System.arraycopy(saved, 0, features, 0, saved.length);
         }
+    }
+
+    //! Returns the paths that QoreSandbox.checkCompilerClasspath() returns
+    public static String[] compilerClasspathPaths(String classpath) {
+        return QoreSandbox.checkCompilerClasspath(classpath).stream().map(File::getPath).toArray(String[]::new);
     }
 
     //! Calls QoreSandbox.checkCompilerClasspath(); returns "ok: <number of files>" or "refused: <exception>"

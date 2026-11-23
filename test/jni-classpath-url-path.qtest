@@ -79,6 +79,12 @@ string sub java_add_unverified(string route, string jar) {
 string sub compiler_classpath(string classpath) {
     return Jni::org::qore::jni::test::ClasspathUrlProbe::compilerClasspath(classpath);
 }
+string sub compiler_classpath_unverified(string classpath) {
+    return Jni::org::qore::jni::test::ClasspathUrlProbe::compilerClasspathOnUnverifiedJdk(classpath);
+}
+list<string> sub compiler_classpath_paths(string classpath) {
+    return Jni::org::qore::jni::test::ClasspathUrlProbe::compilerClasspathPaths(classpath);
+}
 ";
 
         #! the refusal for a caller whose sandbox restricts only the network
@@ -232,6 +238,11 @@ string sub compiler_classpath(string classpath) {
         addTestCase("network only: an unverified JDK", \networkUnverifiedJdkTest());
         addTestCase("the compiler classpath check for a caller with no filesystem restriction",
             \compilerClasspathTrustedTest());
+        addTestCase("the compiler classpath: a caller that restricts nothing", \compilerClasspathOpenTest());
+        addTestCase("the compiler classpath: a caller that restricts only the network",
+            \compilerClasspathNetworkTest());
+        addTestCase("the compiler classpath: a caller that restricts the filesystem",
+            \compilerClasspathFilesystemTest());
         addTestCase("network only: addPathOrig takes one path", \networkOnePathTest());
         addTestCase("network only: a URL with the local host is added", \networkLocalUrlTest());
         addTestCase("network only: a manifest entry that the loader ignores is ignored", \networkIgnoredEntryTest());
@@ -768,6 +779,71 @@ string sub compiler_classpath(string classpath) {
         assertRegex(OtherLocation, getPermissiveProgram(False).callFunction("compiler_classpath", jar));
         assertEq("ok: 1", getPermissiveProgram(True).callFunction("compiler_classpath", jar));
         assertEq("ok: 1", newProgram().callFunction("compiler_classpath", jar));
+    }
+
+    #! makes the archives of the compiler classpath cases in a new directory; returns the directory
+    private string makeCompilerCases() {
+        string x = newDir();
+        ClasspathUrlProbe::writeMarkerJar(x + "/dep.jar", Allowed);
+        ClasspathUrlProbe::writeManifestJar(x + "/plain.jar", "dep.jar");
+        ClasspathUrlProbe::writeManifestJar(x + "/nonfile.jar", "http://example.invalid/x.jar dep.jar");
+        ClasspathUrlProbe::writeManifestJar(x + "/undecodable.jar", "dep%zz.jar");
+        ClasspathUrlProbe::writeIndexedJar(x + "/indexed.jar", Allowed);
+        mkfifo(x + "/special.jar");
+        return x;
+    }
+
+    compilerClasspathOpenTest() {
+        string x = makeCompilerCases();
+        foreach Program p in ((newProgram(), getPermissiveProgram(True))) {
+            foreach string name in ("nonfile.jar", "undecodable.jar", "special.jar", "indexed.jar") {
+                assertEq("ok: 1", p.callFunction("compiler_classpath", x + "/" + name), name);
+            }
+            assertEq("ok: 1", p.callFunction("compiler_classpath_unverified", x + "/plain.jar"), "an unverified JDK");
+            # the classpath comes back as it was given, also an entry that does not exist
+            list<string> given = (x + "/dep.jar", x + "/absent.jar", "relative.jar");
+            assertEq(given, p.callFunction("compiler_classpath_paths", given.join(PathSep)));
+        }
+    }
+
+    compilerClasspathNetworkTest() {
+        string x = makeCompilerCases();
+        Program p = getPermissiveProgram(False);
+        # as the class loader ignores it, and with no jar index support to follow
+        foreach string name in ("nonfile.jar", "indexed.jar", "plain.jar") {
+            assertEq("ok: 1", p.callFunction("compiler_classpath", x + "/" + name), name);
+        }
+        # the location of these cannot be confirmed
+        foreach string name in ("undecodable.jar", "special.jar", "absent.jar") {
+            assertRegex("^refused: .*" + UncheckedLocation, p.callFunction("compiler_classpath", x + "/" + name), name);
+        }
+        assertRegex("^refused: .*unverified JDK version", p.callFunction("compiler_classpath_unverified",
+            x + "/plain.jar"));
+        assertEq("ok: 1", p.callFunction("compiler_classpath_unverified", x + "/dep.jar"), "no manifest Class-Path");
+        assertEq((x + "/plain.jar", x + "/dep.jar"), p.callFunction("compiler_classpath_paths",
+            x + "/plain.jar" + PathSep + x + "/dep.jar"));
+
+        # the archives that a wildcard selects are walked
+        string w = newDir();
+        ClasspathUrlProbe::writeMarkerJar(w + "/dep.jar", Allowed);
+        assertEq("ok: 1", p.callFunction("compiler_classpath", w + "/*.jar"));
+        ClasspathUrlProbe::writeManifestJar(w + "/other.jar", "file://example.invalid"
+            + ClasspathUrlProbe::encodedPath(w) + "/dep.jar");
+        assertRegex("^refused: .*" + OtherLocation, p.callFunction("compiler_classpath", w + "/*.jar"));
+    }
+
+    compilerClasspathFilesystemTest() {
+        string x = makeCompilerCases();
+        Program p = getProgram((x,));
+        assertRegex("is not a file", p.callFunction("compiler_classpath", x + "/nonfile.jar"));
+        assertRegex("cannot be checked exactly", p.callFunction("compiler_classpath", x + "/undecodable.jar"));
+        assertRegex("not a regular file", p.callFunction("compiler_classpath", x + "/special.jar"));
+        if (feature < 22) {
+            assertRegex("has a jar index", p.callFunction("compiler_classpath", x + "/indexed.jar"));
+        } else {
+            assertEq("ok: 1", p.callFunction("compiler_classpath", x + "/indexed.jar"));
+        }
+        assertRegex("unverified JDK version", p.callFunction("compiler_classpath_unverified", x + "/plain.jar"));
     }
 
     networkOnePathTest() {

@@ -550,6 +550,52 @@ public class QoreURLClassLoader extends URLClassLoader {
         }
     }
 
+    //! Returns the entries of a classpath as files, exactly as they were given
+    static ArrayList<File> classpathFiles(String classpath) {
+        ArrayList<File> rv = new ArrayList<File>();
+        for (String pathentry : classpathEntries(classpath)) {
+            rv.add(new File(pathentry));
+        }
+        return rv;
+    }
+
+    //! Checks the location of each entry of a classpath, as checkClasspathLocation() does for a URL
+    /** For a classpath that is given to a compiler for a caller whose sandbox restricts the network but not the
+        filesystem.  The entries are checked where they are given, without resolving symbolic links, as the compiler
+        then opens them; a wildcard entry is checked as the archives that it selects.
+
+        @throw JNI-SANDBOX-ERROR an entry names another location, or its location cannot be confirmed
+    */
+    static void checkClasspathLocations(String classpath) {
+        for (String pathentry : classpathEntries(classpath)) {
+            File entry = resolveClasspathEntry(pathentry);
+            String pattern = entry.getName();
+            File dir = entry.getParentFile();
+            if (pattern.indexOf('*') == -1 || dir == null || dir.getName().indexOf('*') != -1) {
+                checkFileLocation(entry);
+                continue;
+            }
+            File[] files = dir.listFiles((d, name) -> wildcardMatches(pattern, name) && isLoadable(name));
+            if (files == null) {
+                throw QoreSandbox.classpathLocationUncheckedError("the directory of a wildcard cannot be read");
+            }
+            for (File f : files) {
+                checkFileLocation(f);
+            }
+        }
+    }
+
+    //! Checks the location of a file as checkClasspathLocation() does for its URL
+    private static void checkFileLocation(File file) {
+        URL url;
+        try {
+            url = file.toURI().toURL();
+        } catch (MalformedURLException | IllegalArgumentException e) {
+            throw QoreSandbox.classpathLocationUncheckedError("its path cannot be a URL");
+        }
+        checkClasspathLocation(url);
+    }
+
     //! Returns the local file URL of a class loader URL, or null if it names another location
     /** @throw JNI-SANDBOX-ERROR a \c jar: URL names a path inside an archive, whose location is not checked
     */
