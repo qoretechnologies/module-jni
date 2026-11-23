@@ -14,7 +14,7 @@
 #   esc/a.jar           the jni test jar; esc/out.jar: a link to outside/k.jar; esc/outdir: a link to outside
 #   outside/k.jar       the Kotlin test jar, outside every allowed directory
 #   in/link.jar         a link to in/sub/k.jar, the Kotlin test jar; in/link2.jar: another link to it;
-#                       in/dangling.jar: a link to a file outside that does not exist; in/subdir: a link to in/sub
+#                       in/dangling.jar: a link to a file in in/ that does not exist; in/subdir: a link to in/sub
 #   plain/a.jar         the jni test jar
 
 %modern
@@ -69,7 +69,7 @@ class JniClasspathWildcardSandboxTest inherits QUnit::Test {
         makeLink(root + "/outside", "esc/outdir");
         makeLink("sub/k.jar", "in/link.jar");
         makeLink("sub/k.jar", "in/link2.jar");
-        makeLink(root + "/outside/none.jar", "in/dangling.jar");
+        makeLink(root + "/in/none.jar", "in/dangling.jar");
         makeLink("sub", "in/subdir");
     }
 
@@ -85,7 +85,8 @@ class JniClasspathWildcardSandboxTest inherits QUnit::Test {
     denyTest() {
         checkCase("deny", (
             "result: deny: the wildcard is refused: OK",
-            "result: deny: the error names the denied file: OK",
+            "result: deny: the error names no file that the wildcard selects: OK",
+            "result: deny: the error names the wildcard as it was given: OK",
             "result: deny: nothing is added: OK",
             "result: deny: the class of the allowed jar is not loaded: OK",
             "result: deny: the class of the denied jar is not loaded: OK",
@@ -105,7 +106,8 @@ class JniClasspathWildcardSandboxTest inherits QUnit::Test {
     escapeTest() {
         checkCase("escape", (
             "result: escape: the wildcard is refused: OK",
-            "result: escape: the error names the file that the link points to: OK",
+            "result: escape: the error does not name the file that the link points to: OK",
+            "result: escape: the error names the wildcard as it was given: OK",
             "result: escape: nothing is added: OK",
             "result: escape: the class of the allowed jar is not loaded: OK",
             "result: escape: the class of the jar outside is not loaded: OK",

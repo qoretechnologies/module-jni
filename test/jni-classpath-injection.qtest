@@ -145,14 +145,12 @@ try {
     #! Asserts that the module's path check refused the command for the jar: \a rv is the result of issue()
     private assertFilesystemDenied(string rv, string cmd, string label) {
         assertRegex("^FILESYSTEM-ACCESS-DENIED: ", rv, label);
-        # the jar is named by the absolute path that it is checked as, as the JVM makes it absolute (against its
-        # user.dir, the current directory, which this test does not change, without resolving symbolic links or "..")
+        # the denial names the entry exactly as it was given, and not the path that it was resolved to
         string jar = getJar();
-        string expected = absolute_path(jar) ? jar : getcwd() + DirSep + jar;
-        # without "." segments, as the denial names it: a test started by a relative path from its directory has a
-        # script directory of "./" (qoretechnologies/qore#6892)
-        expected = regex_subst(expected, "/(\\./)+", "/", RE_Global);
-        assertEq(True, rv.find("'" + expected + "'") >= 0, label + " (path): " + rv);
+        assertEq(True, rv.find("'" + jar + "'") >= 0, label + " (path): " + rv);
+        if (!absolute_path(jar)) {
+            assertEq(-1, rv.find("'" + getcwd() + DirSep), label + " (no resolved path): " + rv);
+        }
         assertRegex("module command error from command '" + cmd.split(" ")[0], rv, label + " (reason)");
     }
 

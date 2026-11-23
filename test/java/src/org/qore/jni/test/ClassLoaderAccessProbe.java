@@ -74,6 +74,100 @@ public class ClassLoaderAccessProbe {
         return false;
     }
 
+    //! runs \a op on a new Java thread, which has no Qore caller
+    private static String onThread(Callable<Object> op) {
+        java.util.concurrent.atomic.AtomicReference<String> rv = new java.util.concurrent.atomic.AtomicReference<>();
+        Thread thread = new Thread(() -> rv.set(run(op)));
+        thread.start();
+        try {
+            thread.join();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return "refused: " + e;
+        }
+        return rv.get();
+    }
+
+    //! asks on a new Java thread whether a filesystem policy restricts it
+    public static String threadRestrictsFilesystem() {
+        return onThread(() -> org.qore.jni.QoreSandbox.restrictsFilesystem());
+    }
+
+    //! asks on a new Java thread, with the policy of the calling code, whether a filesystem policy restricts it
+    public static String threadCapturedRestrictsFilesystem() {
+        try (org.qore.jni.QoreSandbox.Policy policy = org.qore.jni.QoreSandbox.capture()) {
+            return onThread(() -> policy.call(() -> org.qore.jni.QoreSandbox.restrictsFilesystem()));
+        }
+    }
+
+    //! writes a jar with an optional manifest Class-Path and an optional class in the default package
+    public static void writeJar(String path, String classPath, String className, byte[] bytes) throws IOException {
+        java.util.jar.Manifest manifest = new java.util.jar.Manifest();
+        manifest.getMainAttributes().put(java.util.jar.Attributes.Name.MANIFEST_VERSION, "1.0");
+        if (classPath != null) {
+            manifest.getMainAttributes().put(java.util.jar.Attributes.Name.CLASS_PATH, classPath);
+        }
+        try (java.util.jar.JarOutputStream out = new java.util.jar.JarOutputStream(
+                new java.io.FileOutputStream(path), manifest)) {
+            if (className != null) {
+                out.putNextEntry(new java.util.jar.JarEntry(className + ".class"));
+                out.write(bytes);
+                out.closeEntry();
+            }
+        }
+    }
+
+    //! adds \a path to \a loader with the method that adds it as a URL
+    public static String addPathOrig(QoreURLClassLoader loader, String path) {
+        return run(() -> {
+            loader.addPathOrig(path);
+            return "added";
+        });
+    }
+
+    //! a subclass that adds URLs itself
+    public static class UrlAddingLoader extends QoreURLClassLoader {
+        public UrlAddingLoader(String name, ClassLoader parent) {
+            super(name, parent);
+        }
+
+        void add(URL url) {
+            addURL(url);
+        }
+    }
+
+    //! creates, for trusted code, a subclass of the class loader that belongs to the Program of \a program
+    /** Code that a sandbox governs cannot create one, so the test gives it one, to reach the check of the URL
+    */
+    public static QoreURLClassLoader newUrlLoaderFor(QoreURLClassLoader program) throws Exception {
+        QoreURLClassLoader prev = QoreURLClassLoader.getCurrent();
+        ClassLoader prev_tccl = Thread.currentThread().getContextClassLoader();
+        try {
+            UrlAddingLoader loader = new UrlAddingLoader("access-probe", program);
+            java.lang.reflect.Method set = QoreURLClassLoader.class.getDeclaredMethod("setPtrIntern", long.class,
+                boolean.class);
+            set.setAccessible(true);
+            set.invoke(loader, program.getPtr(), false);
+            java.lang.reflect.Field origin = QoreURLClassLoader.class.getDeclaredField("origin_ptr");
+            origin.setAccessible(true);
+            origin.setLong(loader, program.getPtr());
+            return loader;
+        } finally {
+            if (prev != null) {
+                prev.setContext();
+            }
+            Thread.currentThread().setContextClassLoader(prev_tccl);
+        }
+    }
+
+    //! adds \a dir as a URL to a class loader made by newUrlLoaderFor()
+    public static String addUrlTo(QoreURLClassLoader loader, String dir) {
+        return run(() -> {
+            ((UrlAddingLoader)loader).add(new File(dir).toURI().toURL());
+            return "added";
+        });
+    }
+
     //! registers \a loader as the owner of the fixture class
     public static String registerShared(QoreURLClassLoader loader) {
         return run(() -> {

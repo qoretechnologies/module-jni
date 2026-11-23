@@ -1159,6 +1159,7 @@ add_java_compiler_source(org/qore/jni/compiler/QoreJavaCompiler.java JavaFileObj
 add_java_compiler_source(org/qore/jni/compiler/QoreJavaCompilerException.java $SafeDiagnostic)
 add_java_compiler_source(org/qore/jni/compiler/QoreJavaFileManager.java)
 add_java_compiler_source(org/qore/jni/compiler/CompilerOutput.java)
+add_java_compiler_source(org/qore/jni/compiler/QoreCompilerPolicy.java)
 if (HAVE_KOTLIN_COMPILER)
     add_java_compiler_source(org/qore/jni/compiler/QoreKotlinCompiler.java 1 2)
     add_java_compiler_source(org/qore/jni/compiler/QoreKotlinCompilerException.java)
@@ -1277,6 +1278,7 @@ set(JAVA_TEST_JAR_SRC
     test/java/src/org/qore/jni/test/JdbcConnectionDriver.java
     test/java/src/org/qore/jni/test/Callbacks.java
     test/java/src/org/qore/jni/test/ClassPtrProbe.java
+    test/java/src/org/qore/jni/test/ClasspathUrlProbe.java
     test/java/src/org/qore/jni/test/GovernedProgramProbe.java
     test/java/src/org/qore/jni/test/HostObjectProbe.java
     test/java/src/org/qore/jni/test/SandboxIo.java
