@@ -60,11 +60,12 @@ public:
     }
 
     //! Masks the secrets of the connection in the text of a Java exception
-    /** Replaces the URL of the connection (the \c url option and the database name, with and without the \c jdbc:
-        prefix) with its \c jdbc:<subprotocol>: prefix followed by \c "****", and the password of the datasource and
-        the credentials in the URL (the password of its user info, an Oracle-style \c user/password\@ and the values of
-        its password, secret, token and key properties, also percent-decoded) with \c "****"; ASCII letters are
-        matched in any case, and a secret of less than 6 bytes only where it is not next to an ASCII letter or digit
+    /** Replaces the URL of the connection (the \c url option or the database name, and the URLs that the connection
+        used, with and without the \c jdbc: prefix) with its \c jdbc:<subprotocol>: prefix followed by \c "****", and
+        the password of the datasource and the credentials in the URL (the password of its user info, an Oracle-style
+        \c user/password\@ and the values of its password, secret, token and key properties, also percent- and
+        form-decoded) with \c "****"; ASCII letters are matched in any case, and a secret of less than 6 bytes only
+        where it is not next to an ASCII letter or digit
 
         @return true if a secret was replaced
     */

@@ -166,6 +166,7 @@ public class EchoDriver implements Driver {
         addTestCase("overridden database name", \overriddenDbNameTest());
         addTestCase("class name", \classNameTest());
         addTestCase("changed url option", \changedUrlTest());
+        addTestCase("property names", \propertyNamesTest());
         set_return_value(main());
     }
 
@@ -425,6 +426,31 @@ public class EchoDriver implements Driver {
         } catch (hash<ExceptionInfo> ex) {
             string desc = checkMasked(ex, "changed url", (secret,));
             assertTrue(desc =~ /^java.sql.SQLException: cannot [a-zA-Z]+ on jdbc:qore-echo7344:\*\*\*\*$/, desc);
+        }
+    }
+
+    propertyNamesTest() {
+        # the values of properties with other names of credentials, and a value with "+", which a form decoding (as
+        # java.net.URLDecoder's) gives as a space
+        hash<string, string> props;
+        foreach string name in ("pvtKey", "sslkey", "sas", "jwt", "auth", "SharedAccessSignature") {
+            props{name} = sprintf("ZZ%s%sZZ", name, get_random_string(12));
+        }
+        string plus_secret = sprintf("ZZPL%s+%sZZ", get_random_string(6), get_random_string(6));
+        list<string> secrets = (props.values() + (plus_secret, replace(plus_secret, "+", " ")));
+        string url = "qore-echo7344://127.0.0.1:1/db";
+        foreach hash<auto> i in (props.pairIterator()) {
+            url += sprintf(";%s=%s", i.key, i.value);
+        }
+        url += ";accessToken=" + plus_secret;
+        Datasource ds("jdbc", "u", "", "ignored");
+        ds.setOption("url", url);
+        ds.setOption("classpath", tmp.path);
+        try {
+            ds.open();
+            fail("no exception");
+        } catch (hash<ExceptionInfo> ex) {
+            checkMasked(ex, "property names", secrets);
         }
     }
 

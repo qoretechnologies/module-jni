@@ -117,7 +117,16 @@ static void jdbc_add_credential(jdbc_secret_list_t& secrets, const std::string& 
     secrets.emplace_back(val, JDBC_MASK);
     std::string decoded = jdbc_percent_decode(val);
     if (!decoded.empty() && decoded != val) {
-        secrets.emplace_back(std::move(decoded), JDBC_MASK);
+        secrets.emplace_back(decoded, JDBC_MASK);
+    }
+    // the form decoding of java.net.URLDecoder, which also gives "+" as a space
+    if (val.find('+') != std::string::npos) {
+        std::string spaced = val;
+        std::replace(spaced.begin(), spaced.end(), '+', ' ');
+        std::string form_decoded = jdbc_percent_decode(spaced);
+        if (form_decoded != decoded) {
+            secrets.emplace_back(std::move(form_decoded), JDBC_MASK);
+        }
     }
 }
 
@@ -125,14 +134,16 @@ static void jdbc_add_credential(jdbc_secret_list_t& secrets, const std::string& 
 static bool jdbc_is_secret_property(std::string name) {
     std::transform(name.begin(), name.end(), name.begin(),
         [](unsigned char c) { return static_cast<char>(tolower(c)); });
+    // names that contain one of these
     static const char* const words[] = {"pass", "pwd", "secret", "token", "credential", "apikey", "api_key",
-        "accesskey", "access_key", "privatekey", "private_key"};
+        "accesskey", "access_key", "privatekey", "private_key", "pvtkey", "sslkey", "jwt", "sharedaccesssignature"};
     for (const char* word : words) {
         if (name.find(word) != std::string::npos) {
             return true;
         }
     }
-    return false;
+    // names that are one of these
+    return name == "sas" || name == "auth";
 }
 
 //! Adds a JDBC URL, its forms and the credentials in it to the secrets of a connection
