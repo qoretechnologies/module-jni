@@ -127,16 +127,19 @@ are `static_assert`ed to match) and calls `QoreSandboxManager::checkFilesystemAc
   made, nothing below it is touched, its copies stay charged, and a new copy uses a new parent.  The check and the
   removal use one opened directory (`SecureDirectoryStream`), and only a directory is removed at the name of a root.  Where the platform has no POSIX attributes or no secure directory stream, only
   the first removal walks the copy by path, and a retry leaves it charged until the process ends.  The parent is
-  removed with its last copy, under the lock that a new copy takes; only an empty directory can be removed this way,
-  and if that is not possible the next copy reuses it.  If the JVM's user has no name that can be looked up, the
-  parent's owner is taken from the directory when it is created.  A copy is made and read by path, so a restricted
+  removed with its last copy, under the lock that a new copy takes; only an empty directory can be removed this way.
+  That needs a secure directory stream on the temporary directory, so the empty parent stays, and the next copy reuses
+  it, where the JVM cannot read that directory (for example mode 1733 or 0711 of another owner) or the JDK has no such
+  stream.  A copy is made and read by path, so a restricted
   copy is refused unless the real path of the JVM's `java.io.tmpdir`, read once, is a directory owned by the JVM's
   numeric UID or by root that is not writable by group or others or that has the sticky bit.  The JVM's UID comes from
   the JDK (`com.sun.security.auth.module.UnixSystem`), so no user name is needed and nothing is created to find it; a new
   parent must then have that UID, which is recorded and used when the parent is reused.  This is checked when a parent
   is created and each time one is used for a new copy, and the refusal names no path.  If a UID cannot be read or the
   `unix` attribute view is missing on a POSIX platform, the copy is refused; this includes a runtime image without the
-  `jdk.security.auth` module, and a process whose effective UID differs from its real UID.  Trusted and permissive compiles make no
+  `jdk.security.auth` module.  A new parent and the root of each new copy must have the expected UID, so a process
+  whose effective UID differs, also after a later change, makes no copy under another identity, and the empty root is
+  removed.  Trusted and permissive compiles make no
   copy and are not affected.  Only where the platform has no POSIX attributes at all are the mode and owner not checked:
   a copy is made, and a retry stays fail-closed as above.  The directories above it and ACLs are not judged.  Code in the same JVM is not
   defended against.  A

@@ -368,13 +368,15 @@ class Outer {
     loader is closed, and when the Program ends.  A copy that cannot be removed keeps its share of the limits, its
     removal is tried again at the next of these, and a removal that keeps failing is logged once, with no path; a compile
     does not raise this failure.  The copies are kept in one directory of the JVM that only its user can access, which
-    is removed with its last copy.  A retry only removes the directory it created: if that private directory no longer
+    is removed with its last copy; it stays, empty, and is used by the next copy if the JVM cannot read the temporary
+    directory (for example mode 1733 or 0711 of another owner) or the JDK has no secure directory stream.  A retry only removes the directory it created: if that private directory no longer
     verifies (its type, owner, mode or identity changed), nothing below it is touched and its copies keep their share
     of the limits.  On a platform without POSIX file attributes or a secure directory stream in the JDK, a retry does
     not walk the directory, so such a copy keeps its share of the limits until the process ends.  A compile that
     needs a copy is refused unless the real path of the JVM's temporary directory is a directory owned by the JVM's numeric UID
     or by root that is not writable by group or others or that has the sticky bit; no user name is needed, and a compile
-    is also refused if a UID cannot be read, which includes a Java runtime image without the \c jdk.security.auth module.  Compiles that make no copy are not affected.  Only on a platform without
+    is also refused if a UID cannot be read, which includes a Java runtime image without the \c jdk.security.auth
+    module, or if a new copy would have another UID than its private directory.  Compiles that make no copy are not affected.  Only on a platform without
     POSIX file attributes can this not be checked, and a copy is made.  Its parent directories and ACLs are not judged.
     These checks do not defend against Java code in the same JVM.  Once the module's shutdown has started, closing a class loader does
     nothing, so a copy of a compile that is still running is then removed only when that compile ends.  A process that

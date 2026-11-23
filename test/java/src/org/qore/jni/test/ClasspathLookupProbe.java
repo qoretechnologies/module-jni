@@ -433,6 +433,8 @@ public class ClasspathLookupProbe {
         static final int UID_NO_VIEW = 2;
         //! how reading a numeric UID fails, or 0
         volatile int failUid;
+        //! the reads of the attributes of an opened directory that failed with the injected I/O error
+        int handleFailures;
         //! the deletions made by path
         int pathDeletes;
         int failures;
@@ -629,17 +631,15 @@ public class ClasspathLookupProbe {
         }
         @Override public <V extends java.nio.file.attribute.FileAttributeView> V getFileAttributeView(Class<V> type) {
             if (provider.failHandle) {
-                return type.cast(new java.nio.file.attribute.BasicFileAttributeView() {
-                    @Override public String name() { return "basic"; }
-                    @Override public java.nio.file.attribute.BasicFileAttributes readAttributes() throws IOException {
-                        throw new IOException("injected attribute failure");
-                    }
-                    @Override public void setTimes(java.nio.file.attribute.FileTime modified,
-                            java.nio.file.attribute.FileTime accessed, java.nio.file.attribute.FileTime created)
-                            throws IOException {
-                        throw new IOException("injected attribute failure");
-                    }
-                });
+                // a view of the type that is asked for, whose attributes cannot be read
+                return type.cast(java.lang.reflect.Proxy.newProxyInstance(ClasspathLookupProbe.class.getClassLoader(),
+                    new Class<?>[] {type}, (proxy, method, args) -> {
+                        if (method.getName().equals("readAttributes")) {
+                            ++provider.handleFailures;
+                            throw new IOException("injected attribute failure");
+                        }
+                        throw new UnsupportedOperationException(method.getName());
+                    }));
             }
             return real.getFileAttributeView(type);
         }
@@ -835,6 +835,8 @@ public class ClasspathLookupProbe {
             boolean swapped = Files.exists(moved, java.nio.file.LinkOption.NOFOLLOW_LINKS);
             if (provider.pathDeletes != 0) {
                 rv = "the retry deleted by path";
+            } else if (scenario.equals("root-unverified") && provider.handleFailures == 0) {
+                rv = "the failure to read the opened directory was not injected";
             } else if ((int) field(copy, "state") != failedState) {
                 rv = "the retry did not leave the copy failed";
             } else if (chargesReturned(budget)) {
@@ -982,6 +984,86 @@ public class ClasspathLookupProbe {
         return (boolean) rule.invoke(null, wrapped, Long.valueOf(own)) ? "clean" : "the provider refused a readable UID";
     }
 
+    //! Returns null if a method raises the refusal of the private parent, or else what it did
+    private static String refused(java.lang.reflect.Method method, Object target, String refusal, Object... args)
+            throws Exception {
+        try {
+            method.invoke(target, args);
+            return method.getName() + " did not refuse";
+        } catch (java.lang.reflect.InvocationTargetException e) {
+            Throwable cause = e.getCause();
+            return cause instanceof IOException && refusal.equals(cause.getMessage()) ? null
+                : method.getName() + " raised " + cause;
+        }
+    }
+
+    //! Creates a parent and a root under another identity than the one expected: both are refused and leave nothing
+    /** The recorded and process UIDs are changed through reflection; the real UID of the process never changes
+        @param dir the JVM's temporary directory, with no private parent in it
+        @return "clean", or what is wrong
+    */
+    public static String identityChecks(String dir) throws Exception {
+        Class<?> cls = parentClass();
+        String refusal = (String) parentStatic("TEMP_REFUSAL").get(null);
+        Path temp = Path.of(dir).toRealPath();
+        long own = uidOf(temp);
+        int before = countTree(temp);
+        java.lang.reflect.Field processUid = parentStatic("processUid");
+        Object savedUid = processUid.get(null);
+        java.lang.reflect.Method create = cls.getDeclaredMethod("create", Path.class);
+        create.setAccessible(true);
+        try {
+            for (Long uid : new Long[] {own + 1, null}) {
+                processUid.set(null, uid);
+                String rv = refused(create, null, refusal, temp);
+                if (rv != null) {
+                    return rv;
+                }
+                if (countTree(temp) != before) {
+                    return "a refused parent remains";
+                }
+            }
+        } finally {
+            processUid.set(null, savedUid);
+        }
+
+        java.lang.reflect.Method acquire = cls.getDeclaredMethod("acquire");
+        java.lang.reflect.Method newRoot = cls.getDeclaredMethod("newRoot");
+        java.lang.reflect.Method release = cls.getDeclaredMethod("release");
+        java.lang.reflect.Field recorded = cls.getDeclaredField("uid");
+        for (java.lang.reflect.AccessibleObject o : new java.lang.reflect.AccessibleObject[] {acquire, newRoot, release,
+                recorded}) {
+            o.setAccessible(true);
+        }
+        Object parent = acquire.invoke(null);
+        Path parentDir = (Path) field(parent, "path");
+        try {
+            recorded.setLong(parent, own + 1);
+            String rv = refused(newRoot, parent, refusal);
+            recorded.setLong(parent, own);
+            if (rv != null) {
+                return rv;
+            }
+            if (countTree(parentDir) != 1) {
+                return "a refused root remains";
+            }
+            Path root = (Path) newRoot.invoke(parent);
+            if (uidOf(root) != own) {
+                return "a root has another UID";
+            }
+            Files.delete(root);
+        } finally {
+            recorded.setLong(parent, own);
+            try (java.nio.file.DirectoryStream<Path> left = Files.newDirectoryStream(parentDir)) {
+                for (Path entry : left) {
+                    removeTestTree(entry);
+                }
+            }
+            release.invoke(parent);
+        }
+        return Files.exists(parentDir, java.nio.file.LinkOption.NOFOLLOW_LINKS) ? "the parent remains" : "clean";
+    }
+
     //! Opens and closes a compiler classpath: returns "copies=<n>", or the message of the refusal
     public static String copyOutcome(QoreURLClassLoader loader) throws Exception {
         Object handle;
@@ -1057,6 +1139,8 @@ public class ClasspathLookupProbe {
                     rv = "the retry changed the copy";
                 } else if (scenario.equals("parent-replaced") && !Files.exists(marker)) {
                     rv = "the retry touched the directory that replaced the parent";
+                } else if (scenario.equals("parent-handle") && provider.handleFailures == 0) {
+                    rv = "the failure to read the opened directory was not injected";
                 }
             }
             // a new copy does not use a parent that does not verify

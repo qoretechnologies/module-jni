@@ -73,8 +73,8 @@ const LimitRefusal = "the Program has as many compiler classpath copies as it ca
 #! the refusal of a copy from the closed budget of a Program that has ended
 const EndedRefusal = "the Program of the class loader has ended";
 #! the refusal of a copy in a temporary directory that other users can change
-const TempRefusal = "the JVM's temporary directory can be changed by other users or cannot be checked, so a private "
-    "compiler classpath copy cannot be made";
+const TempRefusal = "the JVM's temporary directory can be changed by other users, or it or the JVM's user ID cannot "
+    "be verified, so a private compiler classpath copy cannot be made";
 #! how many new Programs are tried for one at the address of a Program that has ended
 const AddressTries = 64;
 
@@ -293,6 +293,7 @@ sub tmpdir_owner_case(string root, string tmp) {
         result("owner unreadable nothing created", 0, ClasspathLookupProbe::copyDirectories());
     }
     result("owner by UID", "clean", ClasspathLookupProbe::uidRule(tmp));
+    result("owner identity of a parent and a root", "clean", ClasspathLookupProbe::identityChecks(tmp));
     result("owner allowed at the end", "copies=1", q.callFunction("copy_outcome"));
 }
 

@@ -477,15 +477,18 @@ public final class QoreCompilerClasspath implements AutoCloseable {
         real path must be a directory owned by the JVM's numeric UID or by root, that is not writable by group or others
         or that has the sticky bit.  User names are not used, and nothing is created to find the UID.  This is checked
         when this directory is created, whose UID must then be the JVM's, and against that recorded UID each time it is
-        used for a new copy; a copy is refused otherwise, also if a UID cannot be read.  Only where the platform has no
-        POSIX attributes at all can this not be checked, and a copy is made.  The directories above it and ACLs are not
-        judged.
+        used for a new copy.  The root of each new copy must also have the recorded UID, so a process whose effective UID
+        changed later makes no copy under another identity.  A copy is refused otherwise, also if a UID cannot be read.
+        Only where the platform has no POSIX attributes at all can this not be checked, and a copy is made.  The
+        directories above it and ACLs are not judged.
 
         Where the platform has no POSIX attributes or no secure directory stream, only the first removal of a copy walks
         it by path, and a retry leaves it charged.  Code of the same JVM is not defended against.
 
         It is removed when its last copy is gone, under the lock that a new copy takes, so a new copy never uses a
-        directory that is being removed; if the removal is not possible, the empty directory is used by the next copy.
+        directory that is being removed.  Removing it needs a secure directory stream on the temporary directory, so it
+        stays, empty, where the JVM cannot read that directory (ex: mode 1733 or 0711 of another owner) or the JDK has no
+        such stream; the next copy then uses it.
     */
     static final class PrivateParent {
         //! guards #current and the number of copies of each parent
@@ -495,9 +498,9 @@ public final class QoreCompilerClasspath implements AutoCloseable {
             PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE, PosixFilePermission.OWNER_EXECUTE));
         //! the temporary directory of the JVM, read once
         private static final String TEMP_DIR = System.getProperty("java.io.tmpdir");
-        //! the refusal of a temporary directory; it names no path
-        private static final String TEMP_REFUSAL = "the JVM's temporary directory can be changed by other users or "
-            + "cannot be checked, so a private compiler classpath copy cannot be made";
+        //! the refusal for the temporary directory or the identity of the JVM; it names no path
+        private static final String TEMP_REFUSAL = "the JVM's temporary directory can be changed by other users, or it "
+            + "or the JVM's user ID cannot be verified, so a private compiler classpath copy cannot be made";
         //! the sticky bit of a Unix file mode
         private static final int STICKY = 01000;
         //! the numeric UID of this process, or null if it cannot be read; guarded by LOCK
@@ -643,13 +646,33 @@ public final class QoreCompilerClasspath implements AutoCloseable {
             }
         }
 
-        //! Creates the root of a new copy
+        //! Creates the root of a new copy, which must have the UID recorded for this directory
+        /** @throw IOException it could not be created, or it has another UID, in which case the empty root is removed
+        */
         Path newRoot() throws IOException {
+            Path root;
             try {
-                return Files.createTempDirectory(path, "qore-classpath-");
+                root = Files.createTempDirectory(path, "qore-classpath-");
             } catch (IOException e) {
                 throw new IOException("a private directory for the compiler classpath could not be created");
             }
+            if (uid < 0) {
+                return root;
+            }
+            boolean same = false;
+            try {
+                same = uidOf(root) == uid;
+            } catch (IOException | RuntimeException e) {
+                // refused below, without the text of this error, which can name a path
+            } catch (Error e) {
+                cleanup(e, () -> removeEmpty(root));
+                throw e;
+            }
+            if (!same) {
+                removeEmpty(root);
+                throw new IOException(TEMP_REFUSAL);
+            }
+            return root;
         }
 
         //! Called when a copy's root is gone: the last copy removes the directory
