@@ -76,9 +76,21 @@ class JniReleasedHandlesTest inherits QUnit::Test {
     }
 
     releaseInUseCase() {
-        string out = runChild("release-in-use", "live");
-        # the release ran the hook, so it waited for the call, which returned its result; the object is released
-        assertEq("live: hook: true; call: ok: blocked; release: released; after: " + ObjectReleased,
+        string enabled = getLine(runChild("hook-enabled", "live", HangGuard), "live: ").substr(6);
+        assertEq(True, inlist(enabled, ("True", "False")), enabled);
+        string hook = enabled == "True" ? "true" : "false";
+        string out = runChild("release-in-use", "live", HangGuard);
+        # with the hook, the release ran it and so waited for the call, which returned its result; a module that is
+        # not a debug build runs no hook; the object is released in both cases
+        assertEq("live: hook: " + hook + "; call: ok: blocked; release: released; after: " + ObjectReleased,
+            getLine(out, "live: "), out);
+        # a hook that throws does not prevent the release
+        out = runChild("release-throwing-hook", "live", HangGuard);
+        assertEq("live: hook: " + hook + "; call: ok: blocked; release: released; after: " + ObjectReleased,
+            getLine(out, "live: "), out);
+        # a module that is not a debug build does not run a hook stored in the field by reflection either
+        out = runChild("release-forced-hook", "live", HangGuard);
+        assertEq("live: hook: " + hook + "; call: ok: blocked; release: released; after: " + ObjectReleased,
             getLine(out, "live: "), out);
     }
 

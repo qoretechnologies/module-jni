@@ -12,6 +12,6 @@ public abstract class QoreJavaClassBase extends QoreObject {
 
     //! creates the wrapper object with a pointer to an object; this Java object holds a weak reference to the Qore object passed here
     public QoreJavaClassBase(QoreJavaObjectPtr obj) {
-        super(obj.ptr);
+        super(obj);
     }
 }

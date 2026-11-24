@@ -115,7 +115,7 @@ QoreValue JniQoreClass::memberGate(const QoreMethod& meth, void* m, QoreObject* 
         if (!pgm) {
             pgm = current_pgm;
         }
-        QoreExternalProgramContextHelper qepch(xsink, pgm);
+        JniProgramEntryHelper qepch(xsink, pgm);
         if (*xsink) {
             return QoreValue();
         }

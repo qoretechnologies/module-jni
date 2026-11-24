@@ -33,44 +33,6 @@
 
 namespace jni {
 
-namespace {
-//! Ends the use of the native handle of a Qore object or closure that its qoreJniEnterHandle() began (qore#6864)
-/** The exit method is called when the helper is destroyed, also while a C++ exception unwinds with a Java exception
-    pending, which is kept.
-*/
-class JniHandleUseHelper {
-public:
-    DLLLOCAL JniHandleUseHelper(Env& env, jobject obj, jmethodID exit) : jenv(*env), obj(obj), exit(exit) {
-    }
-
-    DLLLOCAL ~JniHandleUseHelper() {
-        // no JNI call may be made with a Java exception pending
-        jthrowable pending = jenv->ExceptionOccurred();
-        if (pending) {
-            jenv->ExceptionClear();
-        }
-        jenv->CallVoidMethod(obj, exit);
-        if (jenv->ExceptionCheck()) {
-            // the exit method raises no exception but an error of the JVM (ex: an OutOfMemoryError), which is
-            // dropped: the destructor cannot raise it
-            jenv->ExceptionClear();
-        }
-        if (pending) {
-            jenv->Throw(pending);
-            jenv->DeleteLocalRef(pending);
-        }
-    }
-
-private:
-    JNIEnv* jenv;
-    jobject obj;
-    jmethodID exit;
-
-    JniHandleUseHelper(const JniHandleUseHelper&) = delete;
-    JniHandleUseHelper& operator=(const JniHandleUseHelper&) = delete;
-};
-} // namespace
-
 //! Discards the values converted for a Java Map or List that the conversion still holds when it is left with an exception
 /** A QoreValue does not own its value, so the values converted so far would leak if the conversion of a nested value
     (ex: a Map with a key that has a NUL character, qore#6738) or a Java call threw an exception.  The explicit error
@@ -262,15 +224,24 @@ QoreValue JavaToQore::convertToQore(LocalReference<jobject> v, QoreProgram* pgm,
         JniPendingContextHelper::set(env);
         jlong ptr = env.callLongMethod(v, Globals::methodQoreObjectBaseEnterHandle, nullptr);
         JniHandleUseHelper use(env, v, Globals::methodQoreObjectBaseExitHandle);
-        QoreObject* obj = JniObjectHandle::fromJava(ptr)->getObject();
-        return obj->refSelf();
+        // this conversion also runs for Qore code that called Java, outside of any native method of Java
+        std::shared_ptr<JniObjectHandle> handle = std::static_pointer_cast<JniObjectHandle>(
+            jni_handle_find(ptr, JniHandleKind::Object));
+        if (!handle) {
+            throw BasicException("invalid or released Qore native handle");
+        }
+        return handle->getObject()->refSelf();
     }
 
     if (env.isInstanceOf(v, Globals::classQoreClosure)) {
         JniPendingContextHelper::set(env);
         jlong ptr = env.callLongMethod(v, Globals::methodQoreClosureEnterHandle, nullptr);
         JniHandleUseHelper use(env, v, Globals::methodQoreClosureExitHandle);
-        const JniClosureHandle* handle = reinterpret_cast<const JniClosureHandle*>(ptr);
+        std::shared_ptr<JniClosureHandle> handle = std::static_pointer_cast<JniClosureHandle>(
+            jni_handle_find(ptr, JniHandleKind::Closure));
+        if (!handle) {
+            throw BasicException("invalid or released Qore native handle");
+        }
         return handle->getCall()->refRefSelf();
     }
 

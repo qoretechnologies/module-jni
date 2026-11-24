@@ -538,14 +538,7 @@ public class JavaClassBuilder {
     @RuntimeType
     public static Object doNormalCallTyped(String methodName, QoreObjectBase self, long mptr, long vptr,
             Class<?> rtype, @Argument(0) Object... args) throws Throwable {
-        long qobjptr = self.qoreJniEnterHandle();
-        try {
-            return doNormalCallTyped(methodName, qobjptr, mptr, vptr, rtype, args);
-        } finally {
-            self.qoreJniExitHandle();
-            // the object stays reachable until its use has ended (see NativeCleanup.Ref.acquireForCleanup())
-            Reference.reachabilityFence(self);
-        }
+        return convertReturnValue(doNormalCall(methodName, self, mptr, vptr, args), rtype);
     }
 
     /** makes a call to a Qore method overriding a Java method with the native handle of the object; for classes
@@ -642,11 +635,13 @@ public class JavaClassBuilder {
     @RuntimeType
     public static Object doNormalCall(String methodName, QoreObjectBase self, long mptr, long vptr,
             @Argument(0) Object... args) throws Throwable {
-        long qobjptr = self.qoreJniEnterHandle();
+        // the native method holds the handle of the object for the call; this class can be defined by another class
+        // loader than the wrapper classes, so it cannot use their internal methods
+        Object[] ctx = QoreURLClassLoader.saveContext();
         try {
-            return doNormalCall(methodName, qobjptr, mptr, vptr, args);
+            return doNormalCallHeld0(methodName, self, mptr, vptr, args);
         } finally {
-            self.qoreJniExitHandle();
+            QoreURLClassLoader.restoreContext(ctx);
             // the object stays reachable until its use has ended (see NativeCleanup.Ref.acquireForCleanup())
             Reference.reachabilityFence(self);
         }
@@ -656,7 +651,7 @@ public class JavaClassBuilder {
      *  which pass the handle instead of the object
      *
      * @param methodName the name of the method
-     * @param qobjptr the pointer to the Qore object
+     * @param qobjptr the opaque handle of the Qore object
      * @param mptr the registered method binding handle
      * @param vptr reserved; must be zero
      * @param args the arguments to the call, if any, can be null
@@ -925,6 +920,8 @@ public class JavaClassBuilder {
 
     private static native Object doStaticCall0(String methodName, long qclsptr, long pgm, long mptr, long vptr,
             Object... args) throws Throwable;
+    private static native Object doNormalCallHeld0(String methodName, QoreObjectBase self, long mptr, long vptr,
+        Object[] args) throws Throwable;
     private static native Object doNormalCall0(String methodName, long qobjptr, long mptr, long vptr, Object... args)
             throws Throwable;
     private static native Object doFunctionCall0(long pgm, long fptr, long vptr, @Argument(0) Object... args)

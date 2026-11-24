@@ -600,6 +600,9 @@ static void jni_program_cleanup(QoreProgram* pgm) noexcept {
     jni::jni_teardown_step("purging the module root namespace cache of a Program", [pgm] () {
         jni::purge_module_root_ns_cache(pgm);
     });
+    jni::jni_teardown_step("purging the shared class records of a Program", [pgm] () {
+        jni::jni_purge_shared_classes(*pgm);
+    });
 }
 
 //! Undoes what a failed jni_module_init() set up
@@ -1764,6 +1767,8 @@ static void qore_jni_mc_register_shared_class(const QoreString& arg, QoreProgram
     jvalue jarg;
     jarg.l = jname;
     env.callVoidMethod(jpc->getClassLoader(), Globals::methodQoreURLClassLoaderRegisterSharedDynamicClass, &jarg);
+    // recorded once the class loader accepted the name
+    jni_record_shared_class(arg.c_str(), *pgm);
 }
 
 static void qore_jni_mc_kotlin_eval(const QoreString& arg, QoreProgram* pgm, JniExternalProgramData* jpc) {

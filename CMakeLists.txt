@@ -1284,6 +1284,7 @@ set(JAVA_TEST_JAR_SRC
     test/java/src/org/qore/jni/test/GovernedProgramProbe.java
     test/java/src/org/qore/jni/test/HostObjectProbe.java
     test/java/src/org/qore/jni/test/LibraryFieldHolder.java
+    test/java/src/org/qore/jni/test/NativeHandleProbe.java
     test/java/src/org/qore/jni/test/SandboxIo.java
     test/java/src/org/qore/jni/test/CrossProgramCalls.java
     test/java/src/org/qore/jni/test/CrossProgramStatic.java
@@ -1420,6 +1421,7 @@ set(CPP_SRC
     src/Globals.cpp
     src/JavaSandbox.cpp
     src/GeneratedBinding.cpp
+    src/JniHandleRegistry.cpp
     src/ql_jni_debug.cpp
     src/InvocationHandler.cpp
     src/Method.cpp
@@ -1731,6 +1733,11 @@ target_include_directories(generated_binding_registry PRIVATE ${QORE_INCLUDE_DIR
 target_link_libraries(generated_binding_registry ${QORE_LIBRARY} Threads::Threads)
 add_test(NAME generated_binding_registry COMMAND generated_binding_registry)
 set_tests_properties(generated_binding_registry PROPERTIES TIMEOUT 30)
+add_executable(jni_handle_registry test/jni_handle_registry.cpp src/JniHandleRegistry.cpp)
+target_include_directories(jni_handle_registry PRIVATE ${QORE_INCLUDE_DIRS} ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(jni_handle_registry ${QORE_LIBRARY} Threads::Threads)
+add_test(NAME jni_handle_registry COMMAND jni_handle_registry)
+set_tests_properties(jni_handle_registry PROPERTIES TIMEOUT 60)
 add_executable(foreign_thread_deref_crash test/foreign_thread_deref_crash.cpp)
 target_include_directories(foreign_thread_deref_crash PRIVATE ${QORE_INCLUDE_DIRS})
 target_link_libraries(foreign_thread_deref_crash ${QORE_LIBRARY} Threads::Threads)

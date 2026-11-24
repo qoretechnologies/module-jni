@@ -1,0 +1,395 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+%modern
+%no-child-restrictions
+%allow-injection
+%prepend-module-path "${SCRIPT_DIR}/../build"
+%requires QUnit
+%requires jni
+
+%exec-class JniInjectedBuiltinTest
+
+#! A drop-in replacement for a builtin class: it has none of the builtin class's private data
+class InjectedPool inherits Qore::SQL::AbstractDatasource {
+    constructor(string desc) {
+    }
+
+    #! returns the arguments exactly as the method received them
+    private string recordArgs(string name, string sql, *list<auto> args) {
+        return sprintf("%s:%s:%d:%s", name, sql, elements args, exists args ? sprintf("%y", args) : "none");
+    }
+
+    string getUserName() { return "injected-user"; }
+    bool currentThreadInTransaction() { return False; }
+    auto execRaw(string sql) {}
+    auto exec(string sql, ...) { return recordArgs("exec", sql, argv); }
+    auto getClientVersion() {}
+    auto getServerVersion() {}
+    auto selectRows(string sql, ...) { return recordArgs("selectRows", sql, argv); }
+    auto selectRow(string sql, ...) { return recordArgs("selectRow", sql, argv); }
+    auto selectRowsTyped(string sql, ...) { return recordArgs("selectRowsTyped", sql, argv); }
+    auto select(string sql, ...) { return recordArgs("select", sql, argv); }
+    auto selectTyped(string sql, ...) { return recordArgs("selectTyped", sql, argv); }
+    auto vexec(string sql, *softlist<auto> arguments) {}
+    auto vselectRows(string sql, *softlist<auto> arguments) {}
+    auto vselectRow(string sql, *softlist<auto> arguments) {}
+    auto vselectRowsTyped(string sql, *softlist<auto> arguments) {}
+    auto vselect(string sql, *softlist<auto> arguments) {}
+    auto vselectTyped(string sql, *softlist<auto> arguments) {}
+    bool inTransaction() { return False; }
+    hash<auto> getConfigHash() { return {}; }
+    *int getPort() {}
+    nothing beginTransaction() {}
+    nothing commit() {}
+    nothing rollback() {}
+    string getConfigString() { return "injected"; }
+    *string getDBEncoding() {}
+    *string getDBName() {}
+    string getDriverName() { return "injected-driver"; }
+    *string getHostName() {}
+    *string getOSEncoding() {}
+    *string getPassword() {}
+}
+
+#! The parent of a class that has an injected replacement that does not inherit it
+class ParentTarget {
+    string inherited() { return "parent-body"; }
+    string declared() { return "parent-declared"; }
+}
+
+class ChildTarget inherits ParentTarget {
+    string own() { return "target-own"; }
+    string variadicCall(string s, ...) { return "target-variadic"; }
+    string listCall(string s, list<auto> l) { return "target-list"; }
+    string inheritedVariadic(string s, ...) { return "target-inherited"; }
+    string staticVariadic(string s, ...) { return "target-static"; }
+}
+
+#! the parent of the injected class, with a variadic method that it inherits
+class MockBase {
+    string inheritedVariadic(string s, ...) { return sprintf("inherited:%s:%d:%y", s, elements argv, argv); }
+}
+
+class ChildMock inherits MockBase {
+    # a variadic method that the injected class has only as a static method
+    static string staticVariadic(string s, ...) { return sprintf("static:%s:%d:%y", s, elements argv, argv); }
+    string own() { return "mock-own"; }
+    # a method of the replaced class's parent, which this class does not inherit
+    string declared() { return "mock-declared"; }
+    # replaces a variadic method with one that declares a list
+    string variadicCall(string s, list<auto> l) { return sprintf("declared:%s:%d:%y", s, l.size(), l); }
+    string listCall(string s, list<auto> l) { return sprintf("trailing:%s:%d:%y", s, l.size(), l); }
+}
+
+#! Java code calls a class injected in place of a builtin class through the builtin class's generated wrapper
+class JniInjectedBuiltinTest inherits QUnit::Test {
+    public {
+        const Target = "qore.Qore.SQL.DatasourcePool";
+
+        #! calls a variadic method of a wrapper with extra arguments of the given shape
+        const VariadicMethod = "    public static Object variadic(Object o, String method, String sql, String shape)
+            throws Throwable {
+        Object[] extra;
+        switch (shape) {
+            case \"none\": extra = new Object[0]; break;
+            case \"one\": extra = new Object[] {1}; break;
+            case \"several\": extra = new Object[] {1, 2, 3}; break;
+            case \"null\": extra = null; break;
+            default: extra = new Object[] {new Object[] {1, 2}}; break;
+        }
+        try {
+            return o.getClass().getMethod(method, String.class, Object[].class).invoke(o, sql, extra);
+        } catch (java.lang.reflect.InvocationTargetException e) {
+            throw e.getCause();
+        }
+    }
+";
+
+        #! Java code compiled against the builtin class
+        const JavaSource = "public class InjectedPoolUser {
+    public static Object typed(Object pool) throws Throwable {
+        return ((qore.Qore.SQL.DatasourcePool)pool).getUserName();
+    }
+    public static Object reflective(Object pool, String method) throws Throwable {
+        return pool.getClass().getMethod(method).invoke(pool);
+    }
+    public static Object typedSelect(Object pool, String sql) throws Throwable {
+        return ((qore.Qore.SQL.DatasourcePool)pool).select(sql, 1, 2);
+    }
+" + VariadicMethod + "}
+";
+
+        #! the shapes of the extra arguments -> the count and the list that the method must receive
+        const Shapes = {
+            "none": "0:none",
+            "one": "1:[1]",
+            "several": "3:[1, 2, 3]",
+            "nested": "1:[[1, 2]]",
+            # a null array is one argument with no value, as in a call in Qore with NOTHING as the argument
+            "null": "1:[null]",
+        };
+
+        const VariadicMethods = ("select", "selectTyped", "selectRow", "selectRows", "selectRowsTyped", "exec");
+
+        const InjectedSource = "%modern
+%requires jni
+%module-cmd(jni) import org.qore.jni.QoreURLClassLoader
+%module-cmd(jni) import org.qore.jni.compiler.QoreJavaCompiler
+object sub make() {
+    return new Qore::SQL::DatasourcePool(\"injected\");
+}
+hash<auto> sub compile(string source, *binary target) {
+    QoreJavaCompiler compiler(QoreURLClassLoader::getCurrent(), NOTHING);
+    if (target) {
+        compiler.injectClass(\"qore.Qore.SQL.DatasourcePool\", target);
+    }
+    auto out = compiler.compile(\"InjectedPoolUser\", source);
+    return {\"compiler\": compiler, \"cls\": out.cls};
+}
+string sub typed(object cls, object pool) {
+    return cls.getMethod(\"typed\", load_class(\"java.lang.Object\")).invoke(NOTHING, pool);
+}
+string sub reflective(object cls, object pool, string method) {
+    return cls.getMethod(\"reflective\", (load_class(\"java.lang.Object\"), load_class(\"java.lang.String\")))
+        .invoke(NOTHING, pool, method);
+}
+string sub variadic(object cls, object pool, string method, string sql, string shape) {
+    object str = load_class(\"java.lang.String\");
+    return cls.getMethod(\"variadic\", (load_class(\"java.lang.Object\"), str, str, str))
+        .invoke(NOTHING, pool, method, sql, shape);
+}
+string sub typed_select(object cls, object pool, string sql) {
+    return cls.getMethod(\"typedSelect\", (load_class(\"java.lang.Object\"), load_class(\"java.lang.String\")))
+        .invoke(NOTHING, pool, sql);
+}
+";
+
+        const HostSource = "%modern
+%requires jni
+%module-cmd(jni) import org.qore.jni.QoreURLClassLoader
+binary sub target() {
+    return QoreURLClassLoader::getCurrent().generateByteCode(\"qore.Qore.SQL.DatasourcePool\");
+}
+";
+
+        const SharedName = "qore.JniInjectedShared.Api";
+        const SharedBaseName = "qore.JniInjectedShared.Base";
+
+        const SharedSource = "%modern
+%requires jni
+%module-cmd(jni) import org.qore.jni.QoreURLClassLoader
+%module-cmd(jni) import org.qore.jni.compiler.QoreJavaCompiler
+public namespace JniInjectedShared {
+    public class Base {
+        string inherited(string sql, ...) {
+            return sprintf(\"inherited:%s:%d:%s\", sql, elements argv, exists argv ? sprintf(\"%y\", argv) : \"none\");
+        }
+    }
+    public class Api inherits Base {
+        string record(string sql, ...) {
+            return sprintf(\"record:%s:%d:%s\", sql, elements argv, exists argv ? sprintf(\"%y\", argv) : \"none\");
+        }
+    }
+}
+object sub make() {
+    return new JniInjectedShared::Api();
+}
+hash<auto> sub compile(string source) {
+    QoreJavaCompiler compiler(QoreURLClassLoader::getCurrent(), NOTHING);
+    auto out = compiler.compile(\"SharedVariadicUser\", source);
+    return {\"compiler\": compiler, \"cls\": out.cls};
+}
+string sub variadic(object cls, object o, string method, string sql, string shape) {
+    object str = load_class(\"java.lang.String\");
+    return cls.getMethod(\"variadic\", (load_class(\"java.lang.Object\"), str, str, str))
+        .invoke(NOTHING, o, method, sql, shape);
+}
+";
+
+        #! the code of the Program in which a class with a parent is replaced
+        const ParentSource = "%modern
+%requires jni
+%module-cmd(jni) import org.qore.jni.QoreURLClassLoader
+%module-cmd(jni) import org.qore.jni.compiler.QoreJavaCompiler
+object sub make() {
+    return new ChildTarget();
+}
+hash<auto> sub compile(string source) {
+    QoreJavaCompiler compiler(QoreURLClassLoader::getCurrent(), NOTHING);
+    auto out = compiler.compile(\"ParentMethodUser\", source);
+    return {\"compiler\": compiler, \"cls\": out.cls};
+}
+string sub call(object cls, object o, string method) {
+    return cls.getMethod(\"call\", (load_class(\"java.lang.Object\"), load_class(\"java.lang.String\")))
+        .invoke(NOTHING, o, method);
+}
+string sub call_args(object cls, object o, string method, int count) {
+    object str = load_class(\"java.lang.String\");
+    return cls.getMethod(\"callArgs\", (load_class(\"java.lang.Object\"), str, str))
+        .invoke(NOTHING, o, method, string(count));
+}
+";
+
+        const ParentJava = "public class ParentMethodUser {
+    public static String call(Object o, String method) {
+        try {
+            return \"ok: \" + o.getClass().getMethod(method).invoke(o);
+        } catch (java.lang.reflect.InvocationTargetException e) {
+            return \"exception: \" + e.getCause().getClass().getName() + \": \" + e.getCause().getMessage();
+        } catch (ReflectiveOperationException e) {
+            return \"no method: \" + e;
+        }
+    }
+    public static String callArgs(Object o, String method, String count) {
+        int n = Integer.parseInt(count);
+        Object[] list = n < 0 ? null : new Object[n];
+        for (int i = 0; i < n; ++i) {
+            list[i] = i + 1;
+        }
+        try {
+            return \"ok: \" + o.getClass().getMethod(method, String.class, Object[].class).invoke(o, \"q\", list);
+        } catch (java.lang.reflect.InvocationTargetException e) {
+            return \"exception: \" + e.getCause().getClass().getName() + \": \" + e.getCause().getMessage();
+        } catch (ReflectiveOperationException e) {
+            return \"no method: \" + e;
+        }
+    }
+}
+";
+    }
+
+    constructor() : QUnit::Test("jni injected builtin class", "1.0", \ARGV) {
+        addTestCase("Java compiled against the injected view of the class", \injectedViewTest());
+        addTestCase("Java compiled with the builtin class's byte code injected", \injectedByteCodeTest());
+        addTestCase("variadic calls on an injected class", \injectedVariadicTest());
+        addTestCase("variadic calls on a registered shared class", \sharedVariadicTest());
+        addTestCase("a parent method of the replaced class", \missingParentTest());
+        set_return_value(main());
+    }
+
+    private Program injectedProgram() {
+        Program p(PO_NEW_STYLE | PO_ALLOW_INJECTION | PO_NO_CHILD_PO_RESTRICTIONS | PO_NO_SYSTEM_API);
+        p.importClass("InjectedPool", "Qore::SQL::DatasourcePool", True);
+        p.importSystemApi();
+        p.loadModule("jni");
+        p.issueModuleCmd("jni", "add-classpath " + get_script_dir() + "/../build/qore-jni-compiler.jar");
+        p.parse(InjectedSource, "jni-injected-builtin");
+        return p;
+    }
+
+    private check(Program p, hash<auto> compiled) {
+        object pool = p.callFunction("make");
+        # the imported copy takes the name of the class that it replaces; its method shows that it is the injected one
+        assertEq("DatasourcePool", pool.className());
+        assertEq("injected-user", pool.getUserName());
+        assertEq("injected-user", p.callFunction("typed", compiled.cls, pool));
+        assertEq("injected-user", p.callFunction("reflective", compiled.cls, pool, "getUserName"));
+        assertEq("injected-driver", p.callFunction("reflective", compiled.cls, pool, "getDriverName"));
+    }
+
+    injectedViewTest() {
+        Program p = injectedProgram();
+        check(p, p.callFunction("compile", JavaSource));
+    }
+
+    injectedByteCodeTest() {
+        Program host(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        host.parse(HostSource, "jni-injected-builtin-host");
+        binary target = host.callFunction("target");
+        Program p = injectedProgram();
+        check(p, p.callFunction("compile", JavaSource, target));
+    }
+
+    #! each extra argument reaches the injected method as one argument
+    injectedVariadicTest() {
+        Program host(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        host.parse(HostSource, "jni-injected-builtin-host");
+        foreach *binary target in ((NOTHING, host.callFunction("target"))) {
+            Program p = injectedProgram();
+            hash<auto> compiled = p.callFunction("compile", JavaSource, target);
+            object pool = p.callFunction("make");
+            foreach string method in (VariadicMethods) {
+                foreach hash<auto> shape in (Shapes.pairIterator()) {
+                    assertEq(sprintf("%s:q:%s", method, shape.value),
+                        p.callFunction("variadic", compiled.cls, pool, method, "q", shape.key),
+                        sprintf("%s %s", method, shape.key));
+                }
+            }
+            # a call compiled with Java's own varargs
+            assertEq("select:q:2:[1, 2]", p.callFunction("typed_select", compiled.cls, pool, "q"));
+        }
+    }
+
+    #! the same for the object of the Program that does not own a registered shared class
+    sharedVariadicTest() {
+        Program owner(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        Program sibling(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        foreach Program p in ((owner, sibling)) {
+            p.loadModule("jni");
+            p.issueModuleCmd("jni", "add-classpath " + get_script_dir() + "/../build/qore-jni-compiler.jar");
+            p.parse(SharedSource, "jni-injected-shared");
+            p.issueModuleCmd("jni", "register-shared-class " + SharedName);
+            p.issueModuleCmd("jni", "register-shared-class " + SharedBaseName);
+        }
+        hash<auto> compiled = owner.callFunction("compile", "public class SharedVariadicUser {\n" + VariadicMethod
+            + "}\n");
+        foreach Program p in ((owner, sibling)) {
+            object o = p.callFunction("make");
+            foreach hash<auto> shape in (Shapes.pairIterator()) {
+                assertEq("record:q:" + shape.value, owner.callFunction("variadic", compiled.cls, o, "record", "q",
+                    shape.key), shape.key);
+                # a variadic method that the shared class inherits from a shared parent
+                assertEq("inherited:q:" + shape.value, owner.callFunction("variadic", compiled.cls, o, "inherited",
+                    "q", shape.key), "inherited " + shape.key);
+            }
+        }
+    }
+
+    #! a method of a parent of the replaced class runs the injected class's method of that name, also if the injected
+    #! class does not inherit that parent
+    missingParentTest() {
+        Program p(PO_NEW_STYLE | PO_ALLOW_INJECTION | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.importClass("ParentTarget");
+        p.importClass("ChildMock", "ChildTarget", True);
+        p.loadModule("jni");
+        p.issueModuleCmd("jni", "add-classpath " + get_script_dir() + "/../build/qore-jni-compiler.jar");
+        p.parse(ParentSource, "jni-injected-parent");
+        hash<auto> compiled = p.callFunction("compile", ParentJava);
+        object o = p.callFunction("make");
+        assertEq("ok: mock-own", p.callFunction("call", compiled.cls, o, "own"));
+        # a method of a parent of the replaced class runs the injected class's own method of that name
+        assertEq("ok: mock-declared", p.callFunction("call", compiled.cls, o, "declared"));
+        # and if the injected class has none, the call fails as a call of a missing method
+        string result = p.callFunction("call", compiled.cls, o, "inherited");
+        assertRegex("^exception: org.qore.jni.QoreExceptionWrapper: METHOD-DOES-NOT-EXIST", result);
+
+        # a replacement that declares a list for a variadic method receives the list; a method bound with a trailing
+        # list receives it as one argument
+        foreach hash<auto> c in (
+            {"count": 0, "list": "[]"},
+            {"count": 1, "list": "[1]"},
+            {"count": 3, "list": "[1, 2, 3]"},
+        ) {
+            assertEq(sprintf("ok: declared:q:%d:%s", c.count, c.list),
+                p.callFunction("call_args", compiled.cls, o, "variadicCall", c.count), "declared list");
+            assertEq(sprintf("ok: trailing:q:%d:%s", c.count, c.list),
+                p.callFunction("call_args", compiled.cls, o, "listCall", c.count), "trailing list");
+            # the varargs of a variadic method that the injected class inherits, or has as a static method, are passed
+            # as separate arguments
+            string args = c.count ? c.list : "null";
+            assertEq(sprintf("ok: inherited:q:%d:%s", c.count, args),
+                p.callFunction("call_args", compiled.cls, o, "inheritedVariadic", c.count), "inherited variadic");
+            assertEq(sprintf("ok: static:q:%d:%s", c.count, args),
+                p.callFunction("call_args", compiled.cls, o, "staticVariadic", c.count), "static variadic");
+        }
+
+        # a null array for a declared list is no list: the call is refused with the error of the method's signature
+        foreach string method in (("variadicCall", "listCall")) {
+            assertRegex("^exception: .*RUNTIME-OVERLOAD-ERROR: no variant matching",
+                p.callFunction("call_args", compiled.cls, o, method, -1), method + " with a null array");
+        }
+    }
+}

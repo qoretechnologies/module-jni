@@ -39,6 +39,23 @@ The handler is the last resort: native methods still handle the errors that they
 exception raised while the thread is attached and the Program is current), and the handler covers everything that
 escapes them, including C++ exceptions thrown from their catch handlers.
 
+## Program entries and pending Java exceptions
+
+Leaving a Program's entry runs its exit handler, which can call Java, and no Java call can be made while a Java
+exception is pending.  The module therefore enters a Program with `JniProgramEntryHelper` (`src/Jvm.h`), which wraps
+`QoreExternalProgramContextHelper`; `GeneratedBindingContext` (`src/GeneratedBinding.h`), which enters the Programs of
+a generated binding, holds its entries as `JniProgramEntryHelper` objects as well.  No other code of the module uses
+`QoreExternalProgramContextHelper`.  A Java exception that is pending when the entry is left (an error of the code that
+ran in it, of the conversion of a call's arguments or result, of a save object callback, or of a check that the caller
+makes after the entry, such as the check of a second binding of a call) is set aside while the Program is left, and
+raised again after it.
+
+When an exception has been set aside, it stays the error of the code that raised it: a Java exception that the exit
+handler leaves pending is cleared and dropped.  When no exception was pending as the entry was left, nothing is set
+aside, and an exception that the exit handler leaves pending stays pending, as for any other entry.  Each entry sets
+the exception aside in turn, so that nested entries, and a call that holds several entries (a binding's Program and
+the Program of its metadata, or two bindings), leave each Program with no Java exception pending.
+
 ## The lifetime of the Qore exception of a `QoreExceptionWrapper`
 
 A `QoreExceptionWrapper` holds its Qore exception (a heap `ExceptionSink`, `QoreToJava::newExceptionWrapper()`)
@@ -53,7 +70,53 @@ describes a pending Java exception, describes a wrapper with its message and nev
 
 ## The native handles of the Java wrappers
 
-Every Java wrapper with a native pointer holds it in a `NativeCleanup.Ref`: `QoreObjectBase` (and `QoreObject`, and
+The value that a Java wrapper holds is an opaque handle of the registry in `src/JniHandleRegistry.h`, never a native
+address (qore#7068):
+
+- A handle is a keyed permutation of a counter, so it is never issued twice in a process and cannot be derived from
+  another handle.  An entry has a kind (object, closure, invocation handler, exception, sandbox policy, connection
+  waiter, classpath policy); a lookup of another kind finds nothing.  A classpath policy handle holds a reference to
+  the filesystem policy bound to classpath entries, which its release drops once; in Java the handle is the identity
+  of the hold, and two holds of the same policy are compared natively.
+- A lookup returns a `std::shared_ptr` that the native method holds for the call, so a release on another thread
+  cannot free the state during its use.  A release removes the entry, and only one caller gets it; the state is
+  destroyed with its last reference, outside of the registry's locks, on a thread attached to Qore and with any
+  pending Java exception kept (`jni_release_native_state()`).
+- A value that is not a live handle of the expected kind raises a Java exception.  The cleanup thread ignores it.
+- The constructors that take a handle are not public.  `JavaClassBuilder` can be defined by another class loader than
+  the wrapper classes, so it cannot use their package-private methods: the native method of a generated call holds
+  the handle of the wrapper itself.
+- A generated method runs only on an object whose class hierarchy has the method's class ID, with two exceptions, in
+  which the object's own method of the bound name runs, never a name from Java: a class that a declared injection
+  (`Program::importClass()` with injection) relates to the method's class, also when the object's class stands in for
+  a class that inherits the method's class, and the same class of another Program when both Programs registered its
+  Java name with the `register-shared-class` module command.  The module records those registrations natively; a
+  registration made only through the Java class loader method grants neither.  For a shared class, the
+  registrations are checked first, outside any entry of the object's Program, so that a call on the object of a
+  Program that did not register, or that has been deleted, runs no code of that Program.  The class itself is then
+  compared within the call's own entry of the object's Program, before any of the call's code: the class of the path
+  is looked up in that Program and compared with the object's class by ID, so that nothing is read from a namespace
+  that the teardown of a Program can delete.  An accepted call enters the object's Program once, as any call of a
+  method of the object; a call that passes the registration check and is then refused has run the Program's entry and
+  exit handlers once, and its thread initialization code if it was the thread's first entry, and none of the call's
+  code.  Its refusal is raised in Java after the entry has been left, so that the exit handler runs with no Java
+  exception pending (see "Program entries and pending Java exceptions" below).  A class of the same name and
+  signature is otherwise another class.  In these two cases, the Java varargs array of a variadic bound method is
+  passed as separate arguments if the object's class, or a parent of it, has any variadic variant of a normal or
+  static method of that name, and otherwise as one list; the choice is made by method name before Qore selects the
+  variant, so a class that overloads that name with both variadic and list variants can get separate arguments where
+  its list variant was meant.  An object is constructed only with the constructor
+  of the Java class's own binding, or for a Java subclass, of its nearest generated superclass, as the private data of
+  an object is typed by class.  Each Qore class of a Java class records its superclass when it is made, and these links
+  are followed to the generated class when an object is constructed.
+- The handles do not make Java code an isolation boundary: code that a host allows to use Java can use reflection.
+  The registry ensures that a value from Java is used as a native handle only if it is a live handle of the expected
+  kind.  It does not cover the lifetime of what libqore's class metadata refers to, such as the target of an injected
+  class.  Program pointers are not handles: a class loader and the native calls that name a Program still pass its
+  raw address in Java, and the module validates it against the Programs that have jni data, and holds the Program,
+  before it dereferences it (see `JniJavaProgramRef`).
+
+Every Java wrapper with a native handle holds it in a `NativeCleanup.Ref`: `QoreObjectBase` (and `QoreObject`, and
 the generated classes), `QoreClosure`, `QoreInvocationHandler`, `QoreExceptionWrapper` and `QoreSandbox.Policy`.  The
 pointer is released by an explicit release (`release()`, `destroy()`, `close()`, `get()` of a wrapper), by the C++
 cleanup thread when the wrapper is collected, and by the module's shutdown, which releases the pointer of every
@@ -64,8 +127,8 @@ wrapper that still exists; Java can keep a wrapper after any of them (qore#6864)
   counts the use per thread, and `Ref.exit()` ends it, in a `finally` block; no lock is held during the call, which
   can run any Qore and Java code.  Native code that reads the pointer of a wrapper (`JavaToQore`) holds it the same
   way, with `qoreJniEnterHandle()` and `qoreJniExitHandle()`.  The generated classes pass the object itself to
-  `JavaClassBuilder.doNormalCall()`, which holds its handle; the overloads that take the pointer remain for classes
-  generated before.
+  `JavaClassBuilder.doNormalCall()`, whose native method holds its handle; the overloads that take the handle remain
+  for classes generated before, and validate it.
 - An explicit release (`release()`, `destroy()`, `close()`) claims the pointer (`Ref.acquireAndClear()`: 0
   afterwards, so no new use begins) and then waits until the uses on other threads have ended; a release on a
   thread that uses the pointer cannot wait for itself, and is refused with `IllegalStateException`, changing

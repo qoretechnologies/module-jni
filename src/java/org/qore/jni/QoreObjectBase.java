@@ -14,10 +14,6 @@ package org.qore.jni;
     @since 1.2
  */
 public class QoreObjectBase {
-    //! the native handle of the Qore object (a weak reference and the sandbox of the code that handed it to Java) -
-    //! kept for ByteBuddy compatibility
-    protected long obj;
-
     /** Native cleanup handle for the weak-reference pointer.  See
         {@link NativeCleanup}.  The C++ cleanup thread dispatches
         pointerRelease0 (tDeref) when the wrapper becomes phantom-reachable. */
@@ -42,34 +38,35 @@ public class QoreObjectBase {
             }
             throw new IllegalStateException("Native cleanup ended during object construction");
         }
-        this.obj = ptr;
     }
 
-    //! creates the wrapper object with a pointer to an object; this Java object holds a weak reference to the Qore object passed here
-    public QoreObjectBase(long obj) {
-        this.obj = obj;
+    //! creates the wrapper for an opaque handle that the module issued; for the module only
+    QoreObjectBase(long obj) {
         this.ref = NativeCleanup.register(this, obj, NativeCleanup.KIND_OBJECT_BASE_WEAK);
     }
 
-    //! returns the pointer to the object, or 0 if it has been released
-    /** @note the pointer can be released as soon as this method returns; native code holds it with
+    //! creates the wrapper for a handle that the module issued, for the classes generated for Qore classes
+    protected QoreObjectBase(QoreJavaObjectPtr obj) {
+        this(obj.ptr);
+    }
+
+    //! returns the opaque handle of the object, or 0 if it has been released; for the module only
+    /** @note the handle can be released as soon as this method returns; native code holds it with
         qoreJniEnterHandle()
         and qoreJniExitHandle() instead
     */
-    public long get() {
+    long get() {
         return ref.ptr;
     }
 
     //! Holds the native handle for a call that uses it, until qoreJniExitHandle(); for module-jni and the
     //! generated classes; see NativeCleanup.Ref.enter()
     /** A call to qoreJniExitHandle() must follow every call that returns, on the same thread: a use that is never
-        ended keeps release() and destroy() waiting.  The names of this method and of qoreJniExitHandle() are
-        reserved: a %Qore class cannot have a method of either name that
-        overrides them.
+        ended keeps release() and destroy() waiting.
 
         @throws IllegalStateException if the handle has been released
     */
-    public final long qoreJniEnterHandle() {
+    final long qoreJniEnterHandle() {
         long p = ref.enter();
         if (p == 0) {
             throw new IllegalStateException("the Qore object has been released");
@@ -80,7 +77,7 @@ public class QoreObjectBase {
     //! Ends a use of the native handle that qoreJniEnterHandle() began on this thread
     /** @throws IllegalStateException if no use is in progress on this thread
     */
-    public final void qoreJniExitHandle() {
+    final void qoreJniExitHandle() {
         ref.exit();
     }
 
@@ -94,7 +91,6 @@ public class QoreObjectBase {
      */
     public void release() {
         long x = ref.acquireAndClear();
-        obj = 0;
         NativeCleanup.unregister(ref);
         if (x != 0) {
             release0(x);
@@ -108,7 +104,6 @@ public class QoreObjectBase {
     */
     public void destroy() {
         long x = ref.acquireAndClear();
-        obj = 0;
         NativeCleanup.unregister(ref);
         if (x != 0) {
             // the Qore destructor can make Java calls for other Programs: the thread's classloader context is

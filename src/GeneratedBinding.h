@@ -7,6 +7,9 @@
 #include <qore/Qore.h>
 #include <jni.h>
 #include <memory>
+#include <optional>
+
+#include "Jvm.h"
 
 namespace jni {
 
@@ -77,6 +80,9 @@ private:
 // A weak reference from the registry keeps the Program allocation valid while the
 // context helper atomically enters execution or rejects a Program being torn down.
 // Never hold the registry mutex while acquiring a Program context or executing code.
+// Each entry is a JniProgramEntryHelper (Jvm.h): a Java exception that is pending when it is left (also one raised
+// while a later entry or check of the caller is made) is set aside while the Program is left, and raised again after
+// it, so that no exit handler runs with a Java exception pending.
 class GeneratedBindingContext {
 public:
     //! Holds the binding and enters its Programs
@@ -96,8 +102,8 @@ public:
 
 private:
     GeneratedBindingLease binding;
-    std::unique_ptr<QoreExternalProgramContextHelper> metadata_context;
-    std::unique_ptr<QoreExternalProgramContextHelper> context;
+    std::optional<JniProgramEntryHelper> metadata_context;
+    std::optional<JniProgramEntryHelper> context;
 };
 
 }

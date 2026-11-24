@@ -57,6 +57,13 @@ public:
     }
 
     /**
+     * \brief Returns the Env object associated with this thread, or nullptr if the thread is not attached to the JVM
+     */
+    static JNIEnv* getEnvIfAttached() {
+        return env;
+    }
+
+    /**
      * \brief Sets the Env object associated with this thread.
      * \param env the Env object associated with this thread
      */
@@ -189,6 +196,98 @@ private:
     static std::atomic<bool> exiting;
     //! the registration of forkChild()
     static QoreForkHandlerRegistration* fork_reg;
+};
+
+//! Holds a Java exception that was pending when a %Qore Program was left, and raises it again when destroyed
+/** The Program's exit handler runs when its entry is left, and can call Java, which it cannot do while a Java
+    exception is pending: a Java exception that is pending then (an error of the code that ran in the entry, or of the
+    conversion of a call's arguments or of its result) is set aside while the Program is left, and raised again after
+    it.
+
+    When an exception has been set aside, it remains the error of the code that raised it: a Java exception that is
+    pending when this object is destroyed (one that the exit handler left pending) is cleared and dropped.  When none
+    has been set aside, this object does nothing, and an exception that the exit handler leaves pending stays pending.
+    JniProgramEntryHelper calls setAside() once for each entry; a further call, which the module does not make, clears
+    and drops a pending exception, so that no exit handler can run with one pending.
+
+    Declared before the entry, with setAside() called before the entry is left, so that the exception is set aside
+    before the entry is left and raised again after it; see JniProgramEntryHelper, which combines both with an entry.
+*/
+class JniJavaExceptionAside {
+public:
+    DLLLOCAL JniJavaExceptionAside() = default;
+
+    //! Raises the exception set aside again, if any
+    DLLLOCAL ~JniJavaExceptionAside() {
+        if (ex) {
+            // the exception set aside is the error: one left pending by the exit handler is dropped
+            env->ExceptionClear();
+            env->Throw(ex);
+            env->DeleteLocalRef(ex);
+        }
+    }
+
+    JniJavaExceptionAside(const JniJavaExceptionAside&) = delete;
+    JniJavaExceptionAside& operator=(const JniJavaExceptionAside&) = delete;
+
+    //! Takes the pending Java exception of the thread, if any; if one has been set aside already, a pending Java
+    //! exception is cleared and dropped instead; no C++ exception is raised
+    DLLLOCAL void setAside() noexcept {
+        if (ex) {
+            // the exception set aside remains the error, and no Java exception is left pending
+            env->ExceptionClear();
+            return;
+        }
+        // a thread that is not attached has no Java exception, and a JVM that cannot be called (in a child process
+        // created with fork(), or one that is ending the process) is not called
+        if (Jvm::isForkedChild() || Jvm::isExiting()) {
+            return;
+        }
+        JNIEnv* e = Jvm::getEnvIfAttached();
+        if (!e) {
+            return;
+        }
+        jthrowable t = e->ExceptionOccurred();
+        if (!t) {
+            return;
+        }
+        e->ExceptionClear();
+        env = e;
+        ex = t;
+    }
+
+private:
+    //! the JNI environment of the thread, set with the exception
+    JNIEnv* env = nullptr;
+    //! the exception set aside, a local reference, or nullptr
+    jthrowable ex = nullptr;
+};
+
+//! Enters a %Qore Program as QoreExternalProgramContextHelper does, and leaves it with no Java exception pending
+/** See JniJavaExceptionAside.  Every entry of the module into a Program that runs the Program's entry and exit handlers
+    uses this class, so that a Java exception that is pending when the entry is left, wherever it was raised while the
+    entry was held, is set aside immediately before the Program is left, with no code running in between; nested
+    entries each set the exception aside in turn.
+*/
+class JniProgramEntryHelper {
+public:
+    //! Enters \a pgm; an error of the entry is raised in \a xsink, which must outlive this object
+    DLLLOCAL JniProgramEntryHelper(ExceptionSink* xsink, QoreProgram* pgm) : entry(xsink, pgm) {
+    }
+
+    //! Sets a pending Java exception aside, then leaves the Program, then raises the exception again
+    DLLLOCAL ~JniProgramEntryHelper() {
+        aside.setAside();
+    }
+
+    JniProgramEntryHelper(const JniProgramEntryHelper&) = delete;
+    JniProgramEntryHelper& operator=(const JniProgramEntryHelper&) = delete;
+
+private:
+    //! declared before the entry, so that it is destroyed after the Program has been left
+    JniJavaExceptionAside aside;
+    //! the entry into the Program
+    QoreExternalProgramContextHelper entry;
 };
 
 } // namespace jni

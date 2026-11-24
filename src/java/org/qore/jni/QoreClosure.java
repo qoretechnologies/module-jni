@@ -16,8 +16,8 @@ public class QoreClosure implements QoreClosureMarkerImpl {
         the legacy java.lang.ref.Cleaner path).  See {@link NativeCleanup}. */
     private final NativeCleanup.Ref ref;
 
-    //! creates the wrapper object with a pointer to an object; this Java object holds a weak reference to the Qore object passed here
-    public QoreClosure(long obj) {
+    //! creates the wrapper for an opaque handle that the module issued; for the module only
+    QoreClosure(long obj) {
         this.ref = NativeCleanup.register(this, obj, NativeCleanup.KIND_CLOSURE);
     }
 
@@ -26,7 +26,7 @@ public class QoreClosure implements QoreClosureMarkerImpl {
         qoreJniEnterHandle()
         and qoreJniExitHandle() instead
     */
-    public long get() {
+    long get() {
         return ref.ptr;
     }
 
@@ -38,7 +38,7 @@ public class QoreClosure implements QoreClosureMarkerImpl {
 
         @throws IllegalStateException if the handle has been released
     */
-    public final long qoreJniEnterHandle() {
+    final long qoreJniEnterHandle() {
         long p = ref.enter();
         if (p == 0) {
             throw new IllegalStateException("the Qore closure has been released");
@@ -49,7 +49,7 @@ public class QoreClosure implements QoreClosureMarkerImpl {
     //! Ends a use of the native handle that qoreJniEnterHandle() began on this thread
     /** @throws IllegalStateException if no use is in progress on this thread
     */
-    public final void qoreJniExitHandle() {
+    final void qoreJniExitHandle() {
         ref.exit();
     }
 

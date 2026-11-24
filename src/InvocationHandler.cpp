@@ -31,10 +31,11 @@ namespace jni {
 
 InvocationHandler::InvocationHandler(std::unique_ptr<Dispatcher> dispatcher) {
    Env env;
+   JniHandleGuard<Dispatcher> handle(jni_make_native_state(dispatcher.release()));
    jvalue arg;
-   arg.j = reinterpret_cast<jlong>(dispatcher.get());
+   arg.j = handle.get();
    LocalReference<jobject> obj = env.newObject(Globals::classQoreInvocationHandler, Globals::ctorQoreInvocationHandler, &arg);
-   dispatcher.release();    // from now on, the Java instance of QoreInvocationHandler is responsible for the dispatcher
+   handle.release();    // from now on, the Java instance of QoreInvocationHandler is responsible for the dispatcher
    jobj = obj.makeGlobal();
 }
 
