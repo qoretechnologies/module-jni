@@ -22,7 +22,8 @@
       adds to the class loader of a sandboxed Program is a grant of the host, which is not also checked against the
       policy of that Program.  A caller whose sandbox restricts only the network makes no such grant: a policy that is
       bound to an entry stays when it adds the entry again, and a new entry that it adds below an entry of restricted
-      code is judged by that entry's policy.  An entry added before a Program's filesystem policy applied, or while its
+      code is judged by that entry's policy.  Such a caller's addition of a path that is already on the classpath has
+      its location checked too, so it is refused, instead of skipped, if that check fails.  An entry added before a Program's filesystem policy applied, or while its
       sandbox restricted nothing, stays unchecked when the policy is set or tightened later: configure the policy before
       the classpath is added.  On a JDK version whose manifest \c Class-Path handling has not been verified, what the
       manifests of trusted jars name is not found in a class loader that also has entries of restricted code.  Below

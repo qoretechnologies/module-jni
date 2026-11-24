@@ -514,8 +514,10 @@ public class QoreURLClassLoader extends URLClassLoader {
     }
 
     //! Adds a URL, and records the kind of its entry, under this object's monitor, which every addition takes
-    /** A transparent entry is recorded before its URL is added, as a bound entry is (QoreClasspathGuard.bind()), so
-        that no lookup sees it as a grant of the host.  A grant is marked after its URL is added: a transparent record
+    /** A transparent entry is recorded before its URL is added, so that no lookup sees it as a grant of the host.  A
+        bound entry is recorded before its URL is added too, but earlier and outside this monitor: addResolvedPath()
+        binds its policy (QoreClasspathGuard.bind()) before it adds any of its files.  A grant is marked after its URL
+        is added: a transparent record
         that a caller restricted only for the network made for the same path before, in an addition that ended first,
         is then replaced, so a grant of the host is never left transparent.  A transparent or bound addition of a path
         that is already on the classpath leaves its kind as it is; a grant of the host marks it a grant.
@@ -554,6 +556,40 @@ public class QoreURLClassLoader extends URLClassLoader {
         synchronized (this) {
             appendClassPath(file);
             addEntryUrl(url, kind);
+        }
+    }
+
+    //! Adds the files that a wildcard pattern of a classpath matches, and records the pattern
+    /** The duplicate check and the record of the pattern are one step under this object's monitor; its files are added
+        outside it, as their locations can be read.  A recorded pattern is not added again, except for a grant of the
+        host: each loadable file that it matches is then marked a grant, also one that a caller restricted only for the
+        network added as a transparent entry, and its URL, which the class loader has, is not added twice.  A pattern
+        whose addition raises an error is not recorded, so it is added again the next time.
+
+        @param pattern the path of the pattern: its directory and \a basename
+    */
+    private void addPatternOnce(File pattern, String basename) {
+        String path = pattern.getPath();
+        boolean recorded;
+        synchronized (this) {
+            entryStep("duplicate-check");
+            recorded = classPathElements.contains(path);
+            if (!recorded) {
+                classPathElements.add(path);
+            }
+        }
+        if (recorded && locationChecked.get() != null) {
+            return;
+        }
+        try {
+            addWildcardIntern(pattern.getParentFile(), basename);
+        } catch (RuntimeException | Error e) {
+            if (!recorded) {
+                synchronized (this) {
+                    classPathElements.remove(path);
+                }
+            }
+            throw e;
         }
     }
 
@@ -2567,16 +2603,7 @@ public class QoreURLClassLoader extends URLClassLoader {
                 fileentry = new File(fileentry, basename);
             }
             if (basename != null && !basename.isEmpty()) {
-                // the pattern is recorded once its files have been added
-                synchronized (this) {
-                    if (classPathElements.contains(fileentry.getPath())) {
-                        continue;
-                    }
-                }
-                addWildcardIntern(fileentry.getParentFile(), basename);
-                synchronized (this) {
-                    classPathElements.add(fileentry.getPath());
-                }
+                addPatternOnce(fileentry, basename);
                 continue;
             }
             // added by code that no sandbox restricts: the entry is a grant of the host, also if restricted code added

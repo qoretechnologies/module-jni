@@ -110,9 +110,13 @@ are `static_assert`ed to match) and calls `QoreSandboxManager::checkFilesystemAc
   own entries, and does not contain the code that adds an entry, which its own sandbox governs.  The kind of a new
   entry is recorded and its URL added under the class loader's monitor, together with the duplicate check and the
   record of its path (`classPathElements`), which are only used under it: a transparent entry is recorded before its
-  URL is added, like a bound one, and a grant is marked after, also for a path that is already on the classpath, so no
-  lookup sees a transparent entry as a grant and a grant is not left transparent by a concurrent addition of the same
-  path.
+  URL is added, and a grant is marked after, also for a path or a wildcard pattern that is already on the classpath,
+  so no lookup sees a transparent entry as a grant and a grant is not left transparent by a concurrent addition of the
+  same path.  A bound entry is recorded before its URL is added as well, but earlier and outside the monitor: its
+  policy is bound before any of its files is added.  When the host and restricted code add the same path, the kind
+  depends on their order: a later grant of the host replaces the binding, and a later binding applies its policy to
+  the grant.  A sandboxed caller never weakens a bound entry: a caller restricted only for the network leaves its kind
+  as it is, and restricted code adds its own policy to it.
 - **Network-only callers.** A caller whose sandbox restricts the network but not the filesystem binds no filesystem
   policy and makes no per-file check: its entries have only their location checked, on every route, also the `global-*`
   module commands of a sandbox that allows uncontrolled APIs.  It is still sandboxed, so it makes no grant of the host:

@@ -467,6 +467,18 @@ sub network_nested_case(string root) {
             "duplicate", root + "/allowed/denied", "nested.txt"));
     }
 
+    # a wildcard pattern that such a caller added first, and that the host adds again: each jar that it matches is then a
+    # grant of the host
+    {
+        Program p = new_program(get_policy(root, ("allowed",)), root + "/allowed");
+        object loader = p.callFunction("own_loader");
+        result("nested pattern added", "ok", ClasspathLookupProbe::addRouteUnder(policy, loader, "addPath",
+            jar_dir + "/*.jar"));
+        result("nested pattern transparent", "missing", p.callFunction("lookup", "getResource", "denied/JB.class"));
+        result("nested pattern host add", "ok", ClasspathLookupProbe::addPath(loader, jar_dir + "/*.jar"));
+        result("nested pattern host grant", "found", p.callFunction("lookup", "getResource", "denied/JB.class"));
+    }
+
     # the control: an entry that code no sandbox restricts adds below a bound entry is a grant of the host
     {
         Program p = new_program(get_policy(root, ("allowed",)), root + "/allowed");
