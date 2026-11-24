@@ -147,6 +147,15 @@ QORE_JNI_MIN_HEAP_SIZE=20m QORE_JNI_MAX_HEAP_SIZE=20m qore -l jni script.q
     were still running, and the process aborted (<tt>external native threads still active while stopping the cleanup
     worker</tt>) when a \c ThreadPool worker was active.
 
+    @section jni_process_exit_in_call Process Exit While a Java Thread Is In a Qore Call
+
+    When the %Qore program ends while a Java thread is still inside a call of %Qore code (ex: a Java thread that
+    called a closure that has not returned), %Qore does not wait for the call: it leaves the library as it is and ends
+    the process immediately, without running any exit handler (qore#7340).  The module's delete function and its exit
+    handler do not run, the JVM is not destroyed, and Java's shutdown hooks do not run.  A program that needs a Java
+    shutdown hook to run (ex: to flush or to close a resource) must let such calls end before it ends, or call
+    \c System.exit() itself, which runs the hooks first (see @ref jni_process_exit).
+
     When a Java process loads %Qore and so has created the JVM itself, the Java host decides how the JVM ends the
     process.
 */
