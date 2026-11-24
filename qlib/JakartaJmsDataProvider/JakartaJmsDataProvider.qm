@@ -30,7 +30,7 @@
 %module-cmd(jni) global-add-relative-classpath ./jar/jakarta.jms-api-3.1.0.jar
 
 # implements a data provider for JMS functionality
-%requires(reexport) DataProvider >= 3.12
+%requires(reexport) DataProvider >= 3.13
 # implements support for JMS connections
 %requires(reexport) ConnectionProvider
 

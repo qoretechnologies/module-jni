@@ -70,6 +70,7 @@ public class JmsPollingDataProvider inherits JmsDataProviderBase, DataProvider::
             "name": "polling",
             "desc": "Data provider for event-driven JMS message consumption",
             "supports_observable": True,
+            "supports_refusal_redelivery": True,
         };
 
         #! Provider summary info

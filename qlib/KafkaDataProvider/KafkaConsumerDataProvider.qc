@@ -63,6 +63,7 @@ public class KafkaConsumerDataProvider inherits DataProvider::Observer, KafkaDat
             "name": "consumer",
             "desc": "Data provider for listening to KAFKA messages",
             "supports_observable": True,
+            "supports_refusal_redelivery": True,
             "constructor_options": ConstructorOptions,
         };
 
