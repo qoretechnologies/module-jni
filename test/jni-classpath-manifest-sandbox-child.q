@@ -421,6 +421,55 @@ sub jdkgate_case(string root) {
     result("jdkgate: the running JDK version is used again", "ok", add_classpath(p, root + "/a/cp-ref.jar").err);
 }
 
+#! returns a sandbox that restricts neither the filesystem nor the network, or with \a network, only the network
+SandboxManager sub get_open_sandbox(bool network) {
+    SandboxManager sm();
+    call_object_method(sm, "setUncontrolledApiPolicy", True);
+    sm.setFilesystemDefaultPolicy(True);
+    sm.setNetworkDefaultPolicy(!network);
+    return sm;
+}
+
+#! the manifest checks depend on what the policy of the caller restricts (qore#7364): a caller whose sandbox
+#! restricts neither the filesystem nor the network is not affected, also on a JDK version that has not been verified,
+#! and one restricted only for the network has only the location of the entries checked, on that version as well
+sub callers_case(string root) {
+    list<hash<auto>> jdks = ({"label": "running JDK", "feature": NOTHING, "dir": root + "/gr"},
+        {"label": "unverified JDK", "feature": 9999, "dir": root + "/gu"});
+    # the Java routes, which have their own check for a caller restricted only for the network, are covered by
+    # jni-classpath-url-path.qtest
+    foreach hash<auto> jdk in (jdks) {
+        set_jdk_feature(jdk.feature);
+        string dir = jdk.dir;
+        string l = "callers: " + jdk.label;
+        # a sandbox that restricts neither: added and followed as with no sandbox
+        Program p = new_program(get_open_sandbox(False));
+        result(l + ": an open sandbox adds a jar with a Class-Path", "ok", add_classpath(p, dir + "/cp-ref.jar").err);
+        result(l + ": the class of the named jar is loaded", True, loads(p, "CpTarget"));
+        p = new_program(get_open_sandbox(False));
+        result(l + ": an open sandbox adds a jar whose Class-Path names a URL", "ok",
+            add_classpath(p, dir + "/cp-http.jar").err);
+        result(l + ": the class of that jar is loaded", True, loads(p, "CpHttp"));
+        # but a special file that the class loader would open is refused for it too
+        p = new_program(get_open_sandbox(False));
+        hash<auto> hs = add_classpath(p, root + "/v/cp-ref.jar");
+        result(l + ": an open sandbox is refused a special file that a Class-Path names", "JNI-CLASSPATH-ERROR",
+            hs.err);
+        result(l + ": the error names the special file", True, hs.desc =~ /is not a regular file/);
+        # a sandbox that restricts only the network: the location of each entry is checked
+        p = new_program(get_open_sandbox(True));
+        result(l + ": a network-only sandbox adds a jar with a local Class-Path", "ok",
+            add_classpath(p, dir + "/cp-ref.jar").err);
+        result(l + ": the class of the named jar is loaded with it", True, loads(p, "CpTarget"));
+        p = new_program(get_open_sandbox(True));
+        hash<auto> h = add_classpath(p, dir + "/cp-http.jar");
+        result(l + ": a network-only sandbox refuses a Class-Path that names a URL", "JNI-CLASSPATH-ERROR", h.err);
+        result(l + ": the error names the entry", True, h.desc =~ /which is not a file/);
+        result(l + ": the class of the refused jar is not loaded", False, loads(p, "CpHttp"));
+    }
+    set_jdk_feature();
+}
+
 #! returns the feature version of the running JVM, the value that the product's check reads
 int sub running_jdk_feature() {
     Program p(PO_NEW_STYLE);
@@ -575,7 +624,8 @@ sub main() {
     bool verified = inlist(feature, VerifiedJdkFeatures);
     printf("jdk-gate: %s %d\n", verified ? "verified" : "refused", feature);
     # the check applies only to a sandboxed classpath, so the unsandboxed case is the same on every JDK
-    if (!verified && ARGV[0] != "unsandboxed") {
+    # so are the callers that the manifest checks do not refuse on an unverified version (qore#7364)
+    if (!verified && ARGV[0] != "unsandboxed" && ARGV[0] != "callers") {
         if (ARGV[0] == "jdkgate") {
             unverified_jdkgate_case(root, feature);
         } else {
@@ -593,6 +643,7 @@ sub main() {
         case "allowed": allowed_case(root); break;
         case "unsandboxed": unsandboxed_case(root); break;
         case "jdkgate": jdkgate_case(root); break;
+        case "callers": callers_case(root); break;
         default:
             printf("unknown case %y\n", ARGV[0]);
             exit(1);
