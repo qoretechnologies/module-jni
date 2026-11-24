@@ -99,8 +99,6 @@ public class QoreURLClassLoader extends URLClassLoader {
 
     //! the paths that the class loader's own additions have recorded; guarded by this object
     private final HashSet<String> classPathElements = new HashSet<String>();
-    //! the paths of the class loader's own additions, in order; guarded by this object
-    private String classPath = new String();
 
     //! Program pointer for the associated Qore Program
     /** Using AtomicLong for thread-safe access to the program pointer.
@@ -501,7 +499,7 @@ public class QoreURLClassLoader extends URLClassLoader {
     //! otherwise
     /** The points: "duplicate-check", just before a path that the class loader records is checked for a duplicate;
         "before-add", between recording a transparent entry and adding a URL; "after-add", right after a URL is added
-        and before a grant is marked
+        and before a grant is marked; "pattern-add", just before the files of a wildcard pattern are added
     */
     private static volatile java.util.function.BiConsumer<QoreURLClassLoader, String> entryStepHook;
 
@@ -553,43 +551,34 @@ public class QoreURLClassLoader extends URLClassLoader {
             checkClasspathLocation(url);
             kind = ENTRY_TRANSPARENT;
         }
-        synchronized (this) {
-            appendClassPath(file);
-            addEntryUrl(url, kind);
-        }
+        addEntryUrl(url, kind);
     }
 
-    //! Adds the files that a wildcard pattern of a classpath matches, and records the pattern
-    /** The duplicate check and the record of the pattern are one step under this object's monitor; its files are added
-        outside it, as their locations can be read.  A recorded pattern is not added again, except for a grant of the
-        host: each loadable file that it matches is then marked a grant, also one that a caller restricted only for the
-        network added as a transparent entry, and its URL, which the class loader has, is not added twice.  A pattern
-        whose addition raises an error is not recorded, so it is added again the next time.
+    //! Adds the files that a wildcard pattern of a classpath matches, and records the pattern once they are added
+    /** A pattern is recorded only after its addition succeeds, so it means that its files are on the classpath; a
+        pattern whose addition raises an error is not recorded, and the error reaches the caller.  A caller restricted
+        only for the network skips a recorded pattern.  A grant of the host always adds the pattern again, so each
+        loadable file that it matches is marked a grant, also one that such a caller added as a transparent entry; the
+        class loader drops a URL that it has already, so concurrent or repeated additions add each file once.
 
         @param pattern the path of the pattern: its directory and \a basename
     */
     private void addPatternOnce(File pattern, String basename) {
         String path = pattern.getPath();
-        boolean recorded;
-        synchronized (this) {
-            entryStep("duplicate-check");
-            recorded = classPathElements.contains(path);
-            if (!recorded) {
-                classPathElements.add(path);
-            }
-        }
-        if (recorded && locationChecked.get() != null) {
-            return;
-        }
-        try {
-            addWildcardIntern(pattern.getParentFile(), basename);
-        } catch (RuntimeException | Error e) {
-            if (!recorded) {
-                synchronized (this) {
-                    classPathElements.remove(path);
+        if (locationChecked.get() != null) {
+            synchronized (this) {
+                entryStep("duplicate-check");
+                if (classPathElements.contains(path)) {
+                    return;
                 }
             }
-            throw e;
+        }
+        synchronized (this) {
+            entryStep("pattern-add");
+        }
+        addWildcardIntern(pattern.getParentFile(), basename);
+        synchronized (this) {
+            classPathElements.add(path);
         }
     }
 
@@ -622,7 +611,6 @@ public class QoreURLClassLoader extends URLClassLoader {
                 return;
             }
             if (url != null) {
-                appendClassPath(file);
                 addEntryUrl(url, kind);
             } else if (!usable && log_unusable) {
                 // a usable file whose URL cannot be made was logged by createUrl()
@@ -2613,7 +2601,6 @@ public class QoreURLClassLoader extends URLClassLoader {
             addFileOnce(fileentry, ENTRY_GRANT, exists && (fileentry.isDirectory() || isLoadable(fileentry.getName())),
                 exists);
         }
-        //infoLog("Class loader is using classpath: \"" + classPath + "\".");
     }
 
     //! The most jars and directories that the manifest Class-Path attributes of a sandboxed classpath can name
@@ -3597,14 +3584,6 @@ public class QoreURLClassLoader extends URLClassLoader {
                 thr + ")");
             return null;
         }
-    }
-
-    //! Appends a path to the list of the class loader's own additions; called with this object's monitor held
-    private void appendClassPath(File file) {
-        if (classPath.length() > 0) {
-            classPath += File.pathSeparator;
-        }
-        classPath += file.getPath();
     }
 
     private void setContextProgram(QoreURLClassLoader new_syscl) {

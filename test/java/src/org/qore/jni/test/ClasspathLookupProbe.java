@@ -1901,14 +1901,16 @@ public class ClasspathLookupProbe {
     /** "transparent": a caller restricted only for the network adds \a path, and right after its URL is added, a lookup
         of \a name is made; returns what it found.  "grant": the host adds \a path, and the same caller adds it between
         the steps of the host's addition; "duplicate": the same, just before the host's duplicate check.  Both return
-        what a lookup of \a name finds once both have added it.
+        what a lookup of \a name finds once both have added it.  "pattern": the same caller adds the wildcard pattern
+        \a path, and just before its files are added, it adds the pattern again and then looks \a name up; returns what
+        that lookup found.
     */
     public static String entryStep(QoreSandbox.Policy policy, QoreURLClassLoader loader, String mode, String path,
             String name) throws Exception {
         java.lang.reflect.Field field = QoreURLClassLoader.class.getDeclaredField("entryStepHook");
         field.setAccessible(true);
         String point = mode.equals("transparent") ? "after-add" : mode.equals("grant") ? "before-add"
-            : "duplicate-check";
+            : mode.equals("pattern") ? "pattern-add" : "duplicate-check";
         String[] seen = {"the hook did not run"};
         java.util.function.BiConsumer<QoreURLClassLoader, String> hook = (cl, at) -> {
             if (cl != loader || !at.equals(point)) {
@@ -1920,12 +1922,18 @@ public class ClasspathLookupProbe {
             } catch (IllegalAccessException e) {
                 throw new IllegalStateException(e);
             }
+            if (mode.equals("pattern")) {
+                // a second caller adds the same pattern; once it returns, the files that it matches are there
+                String rv = addRouteUnder(policy, loader, "addPath", path);
+                seen[0] = rv.equals("ok") ? lookup(loader, "getResource", name) : "the second addition was " + rv;
+                return;
+            }
             seen[0] = mode.equals("transparent") ? lookup(loader, "getResource", name)
                 : addRouteUnder(policy, loader, "addPath", path);
         };
         field.set(null, hook);
         try {
-            if (mode.equals("transparent")) {
+            if (mode.equals("transparent") || mode.equals("pattern")) {
                 String rv = addRouteUnder(policy, loader, "addPath", path);
                 return rv.equals("ok") ? seen[0] : "the addition was " + rv;
             }

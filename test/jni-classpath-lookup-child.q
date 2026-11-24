@@ -354,6 +354,44 @@ sub network_readd_case(string root) {
         result("readd host grant", True, p.callFunction("lookup", "getResource", "denied/g.txt") != "missing");
     }
 
+    # a wildcard pattern is recorded only once its files are added
+    {
+        string pdir = root + "/netpattern";
+        mkdir(pdir, 0700);
+        mkdir(root + "/patsrc", 0700);
+        mkdir(root + "/patsrc/pat", 0700);
+        write_file(root + "/patsrc/pat/x.txt", "x");
+        ClasspathLookupProbe::writeJar(root + "/patsrc", pdir + "/p1.jar", "");
+        Program p = new_program(get_policy(root, ("allowed",)), root + "/allowed");
+        object loader = p.callFunction("own_loader");
+        # a second addition while the first one has not added the files yet adds them itself
+        result("pattern concurrent", "found", ClasspathLookupProbe::entryStep(policy, loader, "pattern",
+            pdir + "/*.jar", "pat/x.txt"));
+        # a recorded pattern is skipped by such a caller, and added again by the host
+        mkdir(root + "/patsrc2", 0700);
+        mkdir(root + "/patsrc2/pat2", 0700);
+        write_file(root + "/patsrc2/pat2/y.txt", "y");
+        ClasspathLookupProbe::writeJar(root + "/patsrc2", pdir + "/p2.jar", "");
+        result("pattern re-add", "ok", ClasspathLookupProbe::addRouteUnder(policy, loader, "addPath", pdir + "/*.jar"));
+        result("pattern re-add skipped", "missing", p.callFunction("lookup", "getResource", "pat2/y.txt"));
+        result("pattern host re-add", "ok", ClasspathLookupProbe::addPath(loader, pdir + "/*.jar"));
+        result("pattern host re-add added", "found", p.callFunction("lookup", "getResource", "pat2/y.txt"));
+
+        # an addition that fails is not recorded, so a retry adds the pattern
+        string fdir = root + "/netpattern-fail";
+        mkdir(fdir, 0700);
+        ClasspathLookupProbe::writeJar(root + "/patsrc", fdir + "/bad.jar", "file://otherhost/x.jar");
+        Program q = new_program(get_policy(root, ("allowed",)), root + "/allowed");
+        object qloader = q.callFunction("own_loader");
+        result("pattern failed", "refused", ClasspathLookupProbe::addRouteUnder(policy, qloader, "addPath",
+            fdir + "/*.jar"));
+        unlink(fdir + "/bad.jar");
+        ClasspathLookupProbe::writeJar(root + "/patsrc", fdir + "/good.jar", "");
+        result("pattern retry", "ok", ClasspathLookupProbe::addRouteUnder(policy, qloader, "addPath",
+            fdir + "/*.jar"));
+        result("pattern retry added", "found", q.callFunction("lookup", "getResource", "pat/x.txt"));
+    }
+
     # a classpath that re-adds a bound entry and is then refused at a later entry, whose manifest names another host,
     # leaves the policy of the bound entry in place
     string dir = root + "/netjar";
