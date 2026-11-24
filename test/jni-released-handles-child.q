@@ -19,8 +19,9 @@
 # - "generated-released": a method of a generated class is called through its generated method before and after the
 #   object is released (ReleasedHandleCalls.generatedReleased())
 # - "shutdown-in-use": a Java thread's call of a closure of a user module (JniReleasedHandlesBlock) is in progress,
-#   blocked until the process ends, when the jni module is shut down; the process must exit, and a JVM shutdown hook
-#   prints "shutdown: <state>", the state of the closure's handle after the module's shutdown has claimed it
+#   blocked until the process ends; the Qore library does not wait for it and ends the process without running any exit
+#   handler (qore#7340), so the process must exit and the JVM shutdown hook that the module registers, which would
+#   print "shutdown: <state>", the state of the closure's handle, does not run
 # - "exit-unmatched": the end of a use of the object's handle that was never begun, before and after the object is
 #   released (ReleasedHandleCalls.exitUnmatched())
 # the operation "policy" keeps a QoreSandbox.Policy captured for the script and calls isSandboxed()

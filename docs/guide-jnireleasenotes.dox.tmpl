@@ -6,6 +6,9 @@
 
     @section jni_3_0_0 jni Module Version 3.0.0
 
+    - <b>Behavior change</b> (qore#7340): when the %Qore program ends while a Java thread is still inside a call of
+      %Qore code, the process now ends without running any exit handler, so Java's shutdown hooks do not run and the
+      JVM is not destroyed (the process does not wait for the call); see @ref jni_process_exit_in_call
     - <b>Security</b>: the filesystem policy of restricted code now applies to every class and resource lookup below a
       classpath entry that it added, to the real path of each file, on any thread, also for a lookup that the JVM makes
       with no %Qore caller.  A file that the policy denies behaves as a file that does not exist.  The Kotlin compiler

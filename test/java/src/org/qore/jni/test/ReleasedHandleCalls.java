@@ -210,11 +210,14 @@ public final class ReleasedHandleCalls {
         }
     }
 
-    //! Prints <tt>shutdown: </tt> and the state of the handle of the closure kept on stderr when the JVM is destroyed,
-    //! after the module's shutdown has claimed the handles of the wrappers
-    /** The module's shutdown releases a handle that it claims only if no use of it is in progress
-        (NativeCleanup.Ref.acquireForCleanup() returns 0 otherwise, and the release of 0 frees nothing): a handle that
-        is claimed and cleared, with a use still in progress, has been left unreleased.
+    //! Registers a JVM shutdown hook that prints <tt>shutdown: </tt> and the state of the handle of the closure kept
+    //! on stderr
+    /** The hook runs when the JVM is destroyed as the process ends normally, after the module's shutdown has claimed
+        the handles of the wrappers: that releases a handle that it claims only if no use of it is in progress
+        (NativeCleanup.Ref.acquireForCleanup() returns 0 otherwise, and the release of 0 frees nothing), so a handle
+        that is claimed and cleared, with a use still in progress, has been left unreleased.  It does not run when the
+        process ends while a call is in progress in a Java thread (qore#7340): see "shutdown-in-use" in
+        jni-released-handles-child.q, which checks that it did not.
     */
     public static void reportClosureAtShutdown() {
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {

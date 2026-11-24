@@ -4,7 +4,7 @@
 
 # a user module for test/jni-released-handles.qtest ("shutdown-in-use"): a Java thread calls a closure of the module,
 # whose Qore code blocks until the process ends; the Qore library leaves the Program of a module that a foreign thread
-# runs code in at its shutdown, so the call is still in progress when the jni module is shut down
+# runs code in, and ends the process without running any exit handler (qore#7340)
 
 %modern
 %requires jni
@@ -25,7 +25,8 @@ public namespace JniReleasedHandlesBlock {
     public sub start() {
         ReleasedHandleCalls::keep(sub () { ReleasedHandleCalls::blockForever(); });
         ReleasedHandleCalls::startBlockedCall();
-        # reports the state of the closure's handle once the module's shutdown has claimed it
+        # registers a JVM shutdown hook that would report the state of the closure's handle; it does not run, as the
+        # process ends without running any exit handler while the call is in progress (qore#7340)
         ReleasedHandleCalls::reportClosureAtShutdown();
     }
 }
