@@ -402,7 +402,8 @@ names the caller while the Java method runs.  The module therefore records the c
 | Call from Qore into Java | Recorded caller |
 |--------------------------|-----------------|
 | builtin calls: a Java method of an object, a static Java method, a constructor (`exec_java_method()`, `exec_java_static_method()`, `exec_java_constructor()`), a member read of a Java object (`JniQoreClass::memberGate()`), the module's functions and `JavaArray` methods that run Java code (`load_class()`, `invoke()`, `invoke_nonvirtual()`, `implement_interface()`, `new_array()`, `define_class()`, `get_byte_code()`, `kotlin_eval()`, `JavaArray::get()`/`set()`/`toString()`/`deepToString()`/`getClass()`) | `callSite()` (for library code, resolved as below, qore#7394): the Program that libqore records in the frame of the builtin call, which it pushes before it calls the module (read by pushing a stack location for a moment, `JniCallSiteProbe`); libqore enters the Program of a Java class of another Program for a call of its methods, and makes the object's Program the Program context of the call, so neither names the caller then |
-| member accessors of Java fields (`jni_field_get()`/`jni_field_set()`, `jni_static_field_get()`/`jni_static_field_set()`), a Java object called as a Qore callable (`QoreJniFunctionalInterface::execValue()`, before the Program that created the callable is entered) | `current()`: the current Program, which these calls do not change (for library code, resolved as below, qore#7394) |
+| member accessors of Java fields (`jni_field_get()`/`jni_field_set()`, `jni_static_field_get()`/`jni_static_field_set()`) | `current()`: the current Program, which these calls do not change (for library code, resolved as below, qore#7394) |
+| a Java object called as a Qore callable (`QoreJniFunctionalInterface::execValue()`, before the Program that created the callable is entered) | the callable's owner: the record that `jni_java_caller_owner()` gave it when it was created (below) |
 
 `callSite()` has one limit (qore#7028): for code that another Program called directly (ex: a host calling a tenant's
 closure), libqore records in the frame of a call that enters another Program the Program context of the call, which is
@@ -459,6 +460,12 @@ Not resolved:
   code whose sandbox restricts network or filesystem access before it connects;
 - the Program that `callSite()` resolves is the current one only: a call of a static Java method of a class of another
   Program that library code makes has entered that Program, so the library's Program is recorded, as libqore names it.
+
+With a Qore library that does not run every function body with its own Program's call context (without
+`_QORE_HAS_FUNCTION_OWN_CALL_PROGRAM_CONTEXT`, which the module hash reports as
+`get_module_hash().jni.info.function_own_call_program_context`), library code that another library calls has the
+calling library's Program as the Program context of the call, which is not the current Program, so it is not resolved;
+the test skips that case without it.
 
 `test/jni-library-caller-program.qtest` has two sandboxed Programs reach these through the functions and the static
 methods of a library module, through a second library that calls it, and through the fields of Java classes of the

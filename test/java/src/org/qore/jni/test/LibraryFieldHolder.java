@@ -25,4 +25,9 @@ public class LibraryFieldHolder {
 
     //! a static field with a Java closure
     public static Object staticClosure = HostObjectProbe.caller();
+
+    //! sets the static field to a new Java closure
+    public static void reset() {
+        staticClosure = HostObjectProbe.caller();
+    }
 }

@@ -747,8 +747,9 @@ public:
     */
     DLLLOCAL static JniJavaCallerRecord callSite();
 
-    //! Returns the current Program, for the calls from Qore into Java that are not builtin calls (a member access, a
-    //! Java object called as a Qore closure), which libqore makes in the Program of the calling code
+    //! Returns the current Program, for the calls from Qore into Java that are not builtin calls (the member accesses
+    //! of Java fields), which libqore makes in the Program of the calling code; a Java object called as a Qore
+    //! closure records instead the owner that jni_java_caller_owner() gave it when it was created
     /** For library code that a restricting sandbox governs, the Program of the code that the library code serves, or
         a record that reaches no Program if that is not known, as for callSite() (qore#7394)
 

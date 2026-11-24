@@ -401,6 +401,16 @@ void jni_qore_module_desc(QoreModuleInfo& mod_info) {
     }
     info->setKeyValue("builtin_call_site_program", true, nullptr);
 #endif
+#ifdef _QORE_HAS_FUNCTION_OWN_CALL_PROGRAM_CONTEXT
+    // "function_own_call_program_context": the body of every function, closure and method runs with its own Program
+    // as the Program context of the calls that it makes, so library code that calls other library code names its own
+    // Program, which the module resolves to the Program of the code that the library code serves (qore#7394;
+    // jni_calling_code_program())
+    if (!info) {
+        info = new QoreHashNode(autoTypeInfo);
+    }
+    info->setKeyValue("function_own_call_program_context", true, nullptr);
+#endif
 #ifdef _QORE_HAS_PROGRAM_CREATOR_SANDBOX
     // "program_creator_sandbox": a Program that code with a restricting sandbox created counts as sandboxed for the
     // attribution of the Java code on the stack (qore#7023, qore#7028)

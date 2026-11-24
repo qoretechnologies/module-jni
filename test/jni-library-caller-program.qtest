@@ -154,6 +154,19 @@ string sub call_stored_closure() {
         return jlcp_stored_closure()(\"jlcp_name\");
     });
 }
+
+# a Java closure that library code writes to a field and reads back
+string sub field_set_closure_via(string which) {
+    return run(string sub () {
+        code c = which == \"static\" ? jlcp_static_field_set_closure() : jlcp_field_set_closure();
+        return c(\"jlcp_name\");
+    });
+}
+
+# an operation of library code in a thread that it starts
+string sub background_via(string op) {
+    return jlcp_background(op);
+}
 ";
 
         #! the byte code of org.qore.jni.test.jcp.Defined, an empty public class
@@ -212,6 +225,12 @@ string sub call_stored_closure() {
             "A": tenant("A"),
             "B": tenant("B"),
         };
+    }
+
+    #! returns True if the Qore library that the module was built with runs every function body with its own
+    #! Program's call context (_QORE_HAS_FUNCTION_OWN_CALL_PROGRAM_CONTEXT)
+    private static bool functionOwnCallProgramContext() {
+        return get_module_hash().jni.info.function_own_call_program_context ?? False;
     }
 
     #! returns the ID of the Program that owns an object, or NOTHING without the debug function of the module
@@ -297,8 +316,16 @@ string sub call_stored_closure() {
             string rv = i.value.callFunction("byte_array_background");
             assertRegex(CallerNotKnown, rv, i.key + ": " + rv);
         }
+        # the same for an array of new_array() and for a Java closure read from a field
+        foreach hash<auto> i in (tenants().pairIterator()) {
+            foreach string op in ("new_array", "field_read", "static_field_read") {
+                string rv = i.value.callFunction("background_via", op);
+                assertRegex(CallerNotKnown, rv, op + " " + i.key + ": " + rv);
+            }
+        }
         # trusted code that calls the library has the state placed as libqore names the Program
         assertEq("2", call_function("JniLibraryCallerProgram::jlcp_byte_array_background", <0102>));
+        assertEq("2", call_function("JniLibraryCallerProgram::jlcp_background", "new_array"));
     }
 
     javaClosureTest() {
@@ -318,6 +345,15 @@ string sub call_stored_closure() {
                 assertEq("OK: ok: " + i.key, i.value.callFunction("field_closure_via", which), which + " " + i.key);
             }
         }
+        # also after library code wrote a closure that it obtained for the calling code to the field; a closure in the
+        # static field, which every caller of the library shares, stays the closure of the code that wrote it
+        foreach string which in ("instance", "static") {
+            foreach hash<auto> i in (ts.pairIterator()) {
+                assertEq("OK: ok: " + i.key, i.value.callFunction("field_set_closure_via", which), which + " set "
+                    + i.key);
+            }
+        }
+        call_function("JniLibraryCallerProgram::jlcp_reset_static_field");
     }
 
     newArrayTest() {
@@ -332,13 +368,23 @@ string sub call_stored_closure() {
     }
 
     nestedTest() {
-        # through a static method of the same library, and through the code of another library
-        foreach string how in ("static", "function") {
-            foreach hash<auto> i in (tenants().pairIterator()) {
-                object array = i.value.callFunction("nested_byte_array_via", how);
-                assertEq(2, array.length(), how + " " + i.key + ": length");
-                assertOwnProgram(i.value, array, how + " " + i.key + ": array");
-            }
+        # through a static method of the same library
+        foreach hash<auto> i in (tenants().pairIterator()) {
+            object array = i.value.callFunction("nested_byte_array_via", "static");
+            assertEq(2, array.length(), "static " + i.key + ": length");
+            assertOwnProgram(i.value, array, "static " + i.key + ": array");
+        }
+        # through the code of another library, which names its own Program as the Program context of the call only
+        # with a Qore library that runs every function body with its own Program's call context
+        if (!functionOwnCallProgramContext()) {
+            testSkip("the Qore library does not run function bodies with their own Program's call context "
+                "(_QORE_HAS_FUNCTION_OWN_CALL_PROGRAM_CONTEXT): library code that another library calls names that "
+                "library's Program, which is not the current one");
+        }
+        foreach hash<auto> i in (tenants().pairIterator()) {
+            object array = i.value.callFunction("nested_byte_array_via", "function");
+            assertEq(2, array.length(), "function " + i.key + ": length");
+            assertOwnProgram(i.value, array, "function " + i.key + ": array");
         }
         binary bytecode = parse_hex_string(DefinedByteCode);
         foreach hash<auto> i in (tenants().pairIterator()) {
@@ -355,6 +401,9 @@ string sub call_stored_closure() {
         # the library's
         assertEq("OK: ok: A", ts.A.callFunction("call_stored_closure"), "A, later");
         assertEq("OK: ok: A", ts.B.callFunction("call_stored_closure"), "B");
+        # the library releases the closure, which keeps its Program allocated
+        call_function("JniLibraryCallerProgram::jlcp_clear_stored");
+        assertEq(NOTHING, call_function("JniLibraryCallerProgram::jlcp_stored_closure"));
     }
 
     trustedTest() {
@@ -364,11 +413,15 @@ string sub call_stored_closure() {
         hash<auto> h = call_function("JniLibraryCallerProgram::jlcp_byte_array_frame", <0102>);
         *int id = objectProgramId(h.array);
         if (exists id) {
-            # the Program context of the call: the library's (qore#7394), or the trusted calling code's with a Qore
-            # library that runs library functions with the call context of their caller
-            int host_id = get_thread_call_stack()[0].programid;
-            assertTrue(id == h.frame || id == host_id, sprintf("array: %d (library frame %d, host %d)", id, h.frame,
-                host_id));
+            # the Program context of the call: the library's, with a Qore library that runs every function body with
+            # its own Program's call context (qore#7394); otherwise also the trusted calling code's
+            if (functionOwnCallProgramContext()) {
+                assertEq(h.frame, id, "array");
+            } else {
+                int host_id = get_thread_call_stack()[0].programid;
+                assertTrue(id == h.frame || id == host_id, sprintf("array: %d (library frame %d, host %d)", id,
+                    h.frame, host_id));
+            }
         }
     }
 

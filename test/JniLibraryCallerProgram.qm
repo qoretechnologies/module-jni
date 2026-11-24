@@ -58,6 +58,37 @@ public string sub jlcp_byte_array_background(binary b) {
     return q.get();
 }
 
+#! runs an operation that creates Java state in a thread that this function starts; returns its result or the
+#! exception
+public string sub jlcp_background(string op) {
+    Queue q();
+    background sub () {
+        try {
+            switch (op) {
+                case "new_array":
+                    q.push(sprintf("%d", new_array(load_class("java.lang.String"), 2).length()));
+                    break;
+                case "field_read": {
+                    LibraryFieldHolder holder();
+                    code c = holder.closure;
+                    q.push(sprintf("%s", c("jlcp_name")));
+                    break;
+                }
+                case "static_field_read": {
+                    code c = LibraryFieldHolder::staticClosure;
+                    q.push(sprintf("%s", c("jlcp_name")));
+                    break;
+                }
+                default:
+                    q.push("unknown operation: " + op);
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            q.push(sprintf("%s: %s", ex.err, ex.desc));
+        }
+    }();
+    return q.get();
+}
+
 #! returns the class of a Java array
 public object sub jlcp_array_class(object array) {
     return array.getClass();
@@ -118,6 +149,29 @@ public nothing sub jlcp_store_closure() {
 #! returns the Java closure kept
 public *code sub jlcp_stored_closure() {
     return jlcp_stored;
+}
+
+#! releases the Java closure kept
+public nothing sub jlcp_clear_stored() {
+    remove jlcp_stored;
+}
+
+#! writes a Java closure that it obtains to an instance field of a Java object, and returns the field's value
+public code sub jlcp_field_set_closure() {
+    LibraryFieldHolder holder();
+    holder.closure = HostObjectProbe::caller();
+    return holder.closure;
+}
+
+#! sets the static Java field to a new Java closure
+public nothing sub jlcp_reset_static_field() {
+    LibraryFieldHolder::reset();
+}
+
+#! writes a Java closure that it obtains to a static Java field, and returns the field's value
+public code sub jlcp_static_field_set_closure() {
+    LibraryFieldHolder::staticClosure = HostObjectProbe::caller();
+    return LibraryFieldHolder::staticClosure;
 }
 
 #! the same calls through the static methods of a class of the library
