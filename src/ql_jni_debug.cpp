@@ -412,8 +412,9 @@ QoreStringNode* dbg_jni_set_env_fail_point() {
     and leaves its Java exception pending, so that a test can make a call fail while it has entered a Program - see
     test/jni-native-handles.qtest).  The point is passed \a skip times on the thread and fails when it is reached the
     next time, so that a test can make a later check of a call fail.  The point fails only on the thread that set it
-    (the module is torn down on the thread that ends the process), so that a test can prove that the C++ exception thrown there does not escape into libqore (qore#6787, qore#6788,
-    qore#6789) - see test/jni-cpp-exception-escape.qtest.  DEBUG builds only.
+    (the module is torn down on the thread that ends the process), so that a test can prove that the C++ exception
+    thrown there does not escape into libqore (qore#6787, qore#6788, qore#6789) - see
+    test/jni-cpp-exception-escape.qtest.  DEBUG builds only.
 */
 static QoreValue f_dbg_jni_fail_point(const QoreListNode* args, RuntimeConfig& rtcfg, ExceptionSink* xsink) {
     const QoreStringNode* point = get_param_value(args, 0).get<const QoreStringNode>();

@@ -265,8 +265,9 @@ private:
 
 //! Enters a %Qore Program as QoreExternalProgramContextHelper does, and leaves it with no Java exception pending
 /** See JniJavaExceptionAside.  Every entry of the module into a Program that runs the Program's entry and exit handlers
-    uses this class, so that no code that can raise a Java exception runs between the entry and the point at which a
-    pending exception is set aside; nested entries each set the exception aside in turn.
+    uses this class, so that a Java exception that is pending when the entry is left, wherever it was raised while the
+    entry was held, is set aside immediately before the Program is left, with no code running in between; nested
+    entries each set the exception aside in turn.
 */
 class JniProgramEntryHelper {
 public:
