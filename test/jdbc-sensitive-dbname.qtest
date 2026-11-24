@@ -1,0 +1,53 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../build"
+%requires jni
+%requires QUnit
+
+%exec-class JdbcSensitiveDbNameTest
+
+#! The jdbc driver declares that its database name, a JDBC URL that can hold credentials, is sensitive (qore#7275)
+/** No database is needed: the capabilities of the driver and the masking of its database name are checked; the URL is
+    that of the Jaybird driver for Firebird, which takes the password as a URL property.
+*/
+class JdbcSensitiveDbNameTest inherits QUnit::Test {
+    public {
+        const Secret = "PASSWORD_SECRET_7275";
+        const Db = "firebird://localhost:3050/db?user=sysdba&password=" + Secret;
+    }
+
+    constructor() : QUnit::Test("jdbc sensitive database name", "1.0", \ARGV) {
+        addTestCase("capabilities", \capabilities());
+        addTestCase("masked database name", \maskedDbName());
+        set_return_value(main());
+    }
+
+    capabilities() {
+%ifdef QORE_HAVE_DBI_SENSITIVE_DBNAME
+        assertTrue(inlist("SensitiveDbName", dbi_get_driver_capability_list("jdbc")));
+        assertEq(DBI_CAP_SENSITIVE_DBNAME, dbi_get_driver_capabilities("jdbc") & DBI_CAP_SENSITIVE_DBNAME);
+%else
+        testSkip("the Qore library has no sensitive DBI database names");
+%endif
+    }
+
+    maskedDbName() {
+%ifdef QORE_HAVE_DBI_SENSITIVE_DBNAME
+        # the driver is loaded by the call: the database name is masked because the driver declares it sensitive,
+        # also a database name that the character rule of the masked forms would show
+        dbi_get_driver_capabilities("jdbc");
+        hash<auto> show = {"show_db": True, "show_options": True};
+        assertEq("****", mask_datasource_hash({"type": "jdbc", "db": Db}, show).db);
+        assertEq("****", mask_datasource_hash({"type": "jdbc", "db": "jdbc:sqlite:/tmp/db"}, show).db);
+        assertEq("****", mask_datasource_hash({"type": "jdbc", "db": "plaindb"}, show).db);
+        # a Datasource does not show it in its masked description either
+        Datasource ds({"type": "jdbc", "db": Db});
+        assertFalse(ds.getMaskedDescription().find(Secret) >= 0);
+%else
+        testSkip("the Qore library has no sensitive DBI database names");
+%endif
+    }
+}
