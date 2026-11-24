@@ -112,14 +112,18 @@ class JniReleasedHandlesTest inherits QUnit::Test {
 
     shutdownInUseCase() {
         # a Java thread's call of a closure of a user module is blocked until the process ends; the Qore library leaves
-        # the module's Program for it, and the jni module's shutdown must not wait for the call either: it waited for
-        # the use of the closure's handle, and the process never exited (the child is run with a guard against a
-        # hang, which is never an expected time)
+        # the module's Program for it and does not wait for the call: it ends the process without running any exit
+        # handler (qore#7340), as the library is left as it is for the thread.  The process must exit (the child is
+        # run with a guard against a hang, which is never an expected time: the jni module's shutdown once waited for
+        # the use of the closure's handle, and the process never exited), with status 0 (checked by runChild())
         string out = runChild("shutdown-in-use", "live", HangGuard);
         assertEq("live: in call", getLine(out, "live: "), out);
-        # the shutdown claimed the handle and cleared it, so that no new use begins, but left it unreleased, as a use
-        # was in progress: NativeCleanup.Ref.acquireForCleanup() returns 0 then, and the release of 0 frees nothing
-        assertEq("shutdown: cleared: true; claimed: true; uses: 1", getLine(out, "shutdown: "), out);
+        # no exit handler ran: neither the jni module's (it claims the handles of the wrappers and destroys the JVM)
+        # nor the JVM's shutdown hooks, so the hook that the child registered, which would print the state of the
+        # closure's handle once the module's shutdown had claimed it, did not run; Java's shutdown hooks run only
+        # when the JVM is destroyed as the process ends normally (see the jni module's guide, "Process Exit While a
+        # Java Thread Is In a Qore Call")
+        assertEq("", getLine(out, "shutdown: "), out);
     }
 
     exitUnmatchedCase() {

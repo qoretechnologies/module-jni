@@ -6,6 +6,95 @@
 
     @section jni_3_0_0 jni Module Version 3.0.0
 
+    - <b>Behavior change</b> (qore#7340): when the %Qore program ends while a Java thread is still inside a call of
+      %Qore code, the process now ends without running any exit handler, so Java's shutdown hooks do not run and the
+      JVM is not destroyed (the process does not wait for the call); see @ref jni_process_exit_in_call
+    - <b>Security</b>: the filesystem policy of restricted code now applies to every class and resource lookup below a
+      classpath entry that it added, to the real path of each file, on any thread, also for a lookup that the JVM makes
+      with no %Qore caller.  A file that the policy denies behaves as a file that does not exist.  The Kotlin compiler
+      is given a private copy of the files that the policy allows below such a directory, within limits for each
+      Program, and its scripting plugin is off for a restricted caller.  Class loaders with no entry from restricted
+      code, which includes trusted code and sandboxes that restrict nothing, make no check.  A file replaced between its
+      check and its use is not covered.  These checks are defense in depth (qore#7276)
+    - <b>Behavior change</b> (qore#7276): a class or resource below a classpath directory of restricted code that its
+      policy denies is no longer found.  A Kotlin script of a restricted caller is refused while a directory that
+      restricted code added is on its classpath.  The \c global-* classpath commands are refused under a sandbox
+      filesystem policy, also one that allows uncontrolled APIs, and when trusted code issues them into a Program that
+      such a sandbox governs.  <b>Operator rule:</b> whoever adds a classpath entry owns its policy: an entry that
+      restricted code adds carries that code's policy and fails closed, and an entry that a trusted host deliberately
+      adds to the class loader of a sandboxed Program is a grant of the host, which is not also checked against the
+      policy of that Program.  A caller whose sandbox restricts only the network makes no such grant: a policy that is
+      bound to an entry stays when it adds the entry again, and a new entry that it adds below an entry of restricted
+      code is judged by that entry's policy.  Such a caller's addition of a file or directory that is already on the
+      classpath has its location checked too, so it is refused, instead of skipped, if that check fails; a wildcard
+      pattern that is already on the classpath is skipped.  An entry added before a Program's filesystem policy
+      applied, or while its sandbox restricted nothing, stays unchecked when the policy is set or tightened later:
+      configure the policy before the classpath is added.  On a JDK version whose manifest \c Class-Path handling has
+      not been verified, what the manifests of trusted jars name is not found in a class loader that also has entries of
+      restricted code.  Below the entries of restricted code, a jar whose path holds the separator of a jar URL
+      (\c "!/") is not used
+    - The connection classes of the data provider modules declare the functional domains of their clients, so code
+      restricted only from other domains can create them; Camel connections use all of them, and JDBC connections
+      declare \c FILESYSTEM because their \c classpath option loads driver jars from the file system, unlike the
+      core's \c DatasourceConnection, which loads no files (qore#7096)
+    - <b>Security</b>: the @ref jnijdbc_driverguide "jdbc driver" masks the URL of a datasource, its password and
+      the credentials in the URL in the text of the Java exceptions that it raises for an operation on the datasource
+      and in their argument (ex: \c "No suitable driver found for jdbc:postgresql:****"), as a JDBC driver can name
+      the URL, which can hold credentials, in its messages (see @ref jdbc_exception_masking, qore#7344)
+    - <b>Security</b>: for a caller that a sandbox filesystem policy restricts, a manifest \c Class-Path entry whose
+      path cannot be checked exactly is refused with \c JNI-CLASSPATH-ERROR, on every JDK version, and nothing of the
+      classpath is added.  For a caller whose sandbox restricts only the network, an entry that names another location,
+      or whose location cannot be confirmed, is refused, also when Java code adds the classpath, which is otherwise
+      added as for a caller with no sandbox, and also for the \c global-* classpath module commands, whose classpath
+      is then added as a whole or not at all; a caller whose sandbox restricts neither is not affected (qore#7349,
+      qore#7195)
+    - A child process created with \c fork() could wait forever when it ended, if another thread of the parent held
+      one of the module's locks on the child's exit path or the global context Program at the time of the fork, as that
+      thread does not exist in the child.  The module's cleanup in a child no longer waits for that state (qore#7192)
+    - <b>Security</b>: Kotlin compiler source and class names are validated as Java binary names before anything is
+      written, the files that the compiler makes for them stay in its private temporary directory, and the names of
+      the classes that it produces are validated.  Java compiler options, and classpaths added to a compiler or a class
+      loader from Java, are checked against the filesystem policy of a caller that one restricts, the locations that a
+      compiler takes from them are the files that were checked, and the Java compiler loads no extensions from its
+      classpath for such a caller.  The Java compiler checks each file that it finds below a directory of its
+      classpath.  The Kotlin compiler also uses the host's Qore and
+      Kotlin jars and the entries of parent class loaders.  A compiler that trusted code creates is not restricted
+      when it is handed to restricted code, and a file that changes between its check and its use is not covered.
+      These checks are defense in depth (qore#7195)
+    - <b>Behavior change</b> (qore#7195): a Kotlin compile with a source or class name that is not a Java binary name
+      is refused.  For a caller that a sandbox filesystem policy restricts, a Java compiler option that is neither known
+      to name no file nor a classpath or output directory that the policy allows is refused, and annotation processing
+      is off; callers with no filesystem policy are unchanged.  An archive with a manifest \c Class-Path attribute is
+      not given to a compiler for such a caller, and a classpath option that names a regular file that is not an
+      archive is refused.  Under a filesystem policy, a wildcard classpath entry that selects a link whose missing
+      target the policy denies now refuses the whole classpath, also for the \c add-classpath module command.
+      \c QoreSandbox.restrictsFilesystem() and
+      \c QoreSandbox.checkCompilerClasspath() are new
+    - <b>Security</b>: class loader operations are now checked against the class loader that they change, and the
+      process-wide registry of shared dynamic classes can no longer be changed by code that a sandbox governs, nor can
+      that code define a class in a registered owner that it cannot reach.  Operations that change the state of a class
+      loader (closing it, its assertion status, its compilation cache) are refused to code that cannot reach its
+      Program.  These checks are defense in depth (qore#7131)
+    - <b>Behavior change</b> (qore#7131): a class loader that is not a \c QoreURLClassLoader no longer takes the
+      Program of its parent class loaders: once code that a sandbox governs has used Java in the process, the calls into
+      %Qore of Java code of its classes are refused.  The classes of a Kotlin script now belong to the Program that
+      evaluated it, so trusted and sandboxed scripts keep calling into their own Program.  A process with trusted code
+      only is unchanged, unless it issues \c set-java-thread-policy \c strict, which applies this rule from the start
+    - <b>Known limit</b> (qore#7131): after any call of Java by code that a sandbox governs, trusted Java-started
+      threads can no longer add classpaths or build compilers, for the rest of the process; threads that %Qore code
+      calls are not affected.  This includes threads started by a host's interface code or by third-party JARs.  One
+      sandboxed Program can cause this for all such threads.  It fails closed, because
+      work that sandboxed code submits to a shared thread cannot be told from trusted work there, so deciding per
+      thread origin cannot be proven safe.  An explicit grant for trusted worker threads is tracked in qore#7229
+    - A refused \c QoreURLClassLoader constructor no longer leaves an object or changes the thread's context, and a
+      class loader with no Program takes the Program of its parent only if it was made with \c createWithoutProgram().
+      A compiler that its caller cannot close stays open for code that can reach its Program, and an error of a
+      compilation is no longer replaced by a refusal of its cleanup.  Once the module's shutdown has started, class
+      loaders and compilers are no longer closed, and the process releases their resources (qore#7131)
+    - In a JVM started with Qore as a library (JVM-primary mode), creating a \c QoreURLClassLoader after the JVM's start
+      initialized the module again and replaced the system class loader, which could abort the process; only the class
+      loader that the JVM creates at its start now does so, and any other is checked like one in an embedded JVM
+      (qore#7131)
     - Trusted code could not define, with \c define-class, a Java class that extends a Qore class (\c qore.*) of a
       %Qore Program that has a sandbox manager, also one that allows uncontrolled APIs, as Qorus gives every
       interface: the command failed with \c JNI-ERROR ("cannot call into a Qore Program other than the one of the
@@ -83,10 +172,11 @@
       against the policy; they are now resolved as the class loader resolves them, recursively and each once, and
       checked as their real paths (with symbolic links resolved) together with the classpath's own entries; if the
       policy denies any of them, or one cannot be checked (ex: a jar that is not a regular file, or, before Java 22, a
-      jar with a jar index), the whole classpath is refused with \c JNI-CLASSPATH-ERROR, naming the file, and nothing
+      jar with a jar index, refused as a defense for other builds, as the JDK 21 builds that were tested have no jar
+      index support to enable), the whole classpath is refused with \c JNI-CLASSPATH-ERROR, naming the file, and nothing
       is added.  The class loader still follows the manifests, so the classpath that is used is unchanged.  The
-      resolution has been verified for JDK feature version 25; on any other JDK version, a governed classpath with a
-      jar that has a manifest \c Class-Path attribute is refused with \c JNI-CLASSPATH-ERROR, naming the reason (a
+      resolution has been verified for JDK feature versions 21 and 25; on any other JDK version, a governed classpath
+      with a jar that has a manifest \c Class-Path attribute is refused with \c JNI-CLASSPATH-ERROR, naming the reason (a
       classpath whose jars have no \c Class-Path attribute is not affected).  The \c add-classpath and
       \c add-relative-classpath module commands and the \c classpath option of the \c jdbc driver are affected; with
       no filesystem policy, classpaths are added as before (qore#6822, see @ref jni_sandbox)
@@ -343,12 +433,13 @@
       also printed as an unhandled %Qore exception
     - fixed %Qore handlers for \c SIGUSR2 never running while the JVM was loaded: HotSpot suspends and resumes its
       threads with \c SIGUSR2 by default and handles it in its own threads; the module now gives the JVM that it
-      creates a free real-time signal in \c _JAVA_SR_SIGNUM (only while the JVM is created, and only if the variable
+      creates a free real-time signal in \c _JAVA_SR_SIGNUM, or \c SIGVTALRM (else \c SIGPROF) on platforms without
+      real-time signals that the JVM accepts, such as macOS (only while the JVM is created, and only if the variable
       is not set), so \c SIGUSR2 handlers run, and reserves the signal that the JVM uses as it does the other signals
       that the JVM needs; this changes which signals %Qore code can handle while the module is loaded: the chosen
-      real-time signal (normally \c SIGRTMAX) cannot be handled, the module cannot be loaded if no real-time signal is
-      free, and \c SIGUSR2, whose handlers never ran, cannot be handled on platforms without real-time signals that the
-      JVM accepts (such as macOS) and when a Java process has created the JVM (qore#6707, see @ref jni_sr_signal)
+      signal (normally \c SIGRTMAX, or \c SIGVTALRM on macOS) cannot be handled, the module cannot be loaded if no
+      candidate is free, and \c SIGUSR2, whose handlers never ran, cannot be handled when a Java process has created
+      the JVM (qore#6707, qore#7129, see @ref jni_sr_signal)
     - fixed Java's \c System.exit() and \c Runtime.halt() aborting the process
       (<tt>external native threads still active while stopping the cleanup worker</tt>) when a \c ThreadPool worker
       was active: the JVM called C \c exit() on its VM Thread, which ran libqore's static destructors while %Qore

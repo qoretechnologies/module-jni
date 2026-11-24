@@ -26,6 +26,13 @@
 public namespace FlywayDataProvider {
 #! Class for Flyway connections
 public class FlywayConnection inherits ConnectionProvider::AbstractConnectionWithInfo {
+    #! Returns the functional domains of the connection's clients (qoretechnologies/qore#7096)
+    /** The clients migrate a database with the SQL migration files of the \c locations option
+    */
+    private final int getConnectionDomainsImpl() {
+        return DOM_DATABASE | DOM_FILESYSTEM;
+    }
+
     public {
         #! Connection entry info
         const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("FlywayDataProvider",

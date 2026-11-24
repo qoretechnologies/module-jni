@@ -28,6 +28,7 @@
 #include "defs.h"
 #include "Env.h"
 #include "QoreToJava.h"
+#include "QoreJniClassMap.h"
 
 #include <qore/QoreNet.h>
 #include <qore/QoreSandboxManager.h>
@@ -271,6 +272,39 @@ static jboolean JNICALL qore_sandbox_is_sandboxed(JNIEnv* jenv, jclass, jlong pt
     });
 } JNI_NATIVE_CATCH(jenv, JNI_FALSE)
 
+//! Returns true if any sandbox manager of the policy \a ptr or of the caller has the given restriction
+/** The Qore caller of a thread with no captured policy is not known.  If such a thread could have been started or
+    given its work by code that a sandbox governs, JNI-SANDBOX-ERROR is raised; otherwise it is a thread of the trusted
+    host, which no policy restricts.
+*/
+static jboolean sandbox_restricts(JNIEnv* jenv, jlong ptr, bool (QoreSandboxManager::*restricts)() const) {
+    return sandbox_native<jboolean>(jenv, JNI_FALSE,
+            [ptr, restricts](Env&, SandboxCallScope& scope, ExceptionSink* xsink) -> jboolean {
+        if (scope.enter(ptr, xsink)) {
+            if (jni_governed_caller_reaches_intern(nullptr)) {
+                xsink->clear();
+            }
+            return JNI_FALSE;
+        }
+        for (const QoreSandboxManager* sm : scope.managers()) {
+            if ((sm->*restricts)()) {
+                return JNI_TRUE;
+            }
+        }
+        return JNI_FALSE;
+    });
+}
+
+//! QoreSandbox.restrictsFilesystem0(): returns true if a filesystem policy restricts the policy \a ptr or the caller
+static jboolean JNICALL qore_sandbox_restricts_filesystem(JNIEnv* jenv, jclass, jlong ptr) try {
+    return sandbox_restricts(jenv, ptr, &QoreSandboxManager::filesystemRestricts);
+} JNI_NATIVE_CATCH(jenv, JNI_FALSE)
+
+//! QoreSandbox.restrictsNetwork0(): returns true if a network policy restricts the policy \a ptr or the caller
+static jboolean JNICALL qore_sandbox_restricts_network(JNIEnv* jenv, jclass, jlong ptr) try {
+    return sandbox_restricts(jenv, ptr, &QoreSandboxManager::networkRestricts);
+} JNI_NATIVE_CATCH(jenv, JNI_FALSE)
+
 //! QoreSandbox.checkNetworkAccess0(): checks a network destination and returns the checked addresses
 static jobjectArray JNICALL qore_sandbox_check_network_access(JNIEnv* jenv, jclass, jlong ptr, jbyteArray jhost,
         jint port, jint proto) try {
@@ -382,6 +416,107 @@ static void JNICALL qore_sandbox_check_file_access(JNIEnv* jenv, jclass, jlong p
     });
 } JNI_NATIVE_CATCH(jenv)
 
+//! QoreSandbox.checkNamedPath0(): checks a path with the filesystem policy; a denial names only the caller's path
+/** The path was made from what the caller gave (ex: resolved, or made absolute), which the caller may not be allowed
+    to know, so the error names only \a jgiven, the path as the caller gave it
+*/
+static void JNICALL qore_sandbox_check_named_path(JNIEnv* jenv, jclass, jlong ptr, jbyteArray jpath, jstring jgiven,
+        jint mode) try {
+    sandbox_native<jboolean>(jenv, JNI_FALSE,
+            [=](Env& env, SandboxCallScope& scope, ExceptionSink* xsink) -> jboolean {
+        if (scope.enter(ptr, xsink)) {
+            return JNI_FALSE;
+        }
+        std::string path = get_bytes(env, jpath);
+        std::string given;
+        if (jgiven) {
+            Env::GetStringUtfChars chars(env, jgiven);
+            given.assign(chars.c_str(), chars.size());
+        }
+        if (!mode || (mode & ~QSEC_ALL)) {
+            xsink->raiseException(JNI_SANDBOX_ERROR, "invalid access mode %d", (int)mode);
+            return JNI_FALSE;
+        }
+        for (QoreSandboxManager* sm : scope.managers()) {
+            ExceptionSink check;
+            if (sm->checkFilesystemAccess(path.c_str(), mode, &check)) {
+                continue;
+            }
+            // every failure of the check is the same denial: an error that resolving the path raised would tell what
+            // is at a path that the caller may not be allowed to know about
+            check.clear();
+            QoreStringNodeHolder desc(new QoreStringNode(QCS_UTF8));
+            desc->sprintf("the path '%s' is not allowed by the sandbox filesystem policy", given.c_str());
+            xsink->raiseException("FILESYSTEM-ACCESS-DENIED", desc.release());
+            return JNI_FALSE;
+        }
+        return JNI_TRUE;
+    });
+} JNI_NATIVE_CATCH(jenv)
+
+//! QoreSandbox.classpathManagers0(): returns new references to the filesystem policies that apply to the caller
+/** The policies that a check made with the captured policy \a ptr, or by the thread's Qore caller, applies, as they
+    are bound to the classpath entries that the caller adds: each lookup below an entry then applies them, on any
+    thread, with no Qore caller.
+*/
+static jlongArray JNICALL qore_sandbox_classpath_managers(JNIEnv* jenv, jclass, jlong ptr) try {
+    return sandbox_native<jlongArray>(jenv, nullptr,
+            [ptr, jenv](Env&, SandboxCallScope& scope, ExceptionSink* xsink) -> jlongArray {
+        if (scope.enter(ptr, xsink)) {
+            return nullptr;
+        }
+        std::vector<QoreSandboxManager*> restricting;
+        std::vector<jlong> ptrs;
+        for (QoreSandboxManager* sm : scope.managers()) {
+            if (sm->filesystemRestricts()) {
+                restricting.push_back(sm);
+                ptrs.push_back(reinterpret_cast<jlong>(sm));
+            }
+        }
+        jlongArray rv = jenv->NewLongArray(static_cast<jsize>(ptrs.size()));
+        if (!rv) {
+            // a Java exception is pending
+            return nullptr;
+        }
+        if (!ptrs.empty()) {
+            jenv->SetLongArrayRegion(rv, 0, static_cast<jsize>(ptrs.size()), ptrs.data());
+        }
+        // nothing can fail from here on: each element is a reference that the caller owns
+        for (QoreSandboxManager* sm : restricting) {
+            sm->ref();
+        }
+        return rv;
+    });
+} JNI_NATIVE_CATCH(jenv, nullptr)
+
+//! QoreSandbox.checkClasspathRead0(): returns true if the policy \a ptr alone allows reading a path
+/** Only the policy that is bound to the classpath entry applies, whatever code runs on the thread, so that the result
+    does not depend on the thread that makes the lookup.  Every failure of the check is a denial.
+*/
+static jboolean JNICALL qore_sandbox_check_classpath_read(JNIEnv* jenv, jclass, jlong ptr, jbyteArray jpath) try {
+    return sandbox_native<jboolean>(jenv, JNI_FALSE,
+            [=](Env& env, SandboxCallScope&, ExceptionSink*) -> jboolean {
+        std::string path = get_bytes(env, jpath);
+        if (path.empty()) {
+            return JNI_FALSE;
+        }
+        ExceptionSink check;
+        bool allowed = reinterpret_cast<QoreSandboxManager*>(ptr)->checkFilesystemAccess(path.c_str(), QSEC_READ,
+            &check);
+        allowed = allowed && !check;
+        check.clear();
+        return allowed ? JNI_TRUE : JNI_FALSE;
+    });
+} JNI_NATIVE_CATCH(jenv, JNI_FALSE)
+
+//! QoreSandbox.releaseClasspathManager0(): releases a reference returned by classpathManagers0()
+static void JNICALL qore_sandbox_release_classpath_manager(JNIEnv* jenv, jclass, jlong ptr) try {
+    sandbox_native<jboolean>(jenv, JNI_FALSE, [ptr](Env&, SandboxCallScope&, ExceptionSink*) -> jboolean {
+        jni_release_classpath_policy(ptr);
+        return JNI_TRUE;
+    });
+} JNI_NATIVE_CATCH(jenv)
+
 //! Returns a new JNI-SANDBOX-ERROR exception as a QoreExceptionWrapper, without throwing it
 /** @param msg the message in UTF-8; it may have NUL characters
 */
@@ -432,14 +567,26 @@ JNINativeMethod qoreSandboxNativeMethods[] = {
     {const_cast<char*>("release0"), const_cast<char*>("(J)V"), reinterpret_cast<void*>(qore_sandbox_release)},
     {const_cast<char*>("isSandboxed0"), const_cast<char*>("(J)Z"),
         reinterpret_cast<void*>(qore_sandbox_is_sandboxed)},
+    {const_cast<char*>("restrictsFilesystem0"), const_cast<char*>("(J)Z"),
+        reinterpret_cast<void*>(qore_sandbox_restricts_filesystem)},
+    {const_cast<char*>("restrictsNetwork0"), const_cast<char*>("(J)Z"),
+        reinterpret_cast<void*>(qore_sandbox_restricts_network)},
     {const_cast<char*>("checkNetworkAccess0"), const_cast<char*>("(J[BII)[[B"),
         reinterpret_cast<void*>(qore_sandbox_check_network_access)},
     {const_cast<char*>("checkFileAccess0"), const_cast<char*>("(J[BI)V"),
         reinterpret_cast<void*>(qore_sandbox_check_file_access)},
+    {const_cast<char*>("checkNamedPath0"), const_cast<char*>("(J[BLjava/lang/String;I)V"),
+        reinterpret_cast<void*>(qore_sandbox_check_named_path)},
     {const_cast<char*>("argumentError0"), const_cast<char*>("(Ljava/lang/String;)Ljava/lang/RuntimeException;"),
         reinterpret_cast<void*>(qore_sandbox_argument_error)},
     {const_cast<char*>("closedError0"), const_cast<char*>("()Ljava/lang/RuntimeException;"),
         reinterpret_cast<void*>(qore_sandbox_closed_error)},
+    {const_cast<char*>("classpathManagers0"), const_cast<char*>("(J)[J"),
+        reinterpret_cast<void*>(qore_sandbox_classpath_managers)},
+    {const_cast<char*>("checkClasspathRead0"), const_cast<char*>("(J[B)Z"),
+        reinterpret_cast<void*>(qore_sandbox_check_classpath_read)},
+    {const_cast<char*>("releaseClasspathManager0"), const_cast<char*>("(J)V"),
+        reinterpret_cast<void*>(qore_sandbox_release_classpath_manager)},
 };
 
 } // namespace
@@ -450,6 +597,26 @@ void jni_register_qore_sandbox_natives(Env& env, jclass cls) {
 
 void jni_release_sandbox_policy(jlong ptr) {
     delete reinterpret_cast<QoreSandboxCapture*>(ptr);
+}
+
+void jni_release_classpath_policy(jlong ptr) {
+    ExceptionSink xsink;
+    reinterpret_cast<QoreSandboxManager*>(ptr)->deref(&xsink);
+    // the release of a policy has no one to report an error to
+    xsink.clear();
+}
+
+void jni_bind_classpath_policy(Env& env, jobject rc, QoreSandboxManager* policy) {
+    policy->ref();
+    jvalue arg;
+    arg.j = reinterpret_cast<jlong>(policy);
+    try {
+        env.callVoidMethod(rc, Globals::methodResolvedClasspathBindPolicy, &arg);
+    } catch (...) {
+        // the classpath took no reference
+        jni_release_classpath_policy(arg.j);
+        throw;
+    }
 }
 
 } // namespace jni

@@ -122,7 +122,8 @@ sub deny_case(string root) {
     Program p = new_program(sm);
     hash<auto> h = add_classpath(p, root + "/mix/*");
     result("deny: the wildcard is refused", "JNI-CLASSPATH-ERROR", h.err);
-    result("deny: the error names the denied file", True, h.desc.find(root + "/mix/d.jar") >= 0);
+    result("deny: the error names no file that the wildcard selects", -1, h.desc.find(root + "/mix/d.jar"));
+    result("deny: the error names the wildcard as it was given", True, h.desc.find("'" + root + "/mix/*'") >= 0);
     result("deny: nothing is added", (), jar_paths(p, root));
     result("deny: the class of the allowed jar is not loaded", False, p.callFunction("can_load", TestClass));
     result("deny: the class of the denied jar is not loaded", False, p.callFunction("can_load", KotlinClass));
@@ -166,8 +167,8 @@ sub escape_case(string root) {
     Program p = new_program(sm);
     hash<auto> h = add_classpath(p, root + "/esc/*.jar");
     result("escape: the wildcard is refused", "JNI-CLASSPATH-ERROR", h.err);
-    result("escape: the error names the file that the link points to", True,
-        h.desc.find(root + "/outside/k.jar") >= 0);
+    result("escape: the error does not name the file that the link points to", -1, h.desc.find(root + "/outside"));
+    result("escape: the error names the wildcard as it was given", True, h.desc.find("'" + root + "/esc/*.jar'") >= 0);
     result("escape: nothing is added", (), jar_paths(p, root));
     result("escape: the class of the allowed jar is not loaded", False, p.callFunction("can_load", TestClass));
     result("escape: the class of the jar outside is not loaded", False, p.callFunction("can_load", KotlinClass));

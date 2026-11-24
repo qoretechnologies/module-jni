@@ -53,6 +53,14 @@ class JniForkTest inherits QUnit::Test {
         addTestCase("a child raises JNI-FORK-ERROR when it uses Java", \javaInChildTest());
         addTestCase("a child deletes a Program whose binding a Java thread is calling", \bindingLeaseTest());
         addTestCase("a child ends its script, and the module is deleted", \moduleCleanupTest());
+        addTestCase("a child ends while another thread holds the context lock", \contextLockTest());
+        addTestCase("a child ends while another thread holds the context Program", \contextProgramTest());
+        addTestCase("a child ends while another thread holds the Program registry", \programRegistryTest());
+        addTestCase("a child ends while another thread holds a save object lock", \saveObjectLockTest());
+        addTestCase("a child ends while another thread holds the shutdown gate", \shutdownGateTest());
+        addTestCase("a child ends while its own thread holds the context Program", \ownContextProgramTest());
+        addTestCase("a child ends with no hold on the context", \contextNoHoldTest());
+        addTestCase("threads of a child change the save object callback", \saveObjectSwapTest());
         set_return_value(main());
     }
 
@@ -144,6 +152,99 @@ class JniForkTest inherits QUnit::Test {
         assertRegex("parent: used", output);
         assertRegex("child: done", output);
         assertRegex("parent: done", output);
+    }
+
+    # the module's cleanup in a child does not wait for a lock or a holder that a thread of the parent left: that thread
+    # does not exist in the child, which waited forever
+    contextLockTest() {
+        checkContextHold("lock");
+    }
+
+    contextProgramTest() {
+        checkContextHold("program");
+    }
+
+    programRegistryTest() {
+        checkContextHold("registry");
+    }
+
+    saveObjectLockTest() {
+        checkContextHold("save-object");
+    }
+
+    shutdownGateTest() {
+        checkContextHold("shutdown-gate");
+    }
+
+    ownContextProgramTest() {
+        checkContextHold("own-program");
+    }
+
+    contextNoHoldTest() {
+        checkContextHold("none");
+    }
+
+    # a child can start threads of its own, which must exclude each other: each old callback is released once
+    saveObjectSwapTest() {
+        checkContextHooks();
+        # also with the lock held by a thread of the parent at the fork, which must not block the child's threads
+        foreach string hold in (("none", "save-object")) {
+            string output = runContextChild(hold, "swap");
+            assertRegex("parent: the child has ended: exited 0", output, hold);
+            *list<*string> swap = output =~ x/child: swap exclusive=(\w+) references=(\d+) expected=(\d+)/;
+            assertEq("True", swap[0], hold + ": " + output);
+            assertEq(swap[2], swap[1], hold + ": " + output);
+        }
+    }
+
+    #! skips the test if the module's debug hooks or the bound of the child script are not available
+    private checkContextHooks() {
+        checkFork();
+        try {
+            call_function("Jni::org::qore::jni::dbg_jni_context_program_counts");
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip("the jni module's debug hooks require a debug build");
+        }
+        # the script limits its wait for the child; this limit is for the script itself
+        if (system("command -v timeout > /dev/null 2>&1")) {
+            if (ENV.CI) {
+                throw "TIMEOUT-MISSING", "the timeout command is required in CI for this test";
+            }
+            testSkip("the timeout command is not available");
+        }
+    }
+
+    #! runs the child script, with a limit, and returns its output
+    private string runContextChild(string hold, string ending) {
+        return backquote(sprintf("timeout -s KILL 150 %s -b --enable-debug %s %s %s 2>&1", shellQuote(QORE_ARGV[0]),
+            shellQuote(get_script_dir() + "/jni-fork-context-child.q"), hold, ending));
+    }
+
+    #! runs the child script for both ways that a child can end; needs the debug hooks of the module
+    private checkContextHold(string hold) {
+        checkContextHooks();
+        foreach string ending in (("end", "exit")) {
+            string label = hold + "-" + ending;
+            string output = runContextChild(hold, ending);
+            assertRegex("child: ending", output, label);
+            # the exit status: a child that crashes in its cleanup also closes the pipe
+            assertRegex("parent: the child has ended: exited 0", output, label);
+            if (ending == "exit") {
+                # exit() deletes no Program, and the module's exit handler leaves it allocated
+                assertRegex("jni-dbg: abandonGlobalContext: forked child: left the Program allocated", output, label);
+                assertFalse(output =~ /deleted the Program/, label);
+            } else if (hold == "own-program") {
+                # the thread that ends the module uses the Program, which is not deleted under it
+                assertRegex("jni-dbg: clearGlobalContext: forked child: kept the Program for this thread", output,
+                    label);
+                assertFalse(output =~ /deleted the Program/, label);
+            } else {
+                # the Program is deleted while the module's data exists, and no jni data is destroyed after it
+                assertRegex("jni-dbg: clearGlobalContext: forked child: deleted the Program", output, label);
+                assertRegex("jni-dbg: the module has been deleted", output, label);
+                assertFalse(output =~ /the module has been deleted.*jni data of a Program is destroyed/s, label);
+            }
+        }
     }
 
     private checkFork() {

@@ -39,6 +39,7 @@ import javax.tools.ToolProvider;
 
 import org.qore.jni.QoreURLClassLoader;
 import org.qore.jni.QoreJavaFileObject;
+import org.qore.jni.QoreSandbox;
 
 /**
  * Compile a String or other <tt>CharSequence</tt>, returning a Java
@@ -93,6 +94,9 @@ public class QoreJavaCompiler<T> implements AutoCloseable {
     // Flag to track if the compiler has been closed
     private volatile boolean closed = false;
 
+    // the captured policy of a restricted caller, or null
+    private final QoreSandbox.Policy readPolicy;
+
     /**
      * Construct a new instance which delegates to a new Qore classloader.
      *
@@ -137,45 +141,74 @@ public class QoreJavaCompiler<T> implements AutoCloseable {
      * @throws IllegalStateException if the Java compiler cannot be loaded.
      */
     public QoreJavaCompiler(QoreURLClassLoader loader, Iterable<String> options) {
+        // read once, and checked before anything is created, so that the options used are the ones checked
+        List<String> checkedOptions = new ArrayList<String>();
+        if (options != null) {
+            for (String option : options) {
+                checkedOptions.add(option);
+            }
+        }
+        final boolean restricted = QoreSandbox.restrictsFilesystem();
+        // the files of a checked classpath, which the compiler is given instead of the classpath string
+        final List<File> checkedClasspath = restricted ? QoreCompilerPolicy.checkJavacOptions(checkedOptions) : null;
+
         compiler = ToolProvider.getSystemJavaCompiler();
         if (compiler == null) {
             throw new IllegalStateException("Cannot find the system Java compiler. "
                     + "Check that your class path includes tools.jar");
         }
-        // the class loader shares the Program pointer of loader, so that it is cleared when the Program is deleted
-        classLoader = QoreURLClassLoader.createDerived(loader);
-        //System.out.printf("compiler classLoader: %s (loader: %s pgm: %x)\n", classLoader, loader, loader.getPtr());
-        diagnostics = null;
-        final QoreJavaFileManager fileManager = new QoreJavaFileManager(classLoader,
-            compiler.getStandardFileManager(diagnostics, null, null));
-
-        // create our FileManager which chains to the default file manager
-        // and our ClassLoader
-        javaFileManager = new FileManagerImpl(fileManager, classLoader);
-        this.options = new ArrayList<String>();
+        // the policy of a restricted caller, captured so that each file that the compiler finds below a directory of
+        // its classpath is checked with it, on whichever thread compiles; released by close()
+        readPolicy = restricted ? QoreSandbox.capture() : null;
         try {
+            // the class loader shares the Program pointer of loader, so that it is cleared when the Program is deleted
+            classLoader = QoreURLClassLoader.createDerived(loader);
+            //System.out.printf("compiler classLoader: %s (loader: %s pgm: %x)\n", classLoader, loader, loader.getPtr());
+            diagnostics = null;
+            final QoreJavaFileManager fileManager = new QoreJavaFileManager(classLoader,
+                compiler.getStandardFileManager(diagnostics, null, null));
+            fileManager.setReadPolicy(readPolicy);
+
+            // create our FileManager which chains to the default file manager
+            // and our ClassLoader
+            javaFileManager = new FileManagerImpl(fileManager, classLoader, restricted);
+            this.options = checkedOptions;
             List<File> pathlist = new ArrayList<File>();
-            if (options != null) { // save a copy of input options
-                boolean cp_next = false;
-                for (String option : options) {
-                    this.options.add(option);
+
+            // add locations from the parent class loader
+            if (restricted) {
+                // exactly the files that the class loader's check allowed
+                pathlist.addAll(loader.getCompilerLocations());
+            } else {
+                for (URL url : loader.getURLs()) {
+                    File file = new File(URLDecoder.decode(url.getPath(), StandardCharsets.UTF_8));
+                    //System.out.printf("set location url: %s\n", file);
+                    pathlist.add(file);
                 }
             }
 
-            // add locations from the parent class loader
-            for (URL url : loader.getURLs()) {
-                String path = URLDecoder.decode(url.getPath(), StandardCharsets.UTF_8);
-                File file = new File(path);
-                //System.out.printf("set location url: %s\n", file);
-                pathlist.add(file);
-            }
-
-            if (pathlist.size() > 0) {
+            if (restricted) {
+                // always set, also if empty: without a location, the compiler uses a default classpath that was not
+                // checked; a classpath option replaces the class loader's locations
+                fileManager.setLocation(StandardLocation.CLASS_PATH,
+                    checkedClasspath != null ? checkedClasspath : pathlist);
+            } else if (pathlist.size() > 0) {
                 fileManager.setLocation(StandardLocation.CLASS_PATH, pathlist);
             }
         } catch (IOException e) {
+            closeReadPolicy();
             e.printStackTrace();
             throw new RuntimeException(e);
+        } catch (RuntimeException | Error e) {
+            closeReadPolicy();
+            throw e;
+        }
+    }
+
+    //! Releases the captured policy of a restricted caller, if any
+    private void closeReadPolicy() {
+        if (readPolicy != null) {
+            readPolicy.close();
         }
     }
 
@@ -359,11 +392,26 @@ public class QoreJavaCompiler<T> implements AutoCloseable {
         }
         // Use a StringWriter to capture any compiler output that would otherwise go to stderr
         StringWriter compilerOutput = new StringWriter();
+        Throwable failure = null;
         try {
             // Get a CompliationTask from the compiler and compile the sources
             final CompilationTask task = compiler.getTask(compilerOutput, javaFileManager, localDiagnostics,
                     options, null, sources);
-            final Boolean result = task.call();
+            final Boolean result;
+            try {
+                result = task.call();
+            } catch (RuntimeException e) {
+                // the compiler closes the class loader when it ends, which can be refused: errors of the compilation
+                // that it has reported are not replaced by the refusal
+                if (localDiagnostics.getDiagnostics().stream()
+                        .noneMatch(d -> d.getKind() == javax.tools.Diagnostic.Kind.ERROR)) {
+                    throw e;
+                }
+                QoreJavaCompilerException error = new QoreJavaCompilerException("Compilation failed.",
+                    classes.keySet(), localDiagnostics);
+                error.addSuppressed(e);
+                throw error;
+            }
             if (result == null || !result) {
                 String outputStr = compilerOutput.toString();
                 String message = "Compilation failed.";
@@ -391,8 +439,23 @@ public class QoreJavaCompiler<T> implements AutoCloseable {
             } catch (SecurityException e) {
                 throw new QoreJavaCompilerException(classes.keySet(), e, localDiagnostics);
             }
+        } catch (Throwable e) {
+            failure = e;
+            throw e;
         } finally {
+            clearCacheAfterCompile(failure);
+        }
+    }
+
+    //! Clears the compilation cache; a refusal does not replace the error of the compilation, \a failure
+    private void clearCacheAfterCompile(Throwable failure) {
+        try {
             classLoader.clearCompilationCache();
+        } catch (RuntimeException e) {
+            if (failure == null) {
+                throw e;
+            }
+            failure.addSuppressed(e);
         }
     }
 
@@ -473,11 +536,15 @@ public class QoreJavaCompiler<T> implements AutoCloseable {
     /**
      * Closes the compiler and releases resources.
      * <p>
-     * This method attempts to close the underlying {@link QoreURLClassLoader}
-     * and then clears its caches and program pointer. Any <tt>IOException</tt>
-     * thrown during {@code classLoader.close()} is intentionally ignored,
-     * because at this point the compiler is being disposed and the class loader
-     * is not expected to be used again.
+     * This method closes the underlying {@link QoreURLClassLoader} and clears
+     * its caches and program pointer. Any <tt>IOException</tt> from closing it
+     * is intentionally ignored, because at this point the compiler is being
+     * disposed and the class loader is not expected to be used again.
+     * <p>
+     * Code that cannot reach the class loader's Program is refused, and the
+     * compiler then stays open until code that can reach its Program closes
+     * it. Once the module's shutdown has started, nothing is closed, and the
+     * process releases the resources.
      * <p>
      * This method is idempotent: calling it multiple times is safe. After
      * calling this method, the compiler must not be used.
@@ -487,21 +554,12 @@ public class QoreJavaCompiler<T> implements AutoCloseable {
         if (closed) {
             return;
         }
+        // a refusal, or the module's shutdown, leaves the compiler open, with all of its resources
+        if (classLoader != null && !classLoader.closeAndClear()) {
+            return;
+        }
         try {
-            if (classLoader != null) {
-                try {
-                    // Attempt to close the class loader first
-                    classLoader.close();
-                } catch (IOException e) {
-                    // Intentionally ignore close errors: the compiler is being
-                    // discarded, and there is no recovery action to take here.
-                } finally {
-                    // Ensure internal loader state is cleared even if close()
-                    // throws, so the compiler ends in a consistent state.
-                    classLoader.clearAllCaches();
-                    classLoader.clearProgramPtr();
-                }
-            }
+            closeReadPolicy();
         } finally {
             closed = true;
         }
@@ -615,6 +673,9 @@ final class FileManagerImpl extends ForwardingJavaFileManager<JavaFileManager> {
     // the delegating class loader (passed to the constructor)
     private final QoreURLClassLoader classLoader;
 
+    // true for a caller that a sandbox filesystem policy restricts: the compiler loads no code from its classpath
+    private final boolean restricted;
+
     // Internal map of filename URIs to JavaFileObjects.
     private final Map<URI, JavaFileObject> fileObjects = new HashMap<URI, JavaFileObject>();
 
@@ -630,9 +691,10 @@ final class FileManagerImpl extends ForwardingJavaFileManager<JavaFileManager> {
      * @param classLoader a ClassLoader which contains dependent classes that the compiled
      *                    classes will require when compiling them.
      */
-    public FileManagerImpl(JavaFileManager fileManager, QoreURLClassLoader classLoader) {
+    public FileManagerImpl(JavaFileManager fileManager, QoreURLClassLoader classLoader, boolean restricted) {
         super(fileManager);
         this.classLoader = classLoader;
+        this.restricted = restricted;
     }
 
     /**
@@ -720,7 +782,15 @@ final class FileManagerImpl extends ForwardingJavaFileManager<JavaFileManager> {
 
     @Override
     public ClassLoader getClassLoader(JavaFileManager.Location location) {
-        return classLoader;
+        // the compiler loads its extensions with this class loader
+        return restricted ? ClassLoader.getPlatformClassLoader() : classLoader;
+    }
+
+    @Override
+    public <S> java.util.ServiceLoader<S> getServiceLoader(Location location, Class<S> service) throws IOException {
+        // for a restricted caller, only the services of the JDK
+        return restricted ? java.util.ServiceLoader.load(ModuleLayer.boot(), service)
+            : super.getServiceLoader(location, service);
     }
 
     @Override

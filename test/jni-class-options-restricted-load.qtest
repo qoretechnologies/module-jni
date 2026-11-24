@@ -50,6 +50,16 @@ class JniClassOptionsRestrictedLoadTest inherits QUnit::Test {
                     }
                     continue;
                 }
+                # a current core refuses the provider's binary module dependency first when its directory is only
+                # added with %prepend-module-path, as a restricted Program loads native code only from the module path
+                if (ex.desc =~ /can load native code only from the module path/) {
+                    assertTrue(inlist(ex.err, ("PARSE-COMMAND-ERROR", "LOAD-MODULE-ERROR")),
+                        mod + ": refused at load by the core: " + ex.err);
+                    assertRegex("LOAD-MODULE-ERROR: cannot load binary module '[^']*\\.qmod': code that a sandbox "
+                        "governs or whose functional domains are restricted can load native code only from the module "
+                        "path", ex.err + ": " + ex.desc, mod + ": refused at load by the core");
+                    continue;
+                }
                 assertTrue(inlist(ex.err, ("PARSE-EXCEPTION", "ILLEGAL-CLASS-INSTANTIATION")),
                     mod + ": refused at load: " + ex.err + ": " + ex.desc);
             }

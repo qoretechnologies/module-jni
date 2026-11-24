@@ -1074,7 +1074,9 @@ set (JNI_BIN_FILES
 
 # Java sources built in to the binary module with an indication of inner classes, if any
 generate_java(org/qore/jni/QoreJavaApi.java)
-generate_java(org/qore/jni/QoreSandbox.java $Policy)
+generate_java(org/qore/jni/QoreSandbox.java $Policy $ClasspathPolicy)
+generate_java(org/qore/jni/QoreClasspathGuard.java)
+generate_java(org/qore/jni/QoreCompilerClasspath.java $Budget $Copy $PrivateParent)
 generate_java(org/qore/jni/JavaCollectionTypes.java)
 generate_java(org/qore/jni/QoreExceptionWrapper.java)
 generate_java(org/qore/jni/QoreException.java)
@@ -1159,6 +1161,7 @@ add_java_compiler_source(org/qore/jni/compiler/QoreJavaCompiler.java JavaFileObj
 add_java_compiler_source(org/qore/jni/compiler/QoreJavaCompilerException.java $SafeDiagnostic)
 add_java_compiler_source(org/qore/jni/compiler/QoreJavaFileManager.java)
 add_java_compiler_source(org/qore/jni/compiler/CompilerOutput.java)
+add_java_compiler_source(org/qore/jni/compiler/QoreCompilerPolicy.java)
 if (HAVE_KOTLIN_COMPILER)
     add_java_compiler_source(org/qore/jni/compiler/QoreKotlinCompiler.java 1 2)
     add_java_compiler_source(org/qore/jni/compiler/QoreKotlinCompilerException.java)
@@ -1277,6 +1280,7 @@ set(JAVA_TEST_JAR_SRC
     test/java/src/org/qore/jni/test/JdbcConnectionDriver.java
     test/java/src/org/qore/jni/test/Callbacks.java
     test/java/src/org/qore/jni/test/ClassPtrProbe.java
+    test/java/src/org/qore/jni/test/ClasspathUrlProbe.java
     test/java/src/org/qore/jni/test/GovernedProgramProbe.java
     test/java/src/org/qore/jni/test/HostObjectProbe.java
     test/java/src/org/qore/jni/test/SandboxIo.java
@@ -1335,6 +1339,10 @@ set(JAVA_TEST_JAR_SRC
     test/java/src/org/qore/jni/test/QoreCallback.java
     test/java/src/org/qore/jni/test/OverloadedMethods.java
     test/java/src/org/qore/jni/test/JvmPrimaryReaperExit.java
+    test/java/src/org/qore/jni/test/JvmPrimarySandboxTrust.java
+    test/java/src/org/qore/jni/test/ClassLoaderAccessProbe.java
+    test/java/src/org/qore/jni/test/ClasspathLookupProbe.java
+    test/java/src/qore/JniClassLoaderAccessFixture.java
     test/java/src/org/qore/jni/test/GeneratedBindings.java
     test/java/src/org/qore/jni/test/CachedProgramPtrProbe.java
     test/java/src/org/qore/jni/test/ContextProgramLifetimeProbe.java
@@ -1735,6 +1743,73 @@ add_test(NAME jvm_primary_reaper_exit COMMAND ${CMAKE_COMMAND} -E env
     -cp ${CMAKE_CURRENT_BINARY_DIR}/qore-jni.jar:${CMAKE_CURRENT_BINARY_DIR}/qore-jni-test.jar
     org.qore.jni.test.JvmPrimaryReaperExit)
 set_tests_properties(jvm_primary_reaper_exit PROPERTIES TIMEOUT 10)
+add_test(NAME jvm_primary_sandbox_trust COMMAND ${CMAKE_COMMAND} -E env
+    QORE_LIBRARY=${QORE_LIBRARY}
+    QORE_MODULE_DIR=${CMAKE_CURRENT_BINARY_DIR}
+    ${Java_JAVA_EXECUTABLE}
+    --enable-native-access=ALL-UNNAMED
+    -Djava.system.class.loader=org.qore.jni.QoreURLClassLoader
+    -cp ${CMAKE_CURRENT_BINARY_DIR}/qore-jni.jar:${CMAKE_CURRENT_BINARY_DIR}/qore-jni-test.jar
+    org.qore.jni.test.JvmPrimarySandboxTrust)
+set_tests_properties(jvm_primary_sandbox_trust PROPERTIES TIMEOUT 30)
+add_test(NAME jvm_primary_new_class_loader COMMAND ${CMAKE_COMMAND} -E env
+    QORE_LIBRARY=${QORE_LIBRARY}
+    QORE_MODULE_DIR=${CMAKE_CURRENT_BINARY_DIR}
+    ${Java_JAVA_EXECUTABLE}
+    --enable-native-access=ALL-UNNAMED
+    -Djava.system.class.loader=org.qore.jni.QoreURLClassLoader
+    -cp ${CMAKE_CURRENT_BINARY_DIR}/qore-jni.jar:${CMAKE_CURRENT_BINARY_DIR}/qore-jni-test.jar
+    org.qore.jni.test.JvmPrimarySandboxTrust new-loader)
+set_tests_properties(jvm_primary_new_class_loader PROPERTIES TIMEOUT 30)
+add_test(NAME jvm_primary_close_after_shutdown COMMAND ${CMAKE_COMMAND} -E env
+    QORE_LIBRARY=${QORE_LIBRARY}
+    QORE_MODULE_DIR=${CMAKE_CURRENT_BINARY_DIR}
+    ${Java_JAVA_EXECUTABLE}
+    --enable-native-access=ALL-UNNAMED
+    -Djava.system.class.loader=org.qore.jni.QoreURLClassLoader
+    -cp ${CMAKE_CURRENT_BINARY_DIR}/qore-jni.jar:${CMAKE_CURRENT_BINARY_DIR}/qore-jni-test.jar
+    org.qore.jni.test.JvmPrimarySandboxTrust close-after-shutdown)
+set_tests_properties(jvm_primary_close_after_shutdown PROPERTIES TIMEOUT 30)
+add_test(NAME jvm_primary_close_during_shutdown COMMAND ${CMAKE_COMMAND} -E env
+    QORE_LIBRARY=${QORE_LIBRARY}
+    QORE_MODULE_DIR=${CMAKE_CURRENT_BINARY_DIR}
+    ${Java_JAVA_EXECUTABLE}
+    --enable-native-access=ALL-UNNAMED
+    -Djava.system.class.loader=org.qore.jni.QoreURLClassLoader
+    -cp ${CMAKE_CURRENT_BINARY_DIR}/qore-jni.jar:${CMAKE_CURRENT_BINARY_DIR}/qore-jni-test.jar
+    org.qore.jni.test.JvmPrimarySandboxTrust close-during-shutdown)
+set_tests_properties(jvm_primary_close_during_shutdown PROPERTIES TIMEOUT 30)
+# Kotlin scripts in a JVM-primary process: without the Kotlin scripting JARs, the test is not registered, except in CI,
+# where it fails
+set(JVM_PRIMARY_KOTLIN_CP "")
+foreach(kotlin_dir "$ENV{KOTLIN_SCRIPTING_JARS}" "$ENV{KOTLIN_HOME}/lib/scripting"
+        "/usr/share/qore/java/kotlin/lib/scripting" "/opt/kotlin/lib/scripting")
+    file(GLOB kotlin_jsr223 "${kotlin_dir}/kotlin-scripting-jsr223*.jar")
+    if(kotlin_jsr223)
+        file(GLOB kotlin_jars "${kotlin_dir}/*.jar")
+        get_filename_component(kotlin_lib "${kotlin_dir}" DIRECTORY)
+        foreach(kotlin_jar kotlin-stdlib.jar kotlin-reflect.jar)
+            if(EXISTS "${kotlin_lib}/${kotlin_jar}")
+                list(APPEND kotlin_jars "${kotlin_lib}/${kotlin_jar}")
+            endif()
+        endforeach()
+        string(REPLACE ";" ":" JVM_PRIMARY_KOTLIN_CP "${kotlin_jars}")
+        break()
+    endif()
+endforeach()
+if(JVM_PRIMARY_KOTLIN_CP)
+    add_test(NAME jvm_primary_kotlin_script COMMAND ${CMAKE_COMMAND} -E env
+        QORE_LIBRARY=${QORE_LIBRARY}
+        QORE_MODULE_DIR=${CMAKE_CURRENT_BINARY_DIR}
+        ${Java_JAVA_EXECUTABLE}
+        --enable-native-access=ALL-UNNAMED
+        -Djava.system.class.loader=org.qore.jni.QoreURLClassLoader
+        -cp ${CMAKE_CURRENT_BINARY_DIR}/qore-jni.jar:${CMAKE_CURRENT_BINARY_DIR}/qore-jni-test.jar:${JVM_PRIMARY_KOTLIN_CP}
+        org.qore.jni.test.JvmPrimarySandboxTrust kotlin)
+    set_tests_properties(jvm_primary_kotlin_script PROPERTIES TIMEOUT 120)
+elseif(DEFINED ENV{CI})
+    add_test(NAME jvm_primary_kotlin_script COMMAND ${CMAKE_COMMAND} -E false)
+endif()
 add_test(NAME java_provider_profile_validator
     COMMAND ${QORE_JAVA_PROVIDER_PYTHON}
         ${CMAKE_SOURCE_DIR}/test/test-java-provider-profiles.py

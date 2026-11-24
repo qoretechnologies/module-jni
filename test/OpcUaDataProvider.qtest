@@ -96,6 +96,10 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
             \genericServerRuntimeAssignedPortTest());
         addTestCase("generic OPC UA server runtime stop releases an OS-assigned port",
             \genericServerRuntimeStopReleasesPortTest());
+        addTestCase("generic OPC UA server runtime stop holds the port release when stop() overtakes the close listeners",
+            \genericServerRuntimeStopOvertakesCloseListenersTest());
+        addTestCase("generic OPC UA server runtime holds the port release in the task of the listener's close",
+            \genericServerRuntimeHoldInCloseTaskTest());
         addTestCase("generic OPC UA server runtime stop fails if an OS-assigned port is not released in time",
             \genericServerRuntimeStopReleaseTimeoutTest());
         addTestCase("generic OPC UA server runtime stop releases a configured port",
@@ -1871,8 +1875,80 @@ sub sandboxProbe() {
         holds = processHoldsPort(port);
         GenericServer::releasePortReleaseHoldForTest();
 
-        assertTrue(held, "the port release was held after the listener's channel was closed");
+        assertTrue(held, "the listener's close took the port release hold");
         # a hold that ended at its bound would have released the port whether stop() waited for it or not
+        assertFalse(timed_out, "the hold ended when stop() waited for the release, not at its bound");
+        assertFalse(holds, "the port is released when stop() returns");
+    }
+
+    #! the port release hold is taken even if stop() goes on before the event loop runs the close future's listeners
+    /** A close future wakes its waiters before it runs its listeners, so stop() can reach its wait for the release
+        first; the listeners are stalled here with a test hook until it has, which makes that order deterministic
+    */
+    genericServerRuntimeStopOvertakesCloseListenersTest() {
+        OpcUaServerRuntime runtime({
+            "port": 0,
+            "schema": genericServerRuntimeSchema("urn:qore:opcua:generic-runtime-stop-overtakes-test"),
+        }, NOTHING);
+        on_exit {
+            GenericServer::releasePortReleaseHoldForTest();
+            runtime.stop();
+        }
+
+        int port = runtime.getPort();
+        *bool holds = processHoldsPort(port);
+        if (!exists holds) {
+            testSkip("no /proc: the port release cannot be checked without binding the port");
+        }
+        runtime.start();
+        assertTrue(processHoldsPort(port), "this process holds the port while the runtime runs");
+
+        GenericServer::stallCloseListenersForTest();
+        GenericServer::holdPortReleaseForTest(True);
+        runtime.stop();
+        bool held = GenericServer::isPortReleaseHeldForTest();
+        bool timed_out = GenericServer::isPortReleaseHoldTimedOutForTest();
+        holds = processHoldsPort(port);
+        GenericServer::releasePortReleaseHoldForTest();
+
+        assertTrue(held, "the listener's close took the port release hold");
+        assertFalse(timed_out, "the hold ended when stop() waited for the release, not at its bound");
+        assertFalse(holds, "the port is released when stop() returns");
+    }
+
+    #! the port release hold blocks the task that closes the listener, so no select can release the port before it
+    /** The event loop can run a select between two tasks, which deregisters a closed channel and releases its port, so
+        a hold that is a task of its own may begin after the port was released.  The close handler marks its thread
+        around the close and the hold, so only a hold in the close's own task is reported, whatever the timing
+    */
+    genericServerRuntimeHoldInCloseTaskTest() {
+        OpcUaServerRuntime runtime({
+            "port": 0,
+            "schema": genericServerRuntimeSchema("urn:qore:opcua:generic-runtime-hold-in-close-task-test"),
+        }, NOTHING);
+        on_exit {
+            GenericServer::releasePortReleaseHoldForTest();
+            runtime.stop();
+        }
+
+        int port = runtime.getPort();
+        *bool holds = processHoldsPort(port);
+        if (!exists holds) {
+            testSkip("no /proc: the port release cannot be checked without binding the port");
+        }
+        runtime.start();
+        assertTrue(processHoldsPort(port), "this process holds the port while the runtime runs");
+
+        GenericServer::holdPortReleaseForTest(True);
+        runtime.stop();
+        bool held = GenericServer::isPortReleaseHeldForTest();
+        bool in_close_task = GenericServer::isPortReleaseHeldInCloseTaskForTest();
+        bool timed_out = GenericServer::isPortReleaseHoldTimedOutForTest();
+        holds = processHoldsPort(port);
+        GenericServer::releasePortReleaseHoldForTest();
+
+        assertTrue(held, "the listener's close took the port release hold");
+        assertTrue(in_close_task, "the hold began in the task that closed the listener");
         assertFalse(timed_out, "the hold ended when stop() waited for the release, not at its bound");
         assertFalse(holds, "the port is released when stop() returns");
     }
@@ -1908,7 +1984,7 @@ sub sandboxProbe() {
         assertThrows("JNI-ERROR", "IllegalStateException: the OS-assigned port " + port + " was not released within " +
             "1 ms after the server was stopped; stop\\(\\) can be called again", \runtime.stop());
         assertTrue(GenericServer::isPortReleaseHeldForTest(),
-            "the port release was held after the listener's channel was closed");
+            "the listener's close took the port release hold");
         assertTrue(processHoldsPort(port), "the port is still held while its release is held");
 
         GenericServer::setPortReleaseTimeoutForTest(0);
@@ -1957,7 +2033,7 @@ sub sandboxProbe() {
         assertThrows("JNI-ERROR", "IllegalStateException: the configured port " + port + " was not released within " +
             "1 ms after the server was stopped; stop\\(\\) can be called again", \runtime.stop());
         assertTrue(GenericServer::isPortReleaseHeldForTest(),
-            "the port release was held after the listener's channel was closed");
+            "the listener's close took the port release hold");
         assertTrue(processHoldsPort(port), "the port is still held while its release is held");
 
         GenericServer::setPortReleaseTimeoutForTest(0);
@@ -2120,7 +2196,7 @@ sub sandboxProbe() {
         GenericServer::setPortReleaseTimeoutForTest(1);
         assertThrows("JNI-ERROR", "IllegalStateException: the OS-assigned port " + port + " was not released within " +
             "1 ms after the server was stopped; stop\\(\\) can be called again", \runtime.stop());
-        assertTrue(GenericServer::isPortReleaseHeldForTest(), "the event loop is held after the listener closed");
+        assertTrue(GenericServer::isPortReleaseHeldForTest(), "the listener's close took the port release hold");
         assertFalse(GenericServer::isPortReleaseHoldTimedOutForTest(),
             "stop() returned while the event loop was held");
 

@@ -1,6 +1,7 @@
 // Copyright (C) 2026 Qore Technologies, s.r.o.
 package org.qore.jni;
 
+import java.io.File;
 import java.lang.ref.Reference;
 import java.net.Inet6Address;
 import java.net.InetAddress;
@@ -11,6 +12,7 @@ import java.nio.charset.CharacterCodingException;
 import java.nio.charset.Charset;
 import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
@@ -31,7 +33,8 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 
     A denied network destination raises \c NETWORK-ACCESS-DENIED, and a denied path \c FILESYSTEM-ACCESS-DENIED, as
     a QoreExceptionWrapper (a \c RuntimeException) that becomes the original %Qore exception when it reaches %Qore
-    code.  Code that is not sandboxed passes every check.
+    code.  The policy allows code that is not sandboxed, though a check still raises \c JNI-SANDBOX-ERROR for invalid
+    arguments and on a thread whose policy cannot be determined.
 
     <b>Java threads</b>
 
@@ -86,6 +89,9 @@ public final class QoreSandbox {
     //! The policy that the static methods use on the current thread instead of the thread's %Qore caller
     private static final ThreadLocal<Policy> current = new ThreadLocal<>();
 
+    //! The encoding of the names that the JVM passes to the operating system; the file name encoding is fixed at startup
+    private static final Charset NAME_CHARSET = readNameCharset();
+
     private QoreSandbox() {
     }
 
@@ -119,6 +125,38 @@ public final class QoreSandbox {
                 long p = enterPtr();
                 try {
                     return isSandboxed0(p);
+                } finally {
+                    ref.exit();
+                }
+            } finally {
+                lock.readLock().unlock();
+                Reference.reachabilityFence(this);
+            }
+        }
+
+        //! Returns true if a filesystem policy applies to a check made with the policy on the current thread
+        public boolean restrictsFilesystem() {
+            lock.readLock().lock();
+            try {
+                long p = enterPtr();
+                try {
+                    return restrictsFilesystem0(p);
+                } finally {
+                    ref.exit();
+                }
+            } finally {
+                lock.readLock().unlock();
+                Reference.reachabilityFence(this);
+            }
+        }
+
+        //! Returns true if a network policy applies to a check made with the policy on the current thread
+        public boolean restrictsNetwork() {
+            lock.readLock().lock();
+            try {
+                long p = enterPtr();
+                try {
+                    return restrictsNetwork0(p);
                 } finally {
                     ref.exit();
                 }
@@ -164,6 +202,22 @@ public final class QoreSandbox {
                 long p = enterPtr();
                 try {
                     checkFileAccess0(p, pathBytes, mode);
+                } finally {
+                    ref.exit();
+                }
+            } finally {
+                lock.readLock().unlock();
+                Reference.reachabilityFence(this);
+            }
+        }
+
+        //! Checks a path with the captured policy; a denial names only \a given, the path as the caller gave it
+        void checkNamed(byte[] path, String given, int mode) {
+            lock.readLock().lock();
+            try {
+                long p = enterPtr();
+                try {
+                    checkNamedPath0(p, path, given, mode);
                 } finally {
                     ref.exit();
                 }
@@ -254,6 +308,101 @@ public final class QoreSandbox {
         }
     }
 
+    //! A filesystem policy that is bound to classpath entries of a class loader
+    /** Applied to every class and resource lookup below the entries, on any thread, also one with no %Qore caller;
+        only this policy applies, so that the result of a lookup does not depend on the thread that makes it.  The
+        policy is read for each check, so a change to a bound policy applies to the next lookup; an entry that was added
+        when no filesystem policy restricted its code has no bound policy and stays unchecked.  A check that fails for any
+        reason is a denial.  Released when it is garbage-collected, or when the module shuts down, after which every
+        check is a denial.
+    */
+    static final class ClasspathPolicy {
+        //! the referenced native policy manager
+        private final NativeCleanup.Ref ref;
+        //! the address of the policy manager, which identifies it while this object holds its reference
+        private final long id;
+
+        //! Takes a reference to the native policy manager \a ptr, unless an exception is raised
+        ClasspathPolicy(long ptr) {
+            ref = NativeCleanup.register(this, ptr, NativeCleanup.KIND_CLASSPATH_POLICY);
+            id = ptr;
+        }
+
+        //! Returns the identity of the policy
+        long id() {
+            return id;
+        }
+
+        //! Returns true if the policy allows reading \a path, which is a real path in the JVM's file name encoding
+        boolean allowsRead(byte[] path) {
+            long p = ref.enter();
+            if (p == 0) {
+                return false;
+            }
+            try {
+                return checkClasspathRead0(p, path);
+            } catch (RuntimeException e) {
+                return false;
+            } finally {
+                ref.exit();
+                Reference.reachabilityFence(this);
+            }
+        }
+    }
+
+    //! Returns the filesystem policies that apply to the caller, to bind to the classpath entries that it adds
+    /** These are the policies that a check made by the caller applies: those of a task that runs with a captured
+        policy, and of the %Qore code that runs on the thread.
+
+        @throw JNI-SANDBOX-ERROR the policy of the caller cannot be determined
+    */
+    static ClasspathPolicy[] callerClasspathPolicies() {
+        Policy p = current.get();
+        long[] ptrs;
+        if (p != null) {
+            p.lock.readLock().lock();
+            try {
+                long pp = p.enterPtr();
+                try {
+                    ptrs = classpathManagers0(pp);
+                } finally {
+                    p.ref.exit();
+                }
+            } finally {
+                p.lock.readLock().unlock();
+                Reference.reachabilityFence(p);
+            }
+        } else {
+            ptrs = classpathManagers0(0);
+        }
+        int i = 0;
+        try {
+            ClasspathPolicy[] rv = new ClasspathPolicy[ptrs.length];
+            for (; i < ptrs.length; ++i) {
+                rv[i] = new ClasspathPolicy(ptrs[i]);
+            }
+            return rv;
+        } catch (Throwable e) {
+            // the references that no object has taken
+            for (; i < ptrs.length; ++i) {
+                releaseClasspathManager0(ptrs[i]);
+            }
+            throw e;
+        }
+    }
+
+    //! Resolves and checks a classpath for a class loader, and binds the policies of the caller to it
+    static QoreURLClassLoader.ResolvedClasspath boundClasspath(String classpath) {
+        QoreURLClassLoader.ResolvedClasspath rc = checkedClasspath(classpath);
+        rc.bindPolicies(callerClasspathPolicies());
+        return rc;
+    }
+
+    //! Returns the bytes of a real path for a policy check, or null if the file name encoding cannot represent it
+    static byte[] encodeRealPath(String path) {
+        return tryEncode(path);
+    }
+
     //! Captures the sandbox policy of the %Qore code that called into Java on the current thread
     /** Call it in the call from %Qore, before handing work to another thread; on a thread that runs a task with a
         policy (QoreSandbox.Policy.run(), ...), the policy of the task is captured.
@@ -296,6 +445,151 @@ public final class QoreSandbox {
     public static boolean isSandboxed() {
         Policy p = current.get();
         return p != null ? p.isSandboxed() : isSandboxed0(0);
+    }
+
+    //! Returns true if a sandbox filesystem policy restricts the code governing the current thread
+    /** Unlike isSandboxed(), a sandbox that allows all filesystem access does not count.  On a thread with no %Qore
+        caller and no captured policy, the caller is not known: once code that a sandbox governs has used Java in the
+        process, or with the strict policy of Java threads, the policy cannot be determined and \c JNI-SANDBOX-ERROR
+        is raised; before that, the thread is one of the trusted host and false is returned.
+
+        @throw JNI-SANDBOX-ERROR the policy of the thread's caller cannot be determined
+
+        @since jni 3.0
+    */
+    public static boolean restrictsFilesystem() {
+        Policy p = current.get();
+        return p != null ? p.restrictsFilesystem() : restrictsFilesystem0(0);
+    }
+
+    //! Returns true if a sandbox network policy restricts the code governing the current thread
+    /** As restrictsFilesystem() does for a filesystem policy; a sandbox that allows all network access does not count.
+
+        @throw JNI-SANDBOX-ERROR the policy of the thread's caller cannot be determined
+
+        @since jni 3.0
+    */
+    public static boolean restrictsNetwork() {
+        Policy p = current.get();
+        return p != null ? p.restrictsNetwork() : restrictsNetwork0(0);
+    }
+
+    //! Returns the exception for a classpath entry whose location a network policy needs but that cannot be confirmed
+    static RuntimeException classpathLocationUncheckedError(String reason) {
+        return argumentError0("a classpath entry cannot be checked for another location, as a sandbox that restricts "
+            + "network access requires: " + reason);
+    }
+
+    //! Returns the exception for a classpath that names a location that a network policy does not allow
+    static RuntimeException classpathLocationError() {
+        return argumentError0("a classpath entry names another location, which a sandbox that restricts network "
+            + "access does not allow");
+    }
+
+    //! Checks a classpath for a compiler and returns the files to give it
+    /** For a caller that a filesystem policy restricts, the classpath is resolved as for the \c add-classpath module
+        command: each entry, the files that a wildcard selects, and the jars and directories that manifest
+        \c Class-Path attributes name, and the policy is applied to each.  For a directory, the policy is applied to the
+        directory itself here; the files below it are checked when they are used: by the Java compiler as it lists them,
+        by the class loader for each lookup, and by the Kotlin compiler, which is given a private copy of the allowed
+        files (qore#7276).  A compiler that is given the returned
+        files resolves the manifest entries of a jar where they were checked.  A compiler does not resolve every entry
+        as the class loader does, so a jar whose manifest has an entry for which the two can differ is refused, and so
+        is a file whose real name, after symbolic links are resolved, is not an archive name, as its manifest is not
+        checked, and a special file, whatever its name.
+
+        A caller whose sandbox restricts only the network gets the entries of the classpath as they were given, after
+        the check that the Java classpath routes make for it: no entry, and no manifest \c Class-Path entry that it
+        reaches, names another location or one that cannot be confirmed.  A caller whose sandbox restricts neither gets
+        the entries as they were given, with no check.
+
+        @param classpath the classpath
+
+        @return for a caller that a filesystem policy restricts, the files of the classpath with symbolic links
+        resolved, in order, with those that do not exist left out; for any other caller, its entries as they were given
+
+        @throw FILESYSTEM-ACCESS-DENIED the policy denies reading a file of the classpath
+        @throw JNI-SANDBOX-ERROR the classpath cannot be checked, or the policy is unknown
+
+        @since jni 3.0
+    */
+    public static List<File> checkCompilerClasspath(String classpath) {
+        if (classpath == null) {
+            throw argumentError0("classpath must not be null");
+        }
+        // read once, so that the branch taken and the check that is made use the same restrictions
+        boolean filesystem = restrictsFilesystem();
+        boolean network = restrictsNetwork();
+        if (!filesystem) {
+            if (network) {
+                QoreURLClassLoader.checkClasspathLocations(classpath);
+            }
+            return QoreURLClassLoader.classpathFiles(classpath);
+        }
+        QoreURLClassLoader.ResolvedClasspath rc = checkedClasspath(classpath, filesystem, network);
+        if (rc.hasAmbiguousManifestEntry()) {
+            throw argumentError0("a jar of the classpath has a manifest Class-Path entry that a compiler could resolve "
+                + "differently from the sandbox filesystem policy check");
+        }
+        if (rc.hasUnexpandedFile()) {
+            throw argumentError0("a file of the classpath does not have a .jar or .zip name once symbolic links are "
+                + "resolved, so a compiler could open it as an archive without its manifest being checked against "
+                + "the sandbox filesystem policy");
+        }
+        return rc.addedFiles();
+    }
+
+    //! Checks that the sandbox filesystem policy allows the access \a mode to \a path; a denial names only \a given
+    /** For a path that was made from what the caller gave (ex: made absolute, or resolved), which the caller may not
+        be allowed to know
+
+        @param path the path that is used
+        @param given the path as the caller gave it
+        @param mode the access mode: a combination of READ, WRITE, EXECUTE, DELETE and CREATE
+
+        @throw FILESYSTEM-ACCESS-DENIED the policy denies the access
+        @throw JNI-SANDBOX-ERROR the path cannot be represented, or the policy is unknown
+
+        @since jni 3.0
+    */
+    public static void checkGivenPath(String path, String given, int mode) {
+        checkNamed(encode(path, "path"), given, mode);
+    }
+
+    //! Applies the policy that the static methods use on this thread; a denial names only \a given
+    private static void checkNamed(byte[] path, String given, int mode) {
+        Policy p = current.get();
+        if (p != null) {
+            p.checkNamed(path, given, mode);
+        } else {
+            checkNamedPath0(0, path, given, mode);
+        }
+    }
+
+    //! Resolves a classpath once and checks each of its elements; returns it to be added as it was checked
+    /** Each element is checked before its refusal is reported, so that a refusal says nothing about a denied path
+    */
+    static QoreURLClassLoader.ResolvedClasspath checkedClasspath(String classpath) {
+        if (classpath == null) {
+            throw argumentError0("classpath must not be null");
+        }
+        return checkedClasspath(classpath, restrictsFilesystem(), restrictsNetwork());
+    }
+
+    //! Resolves and checks a classpath as checkedClasspath(String) does, for restrictions that the caller has read
+    private static QoreURLClassLoader.ResolvedClasspath checkedClasspath(String classpath, boolean filesystem,
+            boolean network) {
+        QoreURLClassLoader.ResolvedClasspath rc = resolveClasspath(classpath, 0, filesystem, network);
+        // the elements grow as they are checked: a manifest is read only after its jar has been allowed
+        for (int i = 0; i < rc.size(); ++i) {
+            checkNamed(rc.encodedPath(i), rc.givenEntry(i), READ);
+            String refusal = rc.refusal(i);
+            if (refusal != null) {
+                throw argumentError0("cannot use the classpath: " + refusal);
+            }
+            expandClasspath(rc, i);
+        }
+        return rc;
     }
 
     //! Checks a TCP connection to \a host and \a port; see checkNetworkAccess(String, int, int)
@@ -410,46 +704,82 @@ public final class QoreSandbox {
     }
 
     //! Resolves a classpath once for its sandbox check and its use (qore#6818)
-    /** Called by the module for a classpath that a filesystem policy governs: the module checks each element of the
+    /** Called by the module for a classpath under a sandbox manager: the module checks each element of the
         result against the policy, calling expandClasspath() after each element is checked, and then gives the same
         object to QoreURLClassLoader.addResolvedPath(), which adds only files that were checked, so that the
         classpath is not resolved again between the check and the use.  The elements are those of
         QoreURLClassLoader.resolveClasspath(): each entry as the JVM resolves it (against its \c user.dir, not the
         current directory of the process, also for a wildcard with no directory part, such as \c "*.jar"), with
-        symbolic links resolved, and for a wildcard entry, its directory and each file that it selects.  Each checked
-        path is encoded as encode() does, which raises JNI-SANDBOX-ERROR for a path that the file name encoding cannot
-        represent exactly.
+        symbolic links resolved, and for a wildcard entry, its directory and each file that it selects.  Each path is
+        encoded when its check is reached, after the elements before it have been allowed, as encode() does, which
+        raises JNI-SANDBOX-ERROR for a path that the file name encoding cannot represent exactly.
 
         @param classpath the classpath
         @param jdkFeature a JDK feature version for the check of manifest Class-Path attributes to assume as well as
         the running JDK's, which can only make the check stricter, or 0 for none (only a debug build of the module
         passes one, for its tests; see QoreURLClassLoader.isVerifiedClassPathJdk())
+        @param restricted true if a filesystem policy restricts the caller: a special file is then refused whatever its
+        name, otherwise only one with an archive name is refused, and a manifest Class-Path entry whose path cannot
+        be checked exactly is refused (qore#7349)
+        @param networkRestricted true if a network policy restricts the caller: a manifest Class-Path entry that
+        names another location is refused (qore#7195)
     */
-    static QoreURLClassLoader.ResolvedClasspath resolveClasspath(String classpath, int jdkFeature) {
-        QoreURLClassLoader.ResolvedClasspath rc = QoreURLClassLoader.resolveClasspath(classpath, jdkFeature);
-        encodeNew(rc);
-        return rc;
+    static QoreURLClassLoader.ResolvedClasspath resolveClasspath(String classpath, int jdkFeature,
+            boolean restricted, boolean networkRestricted) {
+        return QoreURLClassLoader.resolveClasspath(classpath, jdkFeature, restricted, networkRestricted);
     }
 
     //! Called by the module after element \a i of a resolved classpath has been checked (qore#6822)
     /** Adds the jars and directories that the manifest Class-Path attribute of the element names, if it is a jar, as
-        further elements to check (see QoreURLClassLoader.ResolvedClasspath.expand()), and encodes their paths as
-        resolveClasspath() does.
+        further elements to check (see QoreURLClassLoader.ResolvedClasspath.expand()).  A path that the file name
+        encoding cannot represent exactly is refused here, after the policy has allowed its nearest parent directory
+        that it can represent (see encodeNearest()).
     */
     static void expandClasspath(QoreURLClassLoader.ResolvedClasspath rc, int i) {
+        encode(rc.path(i).getPath(), "classpath entry");
         rc.expand(i);
-        encodeNew(rc);
     }
 
-    //! Encodes the paths of the elements of a resolved classpath that have not been encoded yet
-    private static void encodeNew(QoreURLClassLoader.ResolvedClasspath rc) {
-        for (int i = rc.encodedSize(); i < rc.size(); ++i) {
-            rc.addEncoded(encode(rc.path(i).getPath(), "classpath entry"));
+    //! Encodes \a path, or else its nearest parent directory that the file name encoding can represent exactly
+    static byte[] encodeNearest(File path) {
+        for (File f = path; f != null; f = f.getParentFile()) {
+            byte[] rv = tryEncode(f.getPath());
+            if (rv != null) {
+                return rv;
+            }
+        }
+        return encode(File.separator, "classpath entry");
+    }
+
+    //! Returns the bytes of a path in the file name encoding, or null if it cannot represent the path exactly
+    private static byte[] tryEncode(String str) {
+        if (str.indexOf('\0') >= 0) {
+            return null;
+        }
+        try {
+            ByteBuffer buf = nameCharset().newEncoder()
+                .onMalformedInput(CodingErrorAction.REPORT)
+                .onUnmappableCharacter(CodingErrorAction.REPORT)
+                .encode(CharBuffer.wrap(str));
+            byte[] rv = new byte[buf.remaining()];
+            buf.get(rv);
+            return rv;
+        } catch (CharacterCodingException e) {
+            return null;
         }
     }
 
     //! Returns the encoding that the JVM uses for file names and other strings passed to the operating system
     private static Charset nameCharset() {
+        return NAME_CHARSET;
+    }
+
+    //! Reads the file name encoding once, as the file name encoding is fixed at startup
+    /** The class is initialized when the module is initialized (a static method ID is looked up for it).  In a JVM that
+        was started first, with %Qore as a library, Java code that runs before the module is initialized can change the
+        property that is read here; such code is part of the trusted host.
+    */
+    private static Charset readNameCharset() {
         String name = System.getProperty("sun.jnu.encoding");
         if (name != null) {
             try {
@@ -495,15 +825,33 @@ public final class QoreSandbox {
     //! Returns true if the policy \a ptr, or of the current thread if 0, is sandboxed
     private static native boolean isSandboxed0(long ptr);
 
+    //! Returns true if a filesystem policy applies to the policy \a ptr, or to the current thread if 0
+    private static native boolean restrictsFilesystem0(long ptr);
+
+    //! Returns true if a network policy applies to the policy \a ptr, or to the current thread if 0
+    private static native boolean restrictsNetwork0(long ptr);
+
     //! Checks a network destination; returns the checked addresses (see makeAddresses())
     private static native byte[][] checkNetworkAccess0(long ptr, byte[] host, int port, int proto);
 
     //! Checks a path
     private static native void checkFileAccess0(long ptr, byte[] path, int mode);
 
+    //! Checks a path that was made from what the caller gave; a denial names only \a given
+    private static native void checkNamedPath0(long ptr, byte[] path, String given, int mode);
+
     //! Returns the JNI-SANDBOX-ERROR exception for invalid arguments
     private static native RuntimeException argumentError0(String msg);
 
     //! Returns the JNI-SANDBOX-ERROR exception for a closed policy
     private static native RuntimeException closedError0();
+
+    //! Returns new references to the filesystem policies of the captured policy \a ptr, or of the current thread if 0
+    private static native long[] classpathManagers0(long ptr);
+
+    //! Returns true if the policy manager \a ptr alone allows reading \a path
+    private static native boolean checkClasspathRead0(long ptr, byte[] path);
+
+    //! Releases a reference returned by classpathManagers0()
+    private static native void releaseClasspathManager0(long ptr);
 }

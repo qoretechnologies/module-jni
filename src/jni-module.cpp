@@ -57,6 +57,7 @@
 #include "Method.h"
 #include "QoreToJava.h"
 #include "Globals.h"
+#include "JavaSandbox.h"
 #include "QoreJdbcDriver.h"
 #include "ql_jni_debug.h"
 
@@ -152,15 +153,42 @@ static QoreStringNode* jni_reserve_sr_signal(int sig) {
 }
 #endif
 
-#if !defined(Q_WINDOWS) && defined(SIGRTMIN) && defined(SIGRTMAX)
-//! true if the module can choose a real-time signal for the JVM's suspend/resume signal on this platform
+#ifndef Q_WINDOWS
+//! true if the module chooses the JVM's suspend/resume signal on this platform
 #define QORE_JNI_CHOOSE_SR_SIGNAL 1
 
-//! Chooses and reserves the real-time signal that the JVM is told to use to suspend and resume its threads
-/** Without \c _JAVA_SR_SIGNUM, HotSpot uses \c SIGUSR2, which %Qore programs use (ex: Qorus for its shutdown); the
-    module therefore gives the JVM a free real-time signal in \c _JAVA_SR_SIGNUM (qore#6707).
+//! reserves the given signal for the JVM's suspend/resume signal if it is free
+/** The signal is free if HotSpot accepts it in \c _JAVA_SR_SIGNUM (a number greater than \c SIGSEGV and \c SIGBUS
+    and less than \c NSIG), its disposition is \c SIG_DFL (no handler installed in the process and not ignored), and
+    the library can reserve it for the module (no %Qore handler is set for it, and neither the library nor another
+    module manages it).
 
-    The candidates are the real-time signals from \c SIGRTMAX() down to \c SIGRTMIN() + 2, determined at run time
+    @return true if the signal was reserved
+*/
+static bool jni_reserve_free_sr_signal(int sig) {
+    if (sig <= std::max(SIGSEGV, SIGBUS) || sig >= NSIG) {
+        return false;
+    }
+    struct sigaction sa;
+    if (sigaction(sig, nullptr, &sa)) {
+        return false;
+    }
+    // only the handler decides: macOS keeps the flags of a handler that the parent process installed (ex: the
+    // SA_SIGINFO of the JVM's handler) across exec(), which resets the handler to the default
+    if ((sa.sa_flags & SA_SIGINFO) ? sa.sa_sigaction != nullptr : sa.sa_handler != SIG_DFL) {
+        return false;
+    }
+    QoreStringNode* err = jni_reserve_sr_signal(sig);
+    if (err) {
+        err->deref();
+        return false;
+    }
+    return true;
+}
+
+#if defined(SIGRTMIN) && defined(SIGRTMAX)
+//! Chooses and reserves the real-time signal that the JVM is told to use to suspend and resume its threads
+/** The candidates are the real-time signals from \c SIGRTMAX() down to \c SIGRTMIN() + 2, determined at run time
     (the C library reserves real-time signals below \c SIGRTMIN() for itself), except:
     - \c SIGRTMIN() and \c SIGRTMIN() + 1: libqore's internal signal is \c SIGRTMIN() + 1 on Linux, and the lowest
       real-time signals are the ones that other libraries take first
@@ -168,36 +196,94 @@ static QoreStringNode* jni_reserve_sr_signal(int sig) {
     - a signal that HotSpot does not accept in \c _JAVA_SR_SIGNUM (a number greater than \c SIGSEGV and \c SIGBUS and
       less than \c NSIG)
 
-    The first candidate whose disposition is \c SIG_DFL (no handler installed in the process and not ignored) and that
-    the library can reserve for the module (no %Qore handler is set for it, and neither the library nor another module
-    manages it) is reserved and returned.  This is normally \c SIGRTMAX(); under valgrind, which reserves
-    \c SIGRTMAX() for itself and reports it as ignored, it is \c SIGRTMAX() - 1.
+    The first free candidate (see jni_reserve_free_sr_signal()) is reserved and returned.  This is normally
+    \c SIGRTMAX(); under valgrind, which reserves \c SIGRTMAX() for itself and reports it as ignored, it is
+    \c SIGRTMAX() - 1.
 
-    @return the signal reserved, 0 if no candidate is free, or -1 if the platform has no candidate that HotSpot would
-    accept (ex: FreeBSD, where \c NSIG is 32 and the real-time signals start above it)
+    @return the signal reserved, 0 if no candidate is free, or -1 if the platform has no real-time signal that HotSpot
+    would accept (ex: FreeBSD, where \c NSIG is 32 and the real-time signals start above it)
 */
-static int jni_choose_sr_signal() {
+static int jni_choose_rt_sr_signal() {
     int rtmin = SIGRTMIN;
     int rtmax = SIGRTMAX;
     if (rtmin + 2 >= NSIG) {
         return -1;
     }
     for (int sig = rtmax; sig >= rtmin + 2; --sig) {
-        if (sig == rtmax - 2 || sig <= std::max(SIGSEGV, SIGBUS) || sig >= NSIG) {
+        if (sig == rtmax - 2) {
             continue;
         }
-        struct sigaction sa;
-        if (sigaction(sig, nullptr, &sa) || (sa.sa_flags & SA_SIGINFO) || sa.sa_handler != SIG_DFL) {
-            continue;
+        if (jni_reserve_free_sr_signal(sig)) {
+            return sig;
         }
-        QoreStringNode* err = jni_reserve_sr_signal(sig);
-        if (err) {
-            err->deref();
-            continue;
-        }
-        return sig;
     }
     return 0;
+}
+#endif
+
+//! the classic signals that the module can give the JVM to suspend and resume its threads, in order of preference
+/** Used on platforms without real-time signals that HotSpot accepts (macOS; FreeBSD) (qore#7129).  HotSpot accepts
+    signals from <tt>max(SIGSEGV, SIGBUS) + 1</tt> (12 on macOS) to <tt>NSIG - 1</tt> (31), of which the others are
+    used by the JVM, by %Qore, by the C library or the kernel, or by programs:
+    - \c SIGSYS: %Qore's internal signal (\c QORE_STATUS_SIGNAL) where there are no real-time signals
+    - \c SIGPIPE, \c SIGXFSZ: handled by the JVM; \c SIGIO: the JDK's network and NIO libraries interrupt threads
+      blocked in I/O with it on BSD and macOS; \c SIGTERM (and \c SIGHUP, \c SIGINT, \c SIGQUIT below 12): the JVM's
+      shutdown and thread dump signals, and handled by %Qore programs
+    - \c SIGALRM: managed by %Qore (sleep()); \c SIGUSR1, \c SIGUSR2: used by %Qore programs (ex: Qorus)
+    - \c SIGSTOP (cannot be caught), \c SIGTSTP, \c SIGCONT, \c SIGTTIN, \c SIGTTOU: job control; \c SIGCHLD: reserved
+      for the JVM already and used by %Qore
+    - \c SIGURG (out-of-band socket data; the Go runtime's preemption signal), \c SIGWINCH (terminal size changes)
+      and \c SIGINFO (status request, Ctrl-T): sent to the process by the terminal or the kernel, which the JVM would
+      see as stray suspend/resume signals
+    - \c SIGXCPU: the kernel's warning for the CPU time limit, whose default action ends the process
+
+    That leaves \c SIGVTALRM, which only \c setitimer(ITIMER_VIRTUAL) raises, and \c SIGPROF, which only
+    \c setitimer(ITIMER_PROF) raises (CPU profilers, also %Qore built with profiling, which then manages it).
+*/
+static const int jni_classic_sr_signals[] = {
+#ifdef SIGVTALRM
+    SIGVTALRM,
+#endif
+#ifdef SIGPROF
+    SIGPROF,
+#endif
+};
+
+//! Chooses and reserves a classic signal that the JVM is told to use to suspend and resume its threads (qore#7129)
+/** The first free candidate in jni_classic_sr_signals (see jni_reserve_free_sr_signal()) is reserved and returned:
+    normally \c SIGVTALRM.
+
+    @return the signal reserved, or 0 if no candidate is free
+*/
+static int jni_choose_classic_sr_signal() {
+    for (int sig : jni_classic_sr_signals) {
+        if (jni_reserve_free_sr_signal(sig)) {
+            return sig;
+        }
+    }
+    return 0;
+}
+
+//! Chooses and reserves the signal that the JVM is told to use to suspend and resume its threads
+/** Without \c _JAVA_SR_SIGNUM, HotSpot uses \c SIGUSR2, which %Qore programs use (ex: Qorus for its shutdown); the
+    module therefore gives the JVM a free signal in \c _JAVA_SR_SIGNUM: a real-time signal (qore#6707), or, on
+    platforms without real-time signals that HotSpot accepts (macOS; FreeBSD), a classic signal that programs hardly
+    use (qore#7129).
+
+    @param rt set to true if real-time signals were the candidates, false if classic signals were
+
+    @return the signal reserved, or 0 if no candidate is free
+*/
+static int jni_choose_sr_signal(bool& rt) {
+#if defined(SIGRTMIN) && defined(SIGRTMAX)
+    int sig = jni_choose_rt_sr_signal();
+    if (sig >= 0) {
+        rt = true;
+        return sig;
+    }
+#endif
+    rt = false;
+    return jni_choose_classic_sr_signal();
 }
 
 //! Sets \c _JAVA_SR_SIGNUM for the JVM that the module creates, and unsets it when destroyed
@@ -625,22 +711,31 @@ static void jni_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
 #ifdef QORE_JNI_CHOOSE_SR_SIGNAL
         // the module chooses the signal for a JVM that it creates, unless the user has set _JAVA_SR_SIGNUM
         if (host_jvm->getType() != NT_INT && !SystemEnvironment::isSet("_JAVA_SR_SIGNUM")) {
-            sr_sig = jni_choose_sr_signal();
-            if (sr_sig > 0) {
-                sr_chosen = sr_sig;
-            } else if (!sr_sig) {
-                xsink.raiseException("MODULE-INIT-ERROR", "the jni module cannot start the JVM: no real-time "
-                    "signal from SIGRTMAX down to SIGRTMIN+2 (%d - %d) is free for the JVM to suspend and resume its "
-                    "threads with (each has a handler installed in the process or a Qore handler, or is managed "
-                    "by the Qore library or another module); set _JAVA_SR_SIGNUM to choose the signal", SIGRTMAX,
-                    SIGRTMIN + 2);
+            bool rt = false;
+            sr_sig = jni_choose_sr_signal(rt);
+            if (!sr_sig) {
+#if defined(SIGRTMIN) && defined(SIGRTMAX)
+                if (rt) {
+                    xsink.raiseException("MODULE-INIT-ERROR", "the jni module cannot start the JVM: no real-time "
+                        "signal from SIGRTMAX down to SIGRTMIN+2 (%d - %d) is free for the JVM to suspend and resume "
+                        "its threads with (each has a handler installed in the process or a Qore handler, or is "
+                        "managed by the Qore library or another module); set _JAVA_SR_SIGNUM to choose the signal",
+                        SIGRTMAX, SIGRTMIN + 2);
+                    return;
+                }
+#endif
+                xsink.raiseException("MODULE-INIT-ERROR", "the jni module cannot start the JVM: neither SIGVTALRM "
+                    "nor SIGPROF is free for the JVM to suspend and resume its threads with (each has a handler "
+                    "installed in the process or a Qore handler, or is managed by the Qore library or another "
+                    "module); set _JAVA_SR_SIGNUM to choose the signal");
                 return;
             }
+            sr_chosen = sr_sig;
         }
 #endif
         if (!sr_chosen) {
-            // the signal that the user set in _JAVA_SR_SIGNUM, or that the host process's JVM uses, or SIGUSR2 (also
-            // where the platform has no real-time signal that HotSpot accepts)
+            // the signal that the user set in _JAVA_SR_SIGNUM, or that the host process's JVM uses (SIGUSR2 by
+            // default)
             sr_sig = jvm_sr_signal();
         }
     }
@@ -671,7 +766,8 @@ static void jni_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     signals_assigned = true;
 
     // marks a child process created with fork() after the JVM is started, which cannot use the JVM (see
-    // jni::Jvm::isForkedChild()); registered before the JVM is started, so that no fork() is missed, and removed
+    // jni::Jvm::isForkedChild()), and initializes the save object callback lock again in the child; registered before
+    // the JVM is started, so that no fork() is missed, and removed
     // when the module is deleted, or here if its initialization fails, as the module is then unloaded
     if (jni::Jvm::registerForkHandler()) {
         xsink.outOfMemory();
@@ -824,6 +920,7 @@ static void jni_module_delete() noexcept {
 #ifdef DEBUG
     // each global context Program created must have been deleted (qore#6799)
     dbg_jni_report_context_programs();
+    Globals::dbgContextMarker("jni-dbg: the module has been deleted\n");
 #endif
     // the signals reserved for the JVM stay reserved: the module is deleted as the library is torn down, or the JVM
     // belongs to the Java host (the jvm-ptr option) and keeps running, and its handlers stay installed in either case
@@ -1222,18 +1319,18 @@ LocalReference<jobject> jni_check_classpath_sandbox(const char* cmd, const QoreP
         jstring classpath, bool global) {
     if (global) {
         jni_check_uncontrolled_cmd(cmd, pgm, "changes the classpath of every Program");
+        // a sandbox can trust its code with uncontrolled APIs and still restrict the filesystem: the entry of the
+        // shared classpath would carry no policy, and an entry with none is not checked (qore#7276)
+        QoreSandboxManagerHelper governing(QoreSandboxManagerHelper::Policy);
+        if (governing && governing->filesystemRestricts()) {
+            throw QoreJniException("JNI-SANDBOX-ERROR", "the \"%s\" module command changes the classpath of every "
+                "Program, so it cannot be used under a sandbox filesystem policy", cmd);
+        }
         return nullptr;
     }
     // the filesystem policy, as for Qore's own file operations
     QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
     return jni_check_classpath_policy(smh.get(), env, classpath);
-}
-
-//! Returns true if the exception raised is the denial of a filesystem policy
-static bool jni_is_filesystem_denial(ExceptionSink& xsink) {
-    QoreValue err = xsink.getExceptionErr();
-    return err.getType() == NT_STRING
-        && !strcmp(err.get<const QoreStringNode>()->c_str(), "FILESYSTEM-ACCESS-DENIED");
 }
 
 //! Returns a Java string in UTF-8, or an empty string for null
@@ -1254,7 +1351,7 @@ LocalReference<jobject> jni_check_classpath_policy(QoreSandboxManager* policy, E
     // against its user.dir, with symbolic links resolved), in the bytes that the JVM passes to the operating system
     // for it, so that the policy judges the representation that is used, and a wildcard entry is its directory and
     // each file that it selects
-    jvalue jargs[2];
+    jvalue jargs[4];
     jargs[0].l = classpath;
     // a JDK feature version for the check of manifest Class-Path attributes to assume as well as the running JDK's,
     // which can only make the check stricter: 0 for none; only a debug build can pass one, for its tests (qore#6822)
@@ -1262,6 +1359,15 @@ LocalReference<jobject> jni_check_classpath_policy(QoreSandboxManager* policy, E
 #ifdef DEBUG
     jargs[1].i = dbg_jni_classpath_jdk_feature.load(std::memory_order_acquire);
 #endif
+    // a sandbox that does not restrict the filesystem (ex: one for interrupts or limits only) still refuses a special
+    // file with an archive name, which the class loader would open, but not one with another name, which it does not;
+    // a manifest Class-Path entry must have an exact path only for a caller whose filesystem access is restricted
+    // (qore#7349), and cannot name another location for one whose network access is restricted (qore#7195).  The policy
+    // is bound to the entries below exactly when the classpath is resolved as restricted for the filesystem; an entry
+    // added while the policy restricts nothing there is not bound, so tightening the policy later does not reach it
+    const bool restricts = policy->filesystemRestricts();
+    jargs[2].z = restricts ? JNI_TRUE : JNI_FALSE;
+    jargs[3].z = policy->networkRestricts() ? JNI_TRUE : JNI_FALSE;
     LocalReference<jobject> rc = env.callStaticObjectMethod(Globals::classQoreSandbox,
         Globals::methodQoreSandboxResolveClasspath, jargs);
     // the elements grow as they are checked: after an element is allowed, the jars and directories that its manifest
@@ -1270,13 +1376,6 @@ LocalReference<jobject> jni_check_classpath_policy(QoreSandboxManager* policy, E
     for (jint i = 0; i < env.callIntMethod(rc, Globals::methodResolvedClasspathSize, nullptr); ++i) {
         jvalue ji;
         ji.i = i;
-        // an element that cannot be checked refuses the classpath
-        LocalReference<jstring> refusal = env.callObjectMethod(rc, Globals::methodResolvedClasspathRefusal,
-            &ji).as<jstring>();
-        if (refusal) {
-            std::string msg = jni_classpath_string(env, refusal);
-            throw QoreJniException("JNI-CLASSPATH-ERROR", "cannot add the classpath: %s", msg.c_str());
-        }
         LocalReference<jbyteArray> bytes = env.callObjectMethod(rc, Globals::methodResolvedClasspathEncodedPath,
             &ji).as<jbyteArray>();
         jsize len = env.getArrayLength(bytes);
@@ -1290,36 +1389,52 @@ LocalReference<jobject> jni_check_classpath_policy(QoreSandboxManager* policy, E
         LocalReference<jstring> jreferrer = env.callObjectMethod(rc, Globals::methodResolvedClasspathManifestReferrer,
             &ji).as<jstring>();
         bool named = jreferrer;
-        std::string referrer = jni_classpath_string(env, jreferrer);
+        // the entry as the caller gave it: the only path that a denial names
+        LocalReference<jstring> jgiven = env.callObjectMethod(rc, Globals::methodResolvedClasspathGivenEntry,
+            &ji).as<jstring>();
+        std::string given = jni_classpath_string(env, jgiven);
         {
             ExceptionSink xsink;
             if (!policy->checkFilesystemAccess(entry.c_str(), QSEC_READ, &xsink)) {
                 // any denial refuses the whole classpath, and nothing is added; a file that a wildcard selected or
                 // that a manifest named is refused as a classpath error that names it, as a classpath that would add
                 // only some of its files would load another classpath than the one given (qore#6818, qore#6822)
-                if ((match || named) && jni_is_filesystem_denial(xsink)) {
-                    QoreValue desc = xsink.getExceptionDesc();
-                    std::string desc_str = desc.getType() == NT_STRING
-                        ? desc.get<const QoreStringNode>()->c_str()
-                        : "";
-                    xsink.clear();
+                // the path that was checked is a resolved one, which the code that gave the classpath may not be
+                // allowed to know, so an error names only the entry that it gave
+                // every failure of the check is the same denial: an error that resolving the path raised would tell
+                // what is at a path that the caller may not be allowed to know about
+                xsink.clear();
+                if (match || named) {
                     if (named) {
-                        throw QoreJniException("JNI-CLASSPATH-ERROR", "cannot add the classpath: the file '%s' that "
-                            "the manifest Class-Path attribute of '%s' names is not allowed by the sandbox "
-                            "filesystem policy: %s", entry.c_str(), referrer.c_str(), desc_str.c_str());
+                        throw QoreJniException("JNI-CLASSPATH-ERROR", "cannot add the classpath entry '%s': a file "
+                            "that its manifest Class-Path attribute names is not allowed by the sandbox filesystem "
+                            "policy", given.c_str());
                     }
-                    throw QoreJniException("JNI-CLASSPATH-ERROR", "cannot add a wildcard classpath entry: the file "
-                        "'%s' that it selects is not allowed by the sandbox filesystem policy: %s", entry.c_str(),
-                        desc_str.c_str());
+                    throw QoreJniException("JNI-CLASSPATH-ERROR", "cannot add the wildcard classpath entry '%s': a "
+                        "file that it selects is not allowed by the sandbox filesystem policy", given.c_str());
                 }
-                throw XsinkException(xsink);
+                throw QoreJniException("FILESYSTEM-ACCESS-DENIED", "the classpath entry '%s' is not allowed by the "
+                    "sandbox filesystem policy", given.c_str());
             }
+        }
+        // an element that cannot be checked refuses the classpath; only after the policy has allowed its path, as the
+        // reason tells what the file is
+        LocalReference<jstring> refusal = env.callObjectMethod(rc, Globals::methodResolvedClasspathRefusal,
+            &ji).as<jstring>();
+        if (refusal) {
+            std::string msg = jni_classpath_string(env, refusal);
+            throw QoreJniException("JNI-CLASSPATH-ERROR", "cannot add the classpath: %s", msg.c_str());
         }
         // the element is allowed: the entries of its manifest Class-Path, if any, are added to be checked
         jvalue args[2];
         args[0].l = rc;
         args[1].i = i;
         env.callStaticVoidMethod(Globals::classQoreSandbox, Globals::methodQoreSandboxExpandClasspath, args);
+    }
+    if (restricts) {
+        // every class and resource lookup below the entries applies this policy, on any thread; the classpath takes
+        // the reference, unless the call raises an exception, in which case it took nothing
+        jni_bind_classpath_policy(env, rc, policy);
     }
     return rc;
 }

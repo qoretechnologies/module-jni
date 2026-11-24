@@ -201,7 +201,42 @@ class Outer {
     code that obtained it from Java, and the Java code of a call of a Java object of another sandboxed Program (ex: a
     tenant's object that a host calls) reaches no Program; Java code of the classes of a sandboxed Program's class
     loader reaches only that Program, whatever code runs it, and code that cannot reach a Program cannot change or
-    create its class loaders.
+    create its class loaders.  An operation on a class loader is checked against the class loader that it changes.
+    The classes of a Kotlin script evaluated with \c kotlin_eval() or \c kotlin-eval belong to the Program that
+    evaluated it.  A class loader that is not a \c QoreURLClassLoader belongs to no Program, whatever its parent: once
+    sandboxed code has used Java, the calls into %Qore of Java code of its classes are refused.
+
+    The Java thread rule also applies to class loaders and compilers.  In a JVM started with %Qore as a library, the
+    JVM's main thread can create a \c QoreURLClassLoader; once sandboxed code has used Java, a new thread that Java
+    started, with no %Qore caller, cannot.
+
+    @note <b>Known limit:</b> after any call of Java by code that a sandbox governs, trusted Java-started threads can
+    no longer add classpaths or build compilers, for the rest of the process.  Threads that %Qore code calls are not
+    affected.  The limit is process-wide, so one sandboxed Program can cause it for all trusted Java-started threads;
+    it refuses the operation and grants nothing.  The module does not decide per thread origin because that cannot be
+    proven safe: work that sandboxed code submits to a shared thread (ex: a common pool or a host's executor) looks
+    the same as trusted work there.  A host that needs these operations performs them from %Qore code.  This also
+    applies to threads started by a host's interface code or by third-party JARs that it loads, which must not rely
+    on these operations once sandboxed code can run in the process.  An explicit grant for trusted worker threads is
+    tracked in qoretechnologies/qore#7229.
+
+    @par Closing class loaders and compilers
+    Closing a \c QoreURLClassLoader or a compiler is refused with \c JNI-ERROR to code that cannot reach its Program:
+    code that a sandbox governs and that belongs to another Program, Java code of a class loader of another sandboxed
+    Program or of an unknown class loader, and, once sandboxed code has used Java in the process, a thread that Java
+    started and that no %Qore code calls (ex: an \c Executor, a \c Cleaner or a shutdown hook).  This also applies when
+    the object belongs to trusted code: such a thread is refused because the Java stack does not reliably identify the
+    code that supplied the work that it runs, so the module cannot tell a trusted owner from sandboxed code.
+
+    @par
+    A compiler whose close is refused stays open, with its class loader and JAR files, until code that can reach its
+    Program closes it or the process exits.  A host that uses compilers alongside sandboxed code therefore closes them
+    from the %Qore code that owns them, and not from a Java thread.
+
+    @par
+    Once the module's shutdown has started, the caller can no longer be checked: class loaders and compilers are then
+    not closed and their compilation caches are not cleared, for any caller, no exception is raised, and the process
+    releases their resources when it exits.
 
     @note Java objects have no Program of their own: when host code runs a Java object or closure that sandboxed code
     supplied or could have built (a listener, a \c Runnable, \c toString(), a closure that it passes on), its calls into
@@ -284,12 +319,102 @@ class Outer {
     - <tt>QoreSandbox.checkFileAccess(path, write)</tt> and <tt>QoreSandbox.checkFileAccess(path, mode)</tt> check
       a path with the filesystem policy of %Qore \c File and \c Dir operations, and raise
       \c FILESYSTEM-ACCESS-DENIED
-    - <tt>QoreSandbox.isSandboxed()</tt> tells whether a sandbox governs the caller
+    - <tt>QoreSandbox.isSandboxed()</tt> tells whether a sandbox governs the caller, and
+      <tt>QoreSandbox.restrictsFilesystem()</tt> whether a filesystem policy restricts it
+    - <tt>QoreSandbox.checkCompilerClasspath(classpath)</tt> checks each entry of a classpath, the files that a wildcard
+      selects and the entries that manifests name, as for the \c add-classpath module command, and returns the files
+      to give a compiler.  For a directory, the directory itself is checked here; the files below it are checked when
+      they are used (see below)
 
-    The exceptions are thrown in Java as \c org.qore.jni.QoreExceptionWrapper (a \c RuntimeException), which becomes
-    the original %Qore exception when it reaches %Qore code.  Trusted callers pass every check; the host name is
-    resolved for them as well, so the code is the same in both cases.  In a system-policy capability
-    (\c SandboxManager::createSystemPolicyCall()) the checks apply the system policy, as they do for %Qore sockets.
+    <b>Classpath lookups:</b> every class and resource lookup below a classpath entry that restricted code added applies
+    the filesystem policy of that code to the real path of the file, with symbolic links resolved, on any thread.  The
+    policy is captured with the entry when it is added, so the result does not depend on the thread that makes the
+    lookup, and a lookup that the JVM makes with no %Qore caller is checked in the same way.  A file that the policy
+    denies, or that cannot be checked, behaves as a file that does not exist, and the following entries are still
+    searched.  A policy that is bound to an entry is read for each lookup, so a change to it applies to the next lookup;
+    a class that has already been loaded stays loaded.  A class loader to which no restricted code has added an entry
+    makes no check.  A path is checked before it is opened, so a file that is replaced between the check and its use is
+    not covered.  A real path that the JVM's file name encoding cannot represent exactly is treated as denied.  The
+    encoding is read once when the module is initialized, as the file name encoding is fixed at startup; in a JVM that
+    was started first, with %Qore as a library, Java code that runs before the module is initialized is part of the
+    trusted host and must not change it.
+
+    <b>Operator rules:</b>
+    - whoever adds a classpath entry owns its policy.  An entry that restricted code adds carries that code's policy and
+      fails closed
+    - an entry that a trusted host deliberately adds, to the class loader of a sandboxed Program with the class loader's
+      Java API or to the classpath that every Program shares, is a grant of the host: it is not also checked against
+      the policy of the Program that owns the class loader, so that Program can load everything below it.  Add only
+      what the Program may read
+    - a policy is bound to an entry only if it restricts the filesystem when the entry is added.  An entry that was
+      added before \c setSandboxManager(), or while the Program's sandbox restricted nothing, stays unchecked: setting
+      or tightening the policy later does not apply to it.  Configure the filesystem policy of a Program before its
+      classpath is added
+    - on a JDK version for which manifest \c Class-Path handling has not been verified, what the manifests of trusted
+      jars name is not found in a class loader that also has entries of restricted code (fail closed)
+    - a caller whose sandbox restricts the network but not the filesystem makes no grant of the host: adding an entry
+      again leaves its policy in place, and a new entry of such a caller has no policy of its own, so a lookup below it
+      applies the policies of the entries of restricted code that enclose it, and none if no such entry does
+    - below the entries of restricted code, a jar whose path holds the separator of a jar URL (\c "!/") is not used, as
+      a connection to its URLs would open another archive than the one that was checked
+
+    <b>Compilers:</b> the Kotlin compiler validates the source and class names that it is given as Java binary names,
+    keeps the files that it makes for them in its private temporary directory, and validates the names of the classes
+    that it produces; the Java compiler keeps sources and classes in memory and makes no file for a name.  For a caller
+    that a filesystem policy restricts, Java compiler options that name no file are accepted, a classpath and an output
+    directory are checked against the policy and the compiler is given the files that were checked, annotation
+    processing and the Java compiler's extensions from the classpath are turned off, and any other option is refused;
+    use the \c add-classpath module command to add to the classpath.  For such a caller, the Kotlin compiler is given a
+    private copy of the class files and Kotlin module files that every policy of the enclosing entries allows below each
+    classpath directory that restricted code added, and its scripting plugin, which discovers script definitions on the
+    classpath and runs their code, is turned off.  The copies that a Program has at one time are limited in number,
+    files, bytes and directory entries visited, across all of its class loaders; a compile that would go over a limit
+    fails, and the copies are removed when the compile ends, when their class loader is closed, and when the Program
+    ends.  A copy that cannot be removed keeps its share of the limits, its removal is tried again at the next of these,
+    and a removal that keeps failing is logged once, with no path; a compile does not raise this failure.  The copies
+    are kept in one directory of the JVM that only its user can access, which is removed with its last copy if it is
+    then empty; it stays, empty, and is used by the next copy if the JVM cannot read the temporary directory (for
+    example mode 1733 of another owner, or 0300 owned by the JVM's user) or the JDK has no secure directory stream, as
+    for example a JDK on Alpine Linux (musl) can.  For a private directory whose creation is refused, its removal is
+    attempted in any case.  A retry only removes the directory it created: if that private directory no longer
+    verifies (its type, owner, mode or identity changed), nothing below it is touched and its copies keep their share
+    of the limits.  On a platform without
+    POSIX file attributes or a secure directory stream in the JDK, a retry does not walk the directory, so such a copy
+    keeps its share of the limits until the process ends.  A compile that needs a copy is refused unless the real path
+    of the JVM's temporary directory is a directory owned by the JVM's numeric UID or by root that is not writable by
+    group or others or that has the sticky bit; no user name is needed, and a compile is also refused if a UID cannot be
+    read, which includes a Java runtime image without the \c jdk.security.auth module, or if a new copy would have
+    another UID than its private directory.  The removal of such a refused copy is attempted; if it cannot be removed,
+    it stays inside the private directory, and while that directory is the current one, compiles that need a copy are
+    refused, with an error of their own that is logged once.  Once no copy is in flight, the next compile recovers if
+    that directory is gone or is verified and empty; a leftover that never goes means refusal until the process
+    restarts.  Compiles that make no copy are not affected.  Only on a platform without POSIX file attributes can this
+    not be checked, and a copy is made.  Its parent directories and ACLs are not judged. These checks do not defend
+    against Java code in the same JVM.  Once the module's shutdown has started, closing a class loader does nothing, so
+    a copy of a compile that is still running is then removed only when that compile ends.  A process that ends with the
+    \c exit() function while a compile is running does not remove that compile's copy, which stays in the JVM's
+    temporary directory.  A jar with a manifest \c Class-Path attribute is left out of a Kotlin compile for such a
+    caller, so the classes of that jar and of what its manifest names are not visible to the compile, also when the
+    class loader's check accepted them.  The Kotlin compiler also uses the host's %Qore and Kotlin jars and the entries
+    that trusted code added.  A Kotlin script (\c kotlin_eval()) of such a caller is refused while a directory that
+    restricted code added, directly or through a jar's manifest, is on its classpath, as the script compiler reads the
+    files below it itself; use jars for that classpath.  The refusal covers only those directories: a jar is used as a
+    whole once the policy has allowed it, and a directory with no bound policy (a grant of the host, or an entry added
+    before a filesystem policy applied) does not refuse a script, which can then read all of it.  A compiler applies
+    these rules to the caller that creates it: a compiler that trusted code creates keeps the options and classpath that
+    it was given and does not check the files below its classpath directories, also when restricted code uses it, so do
+    not hand one to restricted code.  A path is checked before it is opened, so a file that changes between the check
+    and its use is not covered.  A classpath added with \c addClassPath() of a compiler or with \c addPath(), \c
+    addWildcard() or \c addParentPath() of a class loader is checked against the same policy.  On a Java thread whose
+    %Qore caller is not known, these operations follow the Java thread rule and its known limit, described above; a
+    captured \c QoreSandbox.Policy does not change this.  These checks cover the names and options given to the
+    compilers: Java code that a Program is allowed to run is not confined by them (see the rules below).
+
+    The exceptions are thrown in Java as \c org.qore.jni.QoreExceptionWrapper (a \c RuntimeException), which becomes the
+    original %Qore exception when it reaches %Qore code.  The policy allows callers that no sandbox restricts, though a
+    check still raises an error for invalid arguments and on a thread whose policy cannot be determined (see below); the
+    host name is resolved for them as well, so the code is the same in both cases.  In a system-policy capability (\c
+    SandboxManager::createSystemPolicyCall()) the checks apply the system policy, as they do for %Qore sockets.
 
     <b>Java threads:</b> the static methods apply the policy of the %Qore caller of the current thread.  Work that
     Java runs on threads of its own (an executor, a connection pool, the I/O threads of a client library) has no
@@ -298,8 +423,11 @@ class Outer {
     with <tt>Policy.run()</tt>, <tt>Policy.call()</tt> or <tt>Policy.wrap()</tt>, which make the static methods use
     the captured policy on that thread.  A check made on a thread with no %Qore caller and no captured policy raises
     \c JNI-SANDBOX-ERROR instead of allowing the operation, so that a missing capture is an error and never a silent
-    bypass.  %Qore code that Java calls back on a Java thread already runs under the sandbox of the code that handed
-    it to Java (see @ref jni_callback_sandbox), so the checks it makes through Java use that sandbox.
+    bypass.  <tt>QoreSandbox.restrictsFilesystem()</tt> differs on such a thread: it returns false until code that a
+    sandbox governs has used Java in the process or the strict policy of Java threads is set, and raises
+    \c JNI-SANDBOX-ERROR from then on.  %Qore code that Java calls back on a Java thread already runs under the sandbox
+    of the code that handed it to Java (see @ref jni_callback_sandbox), so the checks it makes through Java use that
+    sandbox.
 
     A captured \c QoreSandbox.Policy applies to every check made through it on any thread, also on a %Qore thread that
     runs other sandboxed code and inside a system-policy capability (\c SandboxManager::createSystemPolicyCall());
@@ -472,14 +600,24 @@ public class Fetcher {
       it (a relative entry resolved against the location of the jar that names it, as the class loader resolves it),
       with symbolic links resolved, before its own manifest is read.  If the policy denies any of them, or a
       \c Class-Path entry cannot be checked (ex: it is not a file, a jar is not a regular file, a manifest cannot be
-      read, or, before Java 22, a jar has a jar index), the whole classpath is refused with \c JNI-CLASSPATH-ERROR,
-      naming the file.  The class loader still follows the manifests itself, so the classpath that is used is the one
-      that was given, and every file of it is one that was checked.  That resolution follows the JDK's class loader,
-      and it has been verified for JDK feature version 25; on any other JDK version, a classpath with a jar that has a
+      read, or, before Java 22, a jar has a jar index, which is refused as a defense for other builds, as the JDK 21
+      builds that were tested have no jar index support to enable), the whole classpath is refused with
+      \c JNI-CLASSPATH-ERROR, naming the file.  A caller whose filesystem access is restricted needs a manifest
+      entry whose path can be checked exactly; a caller whose sandbox restricts only the network cannot use an entry
+      that names another location, or one that cannot be read, as its location cannot be confirmed.  For such a
+      caller, a manifest entry or a path given to \c addPathOrig(), \c addURL() or a compiler that does not exist is
+      refused as well, except for a file URL in the form of a directory, which only \c addURL() and a manifest entry
+      can give; \c addPath(), \c addParentPath() and \c addWildcard() leave out a top-level entry that does not exist.
+      Its Java classpath calls are otherwise those of a caller with no sandbox, so a refusal there can leave the
+      earlier entries of the classpath added.  A caller whose sandbox restricts neither is not affected.  The class
+      loader still follows the manifests itself, so the classpath that is used is the one that was given, and every
+      jar and directory that it opens is one that was checked.  That resolution follows the JDK's class loader, and
+      it has been verified for JDK feature versions 21 and 25; on any other JDK version, a classpath with a jar that
+      has a
       manifest \c Class-Path attribute is refused with \c JNI-CLASSPATH-ERROR, naming the reason, while a classpath
       whose jars have no \c Class-Path attribute is checked and added as usual.  A denial refuses the whole classpath:
-      nothing of it is added.  The files that the class loader reads under a directory entry are not checked one by
-      one, and the files are checked when the classpath is added, not again when the class loader opens them
+      nothing of it is added.  The policy is bound to the entries that are added, and applies to each file that the
+      class loader then finds below them (see @ref jni_sandbox "Sandboxing Java I/O")
     - the commands that change state of the JVM that every Program shares (\c global-add-classpath,
       \c global-add-relative-classpath, \c set-property, \c register-shared-class, \c set-java-thread-policy) or
       that run Java code
@@ -487,7 +625,10 @@ public class Fetcher {
       a policy barrier or a system-policy capability, and in a Program with \c PO_NO_UNCONTROLLED_APIS, where the
       module's Java classes are not available
       either; so a sandboxed Program cannot make trusted Programs load its classes, or change how the JVM connects
-      for them (ex: \c http.proxyHost, \c javax.net.ssl.trustStore)
+      for them (ex: \c http.proxyHost, \c javax.net.ssl.trustStore).  The \c global-* classpath commands also raise
+      \c JNI-SANDBOX-ERROR under a sandbox filesystem policy, including when that sandbox allows uncontrolled APIs and
+      when trusted code issues the command into a Program that such a sandbox governs: an entry of the shared
+      classpath carries no policy; a trusted host issues these commands in a Program of its own
     - \c define-class and \c define-pending-class raise \c JNI-SANDBOX-ERROR in a Program with
       \c PO_NO_UNCONTROLLED_APIS, as defining a class runs its static initializer, and a Program under a sandbox that
       does not allow uncontrolled APIs defines a class only in its own class loader: a class that belongs to another

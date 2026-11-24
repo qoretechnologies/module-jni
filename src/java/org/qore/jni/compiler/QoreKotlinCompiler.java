@@ -20,9 +20,10 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -35,6 +36,8 @@ import org.jetbrains.kotlin.cli.common.messages.MessageCollector;
 import org.jetbrains.kotlin.cli.jvm.K2JVMCompiler;
 import org.jetbrains.kotlin.config.Services;
 
+import org.qore.jni.QoreCompilerClasspath;
+import org.qore.jni.QoreSandbox;
 import org.qore.jni.QoreURLClassLoader;
 
 /**
@@ -108,14 +111,24 @@ public class QoreKotlinCompiler implements AutoCloseable {
             throw new IllegalStateException("Compiler has been closed");
         }
 
+        // every name is checked before any directory is created or file written
+        checkNames(sources.keySet());
+        if (injectedClasses != null) {
+            checkNames(injectedClasses.keySet());
+        }
+        final boolean restricted = QoreSandbox.restrictsFilesystem();
+        // the classpath of this compilation for a restricted caller, which owns its private copies
+        QoreCompilerClasspath compilerClasspath = null;
+
         try {
             // Create temporary directories for source and output
-            tempDir = Files.createTempDirectory("qore-kotlin-");
+            tempDir = Files.createTempDirectory("qore-kotlin-", privateAttributes("rwx------"));
             Path sourceDir = tempDir.resolve("src");
-            Path outputDir = tempDir.resolve("out");
+            // one file: the names of the classes, which the source determines, are never paths of the filesystem; it
+            // is created here, as a new file that is not a link, for the compiler to write
+            Path outputJar = Files.createFile(tempDir.resolve("output.jar"), privateAttributes("rw-------"));
             Path stubsDir = tempDir.resolve("stubs");
             Files.createDirectories(sourceDir);
-            Files.createDirectories(outputDir);
             Files.createDirectories(stubsDir);
 
             // Write source files
@@ -125,10 +138,10 @@ public class QoreKotlinCompiler implements AutoCloseable {
                 String source = entry.getValue();
 
                 // Convert class name to path (com.foo.Bar -> com/foo/Bar.kt)
-                String relativePath = className.replace('.', '/') + ".kt";
-                Path sourceFile = sourceDir.resolve(relativePath);
+                Path sourceFile = containedPath(sourceDir, className, ".kt");
                 Files.createDirectories(sourceFile.getParent());
-                Files.writeString(sourceFile, source);
+                Files.writeString(sourceFile, source, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING,
+                    StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS);
                 sourceFiles.add(sourceFile.toString());
             }
 
@@ -137,10 +150,7 @@ public class QoreKotlinCompiler implements AutoCloseable {
                 for (Map.Entry<String, byte[]> entry : injectedClasses.entrySet()) {
                     String binName = entry.getKey();
                     byte[] bytecode = entry.getValue();
-                    String classPath = binName.replace('.', '/') + ".class";
-                    Path classFile = stubsDir.resolve(classPath);
-                    Files.createDirectories(classFile.getParent());
-                    Files.write(classFile, bytecode);
+                    writeClassFile(stubsDir, binName, bytecode);
                 }
             }
 
@@ -165,12 +175,31 @@ public class QoreKotlinCompiler implements AutoCloseable {
             // compiled the identical source: QoreJavaCompiler reads
             // `loader.getURLs()` - the parent - when it populates the file
             // manager's CLASS_PATH.
-            for (ClassLoader cl = classLoader; cl != null; cl = cl.getParent()) {
-                if (cl instanceof java.net.URLClassLoader) {
-                    for (java.net.URL url : ((java.net.URLClassLoader) cl).getURLs()) {
-                        String entry = urlToClasspathEntry(url);
-                        if (entry != null) {
-                            classpath.append(File.pathSeparator).append(entry);
+            if (restricted) {
+                // only the files that a class loader of the module has checked, as they were checked, with a private
+                // copy of the files that the policies of entries of restricted code allow below a directory; the
+                // compiler's classpath is one string, so an entry cannot contain its separator; checked for the
+                // entries themselves as well, as the path of a private copy has no separator
+                for (ClassLoader cl = classLoader; cl != null; cl = cl.getParent()) {
+                    if (cl instanceof QoreURLClassLoader) {
+                        for (File location : ((QoreURLClassLoader) cl).getCompilerLocations()) {
+                            checkClasspathEntry(location);
+                        }
+                    }
+                }
+                compilerClasspath = classLoader.openCompilerClasspath();
+                for (File location : compilerClasspath.getLocations()) {
+                    checkClasspathEntry(location);
+                    classpath.append(File.pathSeparator).append(location.getPath());
+                }
+            } else {
+                for (ClassLoader cl = classLoader; cl != null; cl = cl.getParent()) {
+                    if (cl instanceof java.net.URLClassLoader) {
+                        for (java.net.URL url : ((java.net.URLClassLoader) cl).getURLs()) {
+                            String entry = urlToClasspathEntry(url);
+                            if (entry != null) {
+                                classpath.append(File.pathSeparator).append(entry);
+                            }
                         }
                     }
                 }
@@ -210,11 +239,16 @@ public class QoreKotlinCompiler implements AutoCloseable {
             // Set up compiler arguments
             K2JVMCompilerArguments args = new K2JVMCompilerArguments();
             args.setFreeArgs(sourceFiles);
-            args.setDestination(outputDir.toString());
+            args.setDestination(outputJar.toString());
+            args.setIncludeRuntime(false);
             args.setClasspath(classpath.toString());
             args.setJvmTarget("21");
             args.setNoStdlib(false);
             args.setNoReflect(true);
+            if (restricted) {
+                // the scripting plugin discovers script definitions on the classpath and runs their code
+                args.setDisableDefaultScriptingPlugin(true);
+            }
 
             // Add any custom options
             // Note: K2JVMCompilerArguments doesn't have a direct way to add arbitrary options
@@ -313,45 +347,32 @@ public class QoreKotlinCompiler implements AutoCloseable {
                 throw new QoreKotlinCompilerException(msg, sources.keySet());
             }
 
-            // Read compiled class files
-            Map<String, byte[]> result = new HashMap<>();
-            Files.walk(outputDir)
-                .filter(p -> p.toString().endsWith(".class"))
-                .forEach(classFile -> {
-                    try {
-                        // Convert file path to class name
-                        String relativePath = outputDir.relativize(classFile).toString();
-                        String fullClassName = relativePath
-                            .replace(File.separatorChar, '.')
-                            .replace(".class", "");
-
-                        // Extract simple class name (without package prefix) for the result map
-                        // The full class name is used for the classloader registration below
-                        String className = fullClassName;
-                        int lastDot = fullClassName.lastIndexOf('.');
-                        if (lastDot >= 0) {
-                            className = fullClassName.substring(lastDot + 1);
-                        }
-
-                        byte[] bytecode = Files.readAllBytes(classFile);
-                        result.put(className, bytecode);
-
-                        // Also add to classloader for potential subsequent compilations
-                        // Use full class name for classloader
-                        classLoader.addPendingClass(fullClassName, bytecode);
-                    } catch (IOException e) {
-                        throw new RuntimeException("Failed to read class file: " + classFile, e);
-                    }
-                });
-
-            return result;
+            return readOutput(outputJar);
 
         } catch (IOException e) {
             throw new QoreKotlinCompilerException("I/O error during compilation: " + e.getMessage(),
                 sources.keySet(), e);
         } finally {
-            // Clean up temp directory
-            cleanupTempDir();
+            try {
+                if (compilerClasspath != null) {
+                    compilerClasspath.close();
+                }
+            } catch (RuntimeException | Error e) {
+                // not reported to the caller, and never replaces the result or the error of the compilation: a copy
+                // that could not be removed stays charged, is removed again when its class loader is closed or its
+                // Program ends, and is logged if it keeps failing
+            } finally {
+                // Clean up temp directory
+                cleanupTempDir();
+            }
+        }
+    }
+
+    //! Refuses a classpath entry that contains the separator of the compiler's classpath string
+    private static void checkClasspathEntry(File location) throws QoreKotlinCompilerException {
+        if (location.getPath().indexOf(File.pathSeparatorChar) >= 0) {
+            throw new QoreKotlinCompilerException("a classpath entry contains the path separator, so it cannot be "
+                + "given to the compiler", java.util.Collections.emptyList());
         }
     }
 
@@ -367,7 +388,7 @@ public class QoreKotlinCompiler implements AutoCloseable {
      * parent classes (e.g., ServiceApi).
      */
     private void generateDynamicStubs(Path stubsDir, Map<String, String> sources)
-            throws IOException {
+            throws IOException, QoreKotlinCompilerException {
         // Track classes we've already written to avoid duplicates
         java.util.Set<String> writtenClasses = new java.util.HashSet<>();
 
@@ -399,20 +420,103 @@ public class QoreKotlinCompiler implements AutoCloseable {
         // Now collect ALL pending classes that were generated (including parent classes)
         // and write them to the stubs directory
         Map<String, byte[]> allPendingClasses = classLoader.getAllPendingClasses();
+        // every stub name is checked before the first stub is written
+        for (Map.Entry<String, byte[]> entry : allPendingClasses.entrySet()) {
+            if (entry.getKey().startsWith("qore.") && entry.getValue() != null) {
+                checkNames(java.util.Collections.singleton(entry.getKey()));
+            }
+        }
         for (Map.Entry<String, byte[]> entry : allPendingClasses.entrySet()) {
             String className = entry.getKey();
             // Only write qore.* classes (dynamic imports)
             if (className.startsWith("qore.") && !writtenClasses.contains(className)) {
                 byte[] bytecode = entry.getValue();
                 if (bytecode != null) {
-                    String classPath = className.replace('.', '/') + ".class";
-                    Path stubFile = stubsDir.resolve(classPath);
-                    Files.createDirectories(stubFile.getParent());
-                    Files.write(stubFile, bytecode);
+                    writeClassFile(stubsDir, className, bytecode);
                     writtenClasses.add(className);
                 }
             }
         }
+    }
+
+    //! Reads the classes of the compiler's output; every name is checked before any class is read or registered
+    private Map<String, byte[]> readOutput(Path jar) throws IOException, QoreKotlinCompilerException {
+        Map<String, byte[]> result = new HashMap<>();
+        if (!Files.isRegularFile(jar, LinkOption.NOFOLLOW_LINKS)) {
+            throw new QoreKotlinCompilerException("invalid compiler output: expecting a regular file",
+                java.util.Collections.emptyList());
+        }
+        // a compilation with no classes leaves the file that was created for it empty
+        if (Files.size(jar) == 0) {
+            return result;
+        }
+        try (java.util.jar.JarFile output = new java.util.jar.JarFile(jar.toFile(), false)) {
+            Map<String, java.util.jar.JarEntry> classes = new java.util.LinkedHashMap<>();
+            java.util.Enumeration<java.util.jar.JarEntry> entries = output.entries();
+            while (entries.hasMoreElements()) {
+                java.util.jar.JarEntry entry = entries.nextElement();
+                String name = entry.getName();
+                if (entry.isDirectory() || name.startsWith("META-INF/") || !name.endsWith(".class")) {
+                    continue;
+                }
+                try {
+                    classes.put(QoreCompilerPolicy.outputClassName(name), entry);
+                } catch (IllegalArgumentException e) {
+                    throw new QoreKotlinCompilerException(e.getMessage(), java.util.Collections.emptyList());
+                }
+            }
+            for (Map.Entry<String, java.util.jar.JarEntry> i : classes.entrySet()) {
+                String fullClassName = i.getKey();
+                byte[] bytecode;
+                try (java.io.InputStream in = output.getInputStream(i.getValue())) {
+                    bytecode = in.readAllBytes();
+                }
+                // the simple class name for the result map; the full name for the class loader
+                result.put(fullClassName.substring(fullClassName.lastIndexOf('.') + 1), bytecode);
+                classLoader.addPendingClass(fullClassName, bytecode);
+            }
+        }
+        return result;
+    }
+
+    //! Refuses names that are not binary class names; the error does not repeat them
+    private static void checkNames(java.util.Collection<String> names) throws QoreKotlinCompilerException {
+        for (String name : names) {
+            if (!QoreCompilerPolicy.isValidBinaryName(name)) {
+                throw new QoreKotlinCompilerException("invalid class name for compilation: expecting a Java binary "
+                    + "name", java.util.Collections.emptyList());
+            }
+        }
+    }
+
+    //! Returns the file of a class name, whose canonical path is in \a dir; creates nothing
+    private static Path containedPath(Path dir, String name, String extension)
+            throws IOException, QoreKotlinCompilerException {
+        Path real = dir.toRealPath();
+        Path file;
+        try {
+            file = QoreCompilerPolicy.resolveUnder(real, name, extension);
+        } catch (IllegalArgumentException e) {
+            throw new QoreKotlinCompilerException(e.getMessage(), java.util.Collections.emptyList());
+        }
+        Path current = real;
+        for (Path element : real.relativize(file)) {
+            current = current.resolve(element);
+            if (Files.isSymbolicLink(current)) {
+                throw new QoreKotlinCompilerException("invalid class name for compilation: its file is reached "
+                    + "through a symbolic link", java.util.Collections.emptyList());
+            }
+        }
+        return file;
+    }
+
+    //! Writes a class file for a class name in \a dir; a symbolic link is not followed
+    private static void writeClassFile(Path dir, String name, byte[] bytecode)
+            throws IOException, QoreKotlinCompilerException {
+        Path file = containedPath(dir, name, ".class");
+        Files.createDirectories(file.getParent());
+        Files.write(file, bytecode, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING,
+            StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS);
     }
 
     /**
@@ -552,7 +656,8 @@ public class QoreKotlinCompiler implements AutoCloseable {
 
         if (spec.startsWith("jar:")) {
             spec = spec.substring(4);
-            int sep = spec.indexOf("!/");
+            // the last separator: the path of the file can contain the same characters
+            int sep = spec.lastIndexOf("!/");
             if (sep >= 0) {
                 spec = spec.substring(0, sep);
             }
@@ -592,38 +697,62 @@ public class QoreKotlinCompiler implements AutoCloseable {
      */
     private void cleanupTempDir() {
         if (tempDir != null) {
-            try {
-                Files.walk(tempDir)
-                    .sorted(Comparator.reverseOrder())
-                    .map(Path::toFile)
-                    .forEach(File::delete);
-            } catch (IOException e) {
-                // Ignore cleanup errors
-            }
+            Path dir = tempDir;
             tempDir = null;
+            deleteTree(dir);
         }
+    }
+
+    //! Deletes what it can of a file or directory, without following links; never throws, so that an error of the
+    //! compilation is not replaced, and a file that cannot be deleted does not stop the others from being deleted
+    private static void deleteTree(Path path) {
+        try {
+            if (Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)) {
+                try (java.nio.file.DirectoryStream<Path> entries = Files.newDirectoryStream(path)) {
+                    for (Path entry : entries) {
+                        deleteTree(entry);
+                    }
+                }
+            }
+        } catch (IOException | RuntimeException | Error e) {
+            // the directory is still tried below
+        }
+        try {
+            Files.deleteIfExists(path);
+        } catch (IOException | RuntimeException | Error e) {
+            // nothing more can be done for this path
+        }
+    }
+
+    //! Returns the attributes of a file or directory that only its owner can use, where the filesystem has them
+    private static java.nio.file.attribute.FileAttribute<?>[] privateAttributes(String permissions) {
+        if (!java.nio.file.FileSystems.getDefault().supportedFileAttributeViews().contains("posix")) {
+            return new java.nio.file.attribute.FileAttribute<?>[0];
+        }
+        return new java.nio.file.attribute.FileAttribute<?>[] {
+            java.nio.file.attribute.PosixFilePermissions.asFileAttribute(
+                java.nio.file.attribute.PosixFilePermissions.fromString(permissions)),
+        };
     }
 
     /**
      * Close the compiler and release resources.
+     * <p>
+     * Code that cannot reach the class loader's Program is refused, and the
+     * compiler then stays open until code that can reach its Program closes
+     * it. Once the module's shutdown has started, nothing is closed.
      */
     @Override
     public void close() {
         if (closed) {
             return;
         }
+        // a refusal, or the module's shutdown, leaves the compiler open, with all of its resources
+        if (classLoader != null && !classLoader.closeAndClear()) {
+            return;
+        }
         try {
             cleanupTempDir();
-            if (classLoader != null) {
-                try {
-                    classLoader.close();
-                } catch (IOException e) {
-                    // Ignore close errors
-                } finally {
-                    classLoader.clearAllCaches();
-                    classLoader.clearProgramPtr();
-                }
-            }
         } finally {
             closed = true;
         }

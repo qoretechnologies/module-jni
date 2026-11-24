@@ -29,6 +29,7 @@
 #include "Env.h"
 #include "Class.h"
 #include "JniQoreClass.h"
+#include "ql_jni_debug.h"
 
 #include <atomic>
 #include <set>
@@ -618,6 +619,15 @@ public:
         return setting < 0 ? jni_compat_types : setting != 0;
     }
 
+    //! Returns the lock of the save object callbacks of all Programs
+    /** Held only to swap a callback or take a reference to it.  One process-wide lock, so that the module's fork handler
+        can initialize it again in a child process created with fork(): a thread of the parent can have held it, while
+        the threads that the child starts must still exclude each other.  Never destroyed, as a Program's data can be
+        destroyed during the process's static destruction; created by Jvm::registerForkHandler(), as the fork handler
+        cannot allocate memory
+    */
+    DLLLOCAL static QoreThreadLock& saveObjectCallbackLock();
+
     //! Sets the save object callback, releasing the old one
     /** The old callback is released after the new one is set, as releasing it can run Qore code, for example the
         destructor of an object that only the callback holds; an exception raised by that code is raised in \a xsink;
@@ -631,8 +641,13 @@ public:
         // the member is swapped under the lock (qore#6790); the old callback is released after the lock is released,
         // as its release can run Qore code, which could set the callback again
         {
-            AutoLocker al(save_object_callback_lock);
+            AutoLocker al(saveObjectCallbackLock());
             old = this->save_object_callback;
+#ifdef DEBUG
+            if (dbg_jni_save_object_gate_set.load(std::memory_order_acquire)) {
+                dbg_jni_run_save_object_gate();
+            }
+#endif
             this->save_object_callback = new_callback;
         }
         if (old) {
@@ -647,7 +662,7 @@ public:
         itself (qore#6790)
     */
     DLLLOCAL ResolvedCallReferenceNode* getSaveObjectCallbackRef() const {
-        AutoLocker al(save_object_callback_lock);
+        AutoLocker al(saveObjectCallbackLock());
         return save_object_callback ? save_object_callback->refRefSelf() : nullptr;
     }
 
@@ -673,6 +688,11 @@ public:
 #ifdef DEBUG
     //! Returns the number of entries in the compilation cache (DEBUG builds only, for tests)
     DLLLOCAL size_t getCompilationCacheSizeForTest();
+
+    //! Returns the save object callback lock, for a debug hold (see Globals::dbgHoldContext())
+    DLLLOCAL QoreThreadLock& dbgSaveObjectLock() {
+        return saveObjectCallbackLock();
+    }
 #endif
 
     DLLLOCAL void saveClass(const QoreClass& qc, LocalReference<jclass> jcls);
@@ -761,10 +781,9 @@ protected:
     bool borrowedClassLoader = false;
     // dynamic API class
     GlobalReference<jclass> dynamicApi;
-    // call reference for saving object references; save_object_callback_lock must be held when accessing it
+    // call reference for saving object references; saveObjectCallbackLock() must be held when accessing it, and is held
+    // only to read, reference, or swap the pointer, never while Qore code runs
     ResolvedCallReferenceNode* save_object_callback = nullptr;
-    // protects save_object_callback; only held to read, reference, or swap the pointer, never while Qore code runs
-    mutable QoreThreadLock save_object_callback_lock;
 
     // QoreJavaDynamicApi.newInstance()
     jmethodID methodQoreJavaDynamicApiNewInstance = 0;
@@ -977,11 +996,18 @@ private:
 
 DLLLOCAL QoreProgram* jni_get_program_context();
 DLLLOCAL JniExternalProgramData* jni_get_context();
+
+#ifdef DEBUG
+//! Returns the lock of the registry of the Programs' jni data, for a debug hold (see Globals::dbgHoldContext())
+DLLLOCAL std::mutex& jni_dbg_program_registry_lock();
+#endif
 DLLLOCAL JniExternalProgramData* jni_get_context(QoreProgram*& pgm);
 
 //! Returns the jni data of the Program context as jni_get_context(), or of the global Java context Program
 /** Returns nullptr once the module's shutdown has started, as no global context Program exists then
-    (Globals::getJavaContextProgram()); \a pgm is set to the Program, or to nullptr
+    (Globals::getJavaContextProgram()); \a pgm is set to the Program, or to nullptr.  A child process created with
+    fork() while the module was being initialized also has none, but the load of the module fails in that child, so no
+    jni API that calls this function can be called there
 
     The global context Program is held by \a holder, which the caller keeps for as long as it uses the Program or its
     jni data, as the module's shutdown deletes it once no other thread holds it (qore#6829)
