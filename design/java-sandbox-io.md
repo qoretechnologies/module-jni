@@ -619,7 +619,8 @@ the refusal as `JNI-ERROR`):
 - the fallbacks of `QoreJavaApi.callFunction*()` and `callStaticMethod*()` to the Program context of the call, for a
   function or class that the class loader's Program does not have (Qorus Java workflow steps): only into the Program
   of the calling code (`jni_java_api_fallback_program()`, decided before the record is cleared);
-- `QoreJavaApi.newObjectSave()`, which creates the object in the Program context of the call;
+- `QoreJavaApi.newObjectSave()`, which creates the object in the Program context of the call, resolved to the calling
+  code for library code that a restricting sandbox governs (see "Library code (qore#7394)");
 - the Java classes generated for the Qore definitions of a Program (`JavaClassBuilder`): constructors
   (`qore_object_create()`: the Program of the class, and the Program that the object is created in), static methods
   (`doStaticCall0()`), functions (`doFunctionCall0()`, the `$Functions` classes) and constants
