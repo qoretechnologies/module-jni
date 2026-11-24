@@ -345,8 +345,9 @@ string sub background_via(string op) {
                 assertEq("OK: ok: " + i.key, i.value.callFunction("field_closure_via", which), which + " " + i.key);
             }
         }
-        # also after library code wrote a closure that it obtained for the calling code to the field; a closure in the
-        # static field, which every caller of the library shares, stays the closure of the code that wrote it
+        # also after library code wrote a closure that it obtained for the calling code to the field; the closure that a
+        # field read gives is owned by the code that reads the field, also for the static field that every caller of
+        # the library shares
         foreach string which in ("instance", "static") {
             foreach hash<auto> i in (ts.pairIterator()) {
                 assertEq("OK: ok: " + i.key, i.value.callFunction("field_set_closure_via", which), which + " set "

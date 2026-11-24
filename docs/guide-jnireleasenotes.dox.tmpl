@@ -10,12 +10,15 @@
       Program that calls it shares), the following Java state that the library code creates for it belongs to the
       Program of that code, never to the library's shared Program: a class defined with \c define_class(), the save
       object callback, the arrays of \c new_array() and \c JavaArray::get(), the %Qore objects that Java code creates
-      with \c QoreJavaApi, and the Program that a Java object used as a closure runs in.  The Java code that the library code runs for such code (its calls, and the
-      class initialization that its field accesses run) reaches only that code's Program, with one exception: a call
-      of a static Java method of a class of a third Program, which library code makes, is judged with the library's
-      Program.  The library's own Java classes, class loader and the objects of its own lookups stay the library's.
-      When the code that the library code serves is not known, or is not code that the thread runs in, the state is
-      refused (qore#7394)
+      with \c QoreJavaApi, and the Program that a Java object used as a closure runs in.  The Java code that the
+      library code runs for such code (its calls, and the class initialization that its field accesses run) reaches
+      only that code's Program, with one exception: a call of a static Java method of a class of a third Program,
+      which library code makes, is judged with the library's Program.  The library's own Java classes, class loader
+      and the objects of its own lookups stay the library's.  When the code that the library code serves is not known,
+      or is not code that the thread runs in, the state is refused.  Library code that another library calls is
+      covered only with a %Qore library that runs function bodies with their own Program's call context (reported as
+      \c function_own_call_program_context in the module's \c info hash); with an older %Qore library, such state
+      belongs to the calling library's Program (qore#7394)
     - <b>Behavior change</b> (qore#7394): for code that a restricting sandbox governs, Java code that library code
       runs cannot call into the library's Program by a Program pointer
     - <b>Behavior change</b> (qore#7340): when the %Qore program ends while a Java thread is still inside a call of
