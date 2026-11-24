@@ -1141,9 +1141,10 @@ DLLLOCAL bool jni_restricting_sandbox_governs();
     module creates or places for the calling code and for the checks of the Program that Java code reaches.  Code that
     no restricting sandbox governs keeps \a pgm.
 
-    Only the current Program is resolved: a Program other than the current one (the Program of an object or a class
-    that the call has entered, or the Program of a callback that the module set as the Program context) is returned as
-    it is.
+    Only the current Program is resolved, as the caller walk starts from it: a library's Program is current whenever
+    its code runs or a call enters it for an object or a class of the library, and is resolved then; a Program that is
+    not current (the Program that the frame of a builtin call names after the call entered another Program, or the
+    Program of a callback that the module set as the Program context) is returned as it is.
 
     @param pgm the Program of the calling code
     @param known set to false if the Program is not known: library code that a restricting sandbox governs serves code

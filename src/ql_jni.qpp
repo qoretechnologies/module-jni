@@ -452,6 +452,15 @@ Jni::org::qore::jni::JavaArray new_array(Jni::java::lang::Class[QoreJniPrivateDa
         // holds the global context Program, if it is the Program returned (qore#6829)
         jni::JniContextProgramHolder ctx_holder;
         jni::jni_get_create_context(pgm, ctx_holder);
+        // the array belongs to the calling code, never to the shared Program of library code that a sandbox governs,
+        // whose jni data the lookup above finds first (qore#7394)
+        QoreProgram* call_pgm = qore_get_call_program_context();
+        if (call_pgm) {
+            QoreProgram* array_pgm = jni_calling_code_program_for_state(call_pgm);
+            if (array_pgm != call_pgm) {
+                pgm = array_pgm;
+            }
+        }
         return new QoreObject(QC_JAVAARRAY, pgm, new Array(component_class->makeLocal().as<jclass>(), size));
     } catch (jni::Exception& e) {
         e.convert(xsink);

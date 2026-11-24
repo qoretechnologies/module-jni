@@ -5173,15 +5173,23 @@ public:
 };
 }
 
-JniJavaCallerRecord JniJavaCallerScope::callSite() {
-    // the code at the call site of library code that a sandbox governs is the code that the library code serves; a
-    // record that reaches no Program if that is not known (qore#7394)
+// the record of the calling code whose Program is \a pgm: for library code that a sandbox governs, the code that the
+// library code serves, and a record that reaches no Program if that is not known (qore#7394)
+static JniJavaCallerRecord jni_calling_code_record(QoreProgram* pgm) {
     bool known;
     JniJavaCallerRecord rv;
     rv.set = true;
-    rv.pgm = jni_calling_code_program(callSiteFrame(), known);
+    rv.pgm = jni_calling_code_program(pgm, known);
     rv.deny = !known;
     return rv;
+}
+
+JniJavaCallerRecord JniJavaCallerScope::callSite() {
+    return jni_calling_code_record(callSiteFrame());
+}
+
+JniJavaCallerRecord JniJavaCallerScope::current() {
+    return jni_calling_code_record(::getProgram());
 }
 
 QoreProgram* JniJavaCallerScope::callSiteFrame() {

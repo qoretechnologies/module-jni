@@ -1283,6 +1283,7 @@ set(JAVA_TEST_JAR_SRC
     test/java/src/org/qore/jni/test/ClasspathUrlProbe.java
     test/java/src/org/qore/jni/test/GovernedProgramProbe.java
     test/java/src/org/qore/jni/test/HostObjectProbe.java
+    test/java/src/org/qore/jni/test/LibraryFieldHolder.java
     test/java/src/org/qore/jni/test/SandboxIo.java
     test/java/src/org/qore/jni/test/CrossProgramCalls.java
     test/java/src/org/qore/jni/test/CrossProgramStatic.java

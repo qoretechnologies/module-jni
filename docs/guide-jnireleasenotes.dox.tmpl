@@ -6,14 +6,18 @@
 
     @section jni_3_0_0 jni Module Version 3.0.0
 
-    - <b>Security</b>: the Java state that the module creates or places for code that a restricting sandbox governs
-      (a class that it defines, its save object callback, the objects that it creates, the Program that a Java closure
-      runs in) belongs to the Program of that code also when the code calls a library (the code of a
-      module, which every Program that calls it shares) that creates it, and never to the library's shared Program;
-      the Java code that library code calls for such code reaches only that code's Program.  When the code that the
-      library code serves is not known, or is not code that the thread runs in, the state is refused (qore#7394)
+    - <b>Security</b>: when code that a restricting sandbox governs calls a library (the code of a module, which every
+      Program that calls it shares), the following Java state that the library code creates for it belongs to the
+      Program of that code, never to the library's shared Program: a class defined with \c define_class(), the save
+      object callback, the arrays of \c new_array() and \c JavaArray::get(), the %Qore objects that Java code creates with \c QoreJavaApi, and the Program that a Java
+      object used as a closure runs in.  The Java code that the library code runs for such code (its calls, and the
+      class initialization that its field accesses run) reaches only that code's Program, with one exception: a call
+      of a static Java method of a class of a third Program, which library code makes, is judged with the library's
+      Program.  The library's own Java classes, class loader and the objects of its own lookups stay the library's.
+      When the code that the library code serves is not known, or is not code that the thread runs in, the state is
+      refused (qore#7394)
     - <b>Behavior change</b> (qore#7394): for code that a restricting sandbox governs, Java code that library code
-      calls cannot call into the library's Program by a Program pointer
+      runs cannot call into the library's Program by a Program pointer
     - <b>Behavior change</b> (qore#7340): when the %Qore program ends while a Java thread is still inside a call of
       %Qore code, the process now ends without running any exit handler, so Java's shutdown hooks do not run and the
       JVM is not destroyed (the process does not wait for the call); see @ref jni_process_exit_in_call

@@ -7,6 +7,7 @@
 %module-cmd(jni) add-relative-classpath qore-jni-test.jar
 %module-cmd(jni) import org.qore.jni.test.HostObjectProbe
 %module-cmd(jni) import org.qore.jni.QoreJavaApi
+%module-cmd(jni) import org.qore.jni.test.LibraryFieldHolder
 
 module JniLibraryCallerProgram {
     version = "1.0";
@@ -75,6 +76,48 @@ public object sub jlcp_new_object(string class_name) {
 #! Java code calls into Qore with the class loader of this module's Program
 public string sub jlcp_call_qore(string func) {
     return HostObjectProbe::staticCallQore(func);
+}
+
+#! returns a new Java array of strings
+public object sub jlcp_new_array() {
+    return new_array(load_class("java.lang.String"), 2);
+}
+
+#! returns a Java byte array and the Program that the frame of a call that this function makes names
+public hash<auto> sub jlcp_byte_array_frame(binary b) {
+    return {
+        "array": JavaArray::get(b),
+        "frame": get_thread_call_stack()[0].programid,
+    };
+}
+
+#! the same as jlcp_byte_array(), through a static method of this module
+public object sub jlcp_nested_byte_array(binary b) {
+    return Lib::byteArray(b);
+}
+
+#! returns the Java closure in an instance field of a Java object
+public code sub jlcp_field_closure() {
+    LibraryFieldHolder holder();
+    return holder.closure;
+}
+
+#! returns the Java closure in a static Java field
+public code sub jlcp_static_field_closure() {
+    return LibraryFieldHolder::staticClosure;
+}
+
+#! a Java closure that this module keeps for later calls
+our *code jlcp_stored;
+
+#! keeps a Java closure, obtained for the calling code
+public nothing sub jlcp_store_closure() {
+    jlcp_stored = HostObjectProbe::caller();
+}
+
+#! returns the Java closure kept
+public *code sub jlcp_stored_closure() {
+    return jlcp_stored;
 }
 
 #! the same calls through the static methods of a class of the library

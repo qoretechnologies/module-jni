@@ -749,9 +749,12 @@ public:
 
     //! Returns the current Program, for the calls from Qore into Java that are not builtin calls (a member access, a
     //! Java object called as a Qore closure), which libqore makes in the Program of the calling code
-    DLLLOCAL static QoreProgram* current() {
-        return ::getProgram();
-    }
+    /** For library code that a restricting sandbox governs, the Program of the code that the library code serves, or
+        a record that reaches no Program if that is not known, as for callSite() (qore#7394)
+
+        @return a record of the Program (\c set is always true)
+    */
+    DLLLOCAL static JniJavaCallerRecord current();
 
 private:
     //! Returns the Program that the frame of the innermost builtin call names (see callSite())

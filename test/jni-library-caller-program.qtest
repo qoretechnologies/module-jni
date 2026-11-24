@@ -26,6 +26,7 @@ class JniLibraryCallerProgramTest inherits QUnit::Test {
         const TenantSource = "%modern
 %requires jni
 %requires JniLibraryCallerProgram
+%requires JniLibraryCallerProgramOuter
 %module-cmd(jni) import org.qore.jni.QoreJavaApi
 
 our string tenant_name_value;
@@ -116,6 +117,43 @@ string sub java_closure_via(string how) {
 string sub call_qore_via() {
     return jlcp_call_qore(\"jlcp_name\");
 }
+
+object sub new_array_via() {
+    return jlcp_new_array();
+}
+
+# library code that calls other library code
+object sub nested_byte_array_via(string how) {
+    return how == \"static\" ? jlcp_nested_byte_array(<0102>) : jlcp_outer_byte_array(<0102>);
+}
+
+hash<auto> sub nested_define_class_via(string name, binary bytecode) {
+    try {
+        object cls = jlcp_outer_define_class(name, bytecode);
+        return {\"own\": cls.getClassLoader().equals(get_class_loader())};
+    } catch (hash<ExceptionInfo> ex) {
+        return {\"err\": sprintf(\"%s: %s\", ex.err, ex.desc)};
+    }
+}
+
+# a Java closure that library code reads from a field
+string sub field_closure_via(string which) {
+    return run(string sub () {
+        code c = which == \"static\" ? jlcp_static_field_closure() : jlcp_field_closure();
+        return c(\"jlcp_name\");
+    });
+}
+
+# a Java closure that the library keeps, for this Program or for another one
+nothing sub store_closure() {
+    jlcp_store_closure();
+}
+
+string sub call_stored_closure() {
+    return run(string sub () {
+        return jlcp_stored_closure()(\"jlcp_name\");
+    });
+}
 ";
 
         #! the byte code of org.qore.jni.test.jcp.Defined, an empty public class
@@ -139,6 +177,8 @@ string sub call_qore_via() {
 
     constructor() : QUnit::Test("jni library caller Program", "1.0") {
         load_module(get_script_dir() + DirSep + "JniLibraryCallerProgram.qm");
+        load_module(get_script_dir() + DirSep + "JniLibraryCallerProgramOuter.qm");
+        addTestCase("Java fields that library code reads and writes", \fieldTest());
         addTestCase("a Java class defined through library code", \defineClassTest());
         addTestCase("the save object callback set through library code", \saveObjectCallbackTest());
         addTestCase("an object that Java creates for library code", \newObjectTest());
@@ -146,6 +186,10 @@ string sub call_qore_via() {
         addTestCase("a Java array created by a thread that library code starts", \backgroundTest());
         addTestCase("a Java closure obtained through library code", \javaClosureTest());
         addTestCase("Java code that library code calls", \callQoreTest());
+        addTestCase("a Java array that new_array() creates for library code", \newArrayTest());
+        addTestCase("library code that calls other library code", \nestedTest());
+        addTestCase("a Java closure that library code keeps", \storedClosureTest());
+        addTestCase("trusted code that calls library code", \trustedTest());
         set_return_value(main());
     }
 
@@ -263,6 +307,68 @@ string sub call_qore_via() {
             foreach hash<auto> i in (tenants().pairIterator()) {
                 assertEq("OK: ok: " + i.key, i.value.callFunction("java_closure_via", how), how + " " + i.key);
             }
+        }
+    }
+
+    fieldTest() {
+        hash<string, Program> ts = tenants();
+        # a Java closure read from a field is the calling code's: it runs in that code's Program and reaches it
+        foreach string which in ("instance", "static") {
+            foreach hash<auto> i in (ts.pairIterator()) {
+                assertEq("OK: ok: " + i.key, i.value.callFunction("field_closure_via", which), which + " " + i.key);
+            }
+        }
+    }
+
+    newArrayTest() {
+        if (!exists objectProgramId(new Mutex())) {
+            testSkip("the module has no dbg_jni_object_program_id() (not a debug build)");
+        }
+        foreach hash<auto> i in (tenants().pairIterator()) {
+            object array = i.value.callFunction("new_array_via");
+            assertEq(2, array.length(), i.key + ": length");
+            assertOwnProgram(i.value, array, i.key + ": array");
+        }
+    }
+
+    nestedTest() {
+        # through a static method of the same library, and through the code of another library
+        foreach string how in ("static", "function") {
+            foreach hash<auto> i in (tenants().pairIterator()) {
+                object array = i.value.callFunction("nested_byte_array_via", how);
+                assertEq(2, array.length(), how + " " + i.key + ": length");
+                assertOwnProgram(i.value, array, how + " " + i.key + ": array");
+            }
+        }
+        binary bytecode = parse_hex_string(DefinedByteCode);
+        foreach hash<auto> i in (tenants().pairIterator()) {
+            hash<auto> rv = i.value.callFunction("nested_define_class_via", DefinedName, bytecode);
+            assertEq(NOTHING, rv.err, i.key);
+            assertTrue(rv.own, i.key + ": own class loader");
+        }
+    }
+
+    storedClosureTest() {
+        hash<string, Program> ts = tenants();
+        ts.A.callFunction("store_closure");
+        # the closure that the library keeps is the code's that obtained it, whoever calls it later: its Program, not
+        # the library's
+        assertEq("OK: ok: A", ts.A.callFunction("call_stored_closure"), "A, later");
+        assertEq("OK: ok: A", ts.B.callFunction("call_stored_closure"), "B");
+    }
+
+    trustedTest() {
+        # code that no sandbox governs keeps the Program that libqore names for library code: the library's own
+        string rv = call_function("JniLibraryCallerProgram::jlcp_call_qore", "jlcp_name");
+        assertEq("ok: library", rv);
+        hash<auto> h = call_function("JniLibraryCallerProgram::jlcp_byte_array_frame", <0102>);
+        *int id = objectProgramId(h.array);
+        if (exists id) {
+            # the Program context of the call: the library's (qore#7394), or the trusted calling code's with a Qore
+            # library that runs library functions with the call context of their caller
+            int host_id = get_thread_call_stack()[0].programid;
+            assertTrue(id == h.frame || id == host_id, sprintf("array: %d (library frame %d, host %d)", id, h.frame,
+                host_id));
         }
     }
 
