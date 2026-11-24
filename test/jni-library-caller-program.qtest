@@ -6,6 +6,7 @@
 %no-child-restrictions
 %prepend-module-path "${SCRIPT_DIR}/../build"
 %requires QUnit
+%requires Util
 %requires jni
 
 %exec-class JniLibraryCallerProgramTest
@@ -189,8 +190,11 @@ string sub background_via(string op) {
     }
 
     constructor() : QUnit::Test("jni library caller Program", "1.0") {
-        load_module(get_script_dir() + DirSep + "JniLibraryCallerProgram.qm");
-        load_module(get_script_dir() + DirSep + "JniLibraryCallerProgramOuter.qm");
+        # an absolute path: load_module() resolves a relative one against the script's directory, so a script started
+        # with a relative path (as the test runner does) would find no module
+        string dir = normalize_dir(get_script_dir());
+        load_module(dir + DirSep + "JniLibraryCallerProgram.qm");
+        load_module(dir + DirSep + "JniLibraryCallerProgramOuter.qm");
         addTestCase("Java fields that library code reads and writes", \fieldTest());
         addTestCase("a Java class defined through library code", \defineClassTest());
         addTestCase("the save object callback set through library code", \saveObjectCallbackTest());
