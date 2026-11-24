@@ -210,18 +210,43 @@ DLLLOCAL void jni_purge_shared_classes(const QoreProgram& pgm);
 DLLLOCAL void dbg_jni_with_shared_class_lock(const std::function<void()>& f);
 #endif
 
-//! Returns true if a class of the receiver is the same registered shared class as the class of a generated method
-/** The receiver's class or one of its parents must have the same path, module and signature as the method's class, and
-    the Programs whose namespaces hold the two classes (QoreClass::getProgram(), which for an imported class is the
-    importing Program) must both have registered the Java name of the method's class with the module command
+//! What the class of a receiver is compared with, for a registered shared class
+struct JniSharedClassMatch {
+    //! the namespace path of the method's class
+    std::string path;
+    //! the path and the signature of the method's class (see get_class_hash())
+    std::string class_hash;
+    //! the module of the method's class, if it has one
+    std::string module;
+    bool has_module = false;
+};
+
+//! Returns true if the Program of the receiver and the Program that holds the class of a generated method both
+//! registered the Java name of that class with the module command
+/** Reads nothing of the receiver's Program but its ID, and enters no Program, so that a refused call runs no code of the
+    receiver's Program; sets \a match for jni_shared_class_matches()
 
     @param env the JNI environment of the thread
-    @param receiver the class of the receiver
+    @param receiver_pgm the Program of the receiver, which the object keeps allocated, or nullptr
     @param method_class the class of the method
     @param method_pgm the Program of the method's binding, which the calling thread has entered
+    @param match set to what the receiver's class is compared with
 */
-DLLLOCAL bool jni_classes_are_shared(Env& env, const QoreClass& receiver, const QoreClass& method_class,
-    QoreProgram* method_pgm);
+DLLLOCAL bool jni_shared_class_registered(Env& env, const QoreProgram* receiver_pgm, const QoreClass& method_class,
+    QoreProgram* method_pgm, JniSharedClassMatch& match);
+
+//! Returns true if the class of \a match's path in the receiver's Program is the receiver's class or one of its parents,
+//! with the module and the signature of the method's class
+/** The calling thread must have entered the receiver's Program, which keeps its namespace, and the classes in it, until
+    the thread has left it; nothing is read from the namespace of the receiver's class itself, which the teardown of the
+    Program that holds it can delete while the object still exists.
+
+    @param receiver the class of the receiver
+    @param receiver_pgm the Program of the receiver, which the calling thread has entered
+    @param match set by jni_shared_class_registered()
+*/
+DLLLOCAL bool jni_shared_class_matches(const QoreClass& receiver, QoreProgram* receiver_pgm,
+    const JniSharedClassMatch& match);
 
 class QoreJniClassMap : public QoreJniClassMapBase {
 public:

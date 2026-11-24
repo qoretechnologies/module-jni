@@ -242,6 +242,8 @@ object sub make() {
         addTestCase("a method call on a receiver from a separate class loader", \separateLoaderReceiverTest());
         addTestCase("an invocation handler released on a Java thread", \javaThreadHandlerReleaseTest());
         addTestCase("a method call on a registered shared class", \sharedClassReceiverTest());
+        addTestCase("a registered shared class of a deleted Program", \sharedClassTeardownTest());
+        addTestCase("a call on a registered shared class enters the Program once", \sharedClassEntryTest());
         addTestCase("a shared class that is not registered by both Programs", \sharedClassRefusedTest());
         addTestCase("two classes injected for one class", \twoInjectedClassesTest());
         addTestCase("a native constructor with no Java object", \nullSelfTest());
@@ -645,6 +647,44 @@ sub give(Program target) { target.importClass(%y); }
         Program importer = importingProgram(sibling, "NativeHandleShared");
         importer.issueModuleCmd("jni", "register-shared-class " + name);
         assertEq("ok: sibling", NativeHandleProbe::callBinding("value", importer.callFunction("make"), binding));
+    }
+
+    #! a call on the object of a registered Program enters that Program once, as any call of a method of the object
+    sharedClassEntryTest() {
+        string ns = "NativeHandleSharedEntry";
+        string name = "qore." + ns + ".Api";
+        Program owner = sharedProgram(ns, "owner");
+        owner.issueModuleCmd("jni", "register-shared-class " + name);
+        Program sibling = sharedProgram(ns, "sibling");
+        sibling.issueModuleCmd("jni", "register-shared-class " + name);
+        int binding = NativeHandleProbe::methodBinding(owner.callFunction("bytes"), "value");
+        object o = sibling.callFunction("make");
+
+        Counter entries();
+        sibling.setThreadEntryHandler(sub () { entries.inc(); }, sub (auto ignored) {});
+        on_exit sibling.setThreadEntryHandler();
+        assertEq("ok: sibling", NativeHandleProbe::callBinding("value", o, binding));
+        assertEq(1, entries.getCount(), "the receiver's Program is entered once for the call");
+    }
+
+    #! the object of a registered Program that has been deleted is refused, and nothing of the deleted Program is used
+    sharedClassTeardownTest() {
+        string ns = "NativeHandleSharedTeardown";
+        string name = "qore." + ns + ".Api";
+        Program owner = sharedProgram(ns, "owner");
+        owner.issueModuleCmd("jni", "register-shared-class " + name);
+        int binding = NativeHandleProbe::methodBinding(owner.callFunction("bytes"), "value");
+        {
+            Program sibling = sharedProgram(ns, "sibling");
+            sibling.issueModuleCmd("jni", "register-shared-class " + name);
+            object o = sibling.callFunction("make");
+            # the Java wrapper outlives the Program, whose namespace, with its classes, is deleted with it
+            NativeHandleProbe::keepWrapper(o);
+            assertEq("ok: sibling", NativeHandleProbe::callBinding("value", o, binding));
+        }
+        # the deletion also removed the Program's registration, so the call is refused before the receiver's Program
+        # would be entered; a Program in its teardown that is still registered is not covered here
+        assertNotInstance(NativeHandleProbe::callKeptBinding("value", binding), "the object of a deleted Program");
     }
 
     #! only the module command of both Programs, for the same class, relates two classes

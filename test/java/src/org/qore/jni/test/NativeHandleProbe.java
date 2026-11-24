@@ -795,6 +795,20 @@ public final class NativeHandleProbe {
         return attempt(() -> JavaClassBuilder.doNormalCall(name, (QoreObjectBase)obj, binding, 0L, args));
     }
 
+    private static volatile Object keptWrapper;
+
+    //! Keeps the Java wrapper of a Qore object, so that a later call does not convert the object again
+    public static void keepWrapper(Object obj) {
+        keptWrapper = obj;
+    }
+
+    //! Calls a method binding on the wrapper kept with keepWrapper(), and drops it
+    public static String callKeptBinding(String name, long binding, Object... args) {
+        Object obj = keptWrapper;
+        keptWrapper = null;
+        return callBinding(name, obj, binding, args);
+    }
+
     //! Calls the public method of the generated Java class of the wrapper, as Java code does
     public static String callGenerated(Object obj, String method, Object... args) {
         return attempt(() -> {

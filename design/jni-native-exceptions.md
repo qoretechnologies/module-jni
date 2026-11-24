@@ -69,20 +69,31 @@ address (qore#7068):
   the handle of the wrapper itself.
 - A generated method runs only on an object whose class hierarchy has the method's class ID, with two exceptions, in
   which the object's own method of the bound name runs, never a name from Java: a class that a declared injection
-  (`Program::importClass()` with injection) relates to the method's class, and the same class of another Program when
-  both Programs registered its Java name with the `register-shared-class` module command.  The module records those
-  registrations natively; a registration made only through the Java class loader method grants neither.  A class of
-  the same name and signature is otherwise another class.  In these two cases, the Java varargs array of a variadic
-  bound method is passed as separate arguments if the object's method of that name has any variadic variant, and
-  otherwise as one list; the choice is made by method name before Qore selects the variant, so a class that overloads
-  that name with both variadic and list variants can get separate arguments where its list variant was meant.  An object is constructed only with the constructor
+  (`Program::importClass()` with injection) relates to the method's class, also when the object's class stands in for
+  a class that inherits the method's class, and the same class of another Program when both Programs registered its
+  Java name with the `register-shared-class` module command.  The module records those registrations natively; a
+  registration made only through the Java class loader method grants neither.  For a shared class, the
+  registrations are checked first, outside any entry, so that a call on the object of a Program that did not register,
+  or that has been deleted, runs no code of that Program.  The class itself is then compared within the call's own
+  entry of the object's Program, before any of the call's code: the class of the path is looked up in that Program and
+  compared with the object's class by ID, so that nothing is read from a namespace that the teardown of a Program can
+  delete.  An accepted call enters the object's Program once, as any call of a method of the object; a call that passes
+  the registration check and is then refused has run the Program's entry and exit handlers once, and its thread
+  initialization code if it was the thread's first entry, and none of the call's code.  A class of the same name and
+  signature is otherwise another class.  In these two cases, the Java varargs array of a variadic bound method is
+  passed as separate arguments if the object's class, or a parent of it, has any variadic variant of a normal or
+  static method of that name, and otherwise as one list; the choice is made by method name before Qore selects the
+  variant, so a class that overloads that name with both variadic and list variants can get separate arguments where
+  its list variant was meant.  An object is constructed only with the constructor
   of the Java class's own binding, or for a Java subclass, of its nearest generated superclass, as the private data of
   an object is typed by class.  Each Qore class of a Java class records its superclass when it is made, and these links
   are followed to the generated class when an object is constructed.
 - The handles do not make Java code an isolation boundary: code that a host allows to use Java can use reflection.
   The registry ensures that a value from Java is used as a native handle only if it is a live handle of the expected
   kind.  It does not cover the lifetime of what libqore's class metadata refers to, such as the target of an injected
-  class.
+  class.  Program pointers are not handles: a class loader and the native calls that name a Program still pass its
+  raw address in Java, and the module validates it against the Programs that have jni data, and holds the Program,
+  before it dereferences it (see `JniJavaProgramRef`).
 
 Every Java wrapper with a native handle holds it in a `NativeCleanup.Ref`: `QoreObjectBase` (and `QoreObject`, and
 the generated classes), `QoreClosure`, `QoreInvocationHandler`, `QoreExceptionWrapper` and `QoreSandbox.Policy`.  The

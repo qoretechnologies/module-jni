@@ -43,7 +43,9 @@
 
 #include <cstdlib>
 #include <cstring>
+#include <functional>
 #include <future>
+#include <set>
 #include <thread>
 #include <unordered_map>
 #include <unistd.h>
@@ -1600,13 +1602,17 @@ static jboolean JNICALL qore_object_instance_of(JNIEnv* jenv, jclass, jlong ptr,
     return obj->validInstanceOf(*cls);
 } JNI_NATIVE_CATCH(jenv, JNI_FALSE)
 
+static bool jni_method_takes_extra_args(const QoreClass& cls, const char* name);
+
 // exactly one of \a object_handle and \a closure_handle is set; the caller holds it for the call
 static jobject qore_object_closure_call_internal(JNIEnv* jenv, jclass, QoreProgram* pgm,
         const JniObjectHandle* object_handle, const JniClosureHandle* closure_handle, jboolean save,
         jstring mname, jobjectArray args, const QoreMethod* m = nullptr,
-        const QoreExternalMethodVariant* v = nullptr, bool flatten = false, bool call_bound_name = false) {
+        const QoreExternalMethodVariant* v = nullptr, bool flatten = false, bool call_bound_name = false,
+        const JniSharedClassMatch* shared_match = nullptr) {
     assert(!object_handle != !closure_handle);
     assert(!call_bound_name || (m && !v));
+    assert(!shared_match || (object_handle && call_bound_name));
     // must ensure that the thread is attached before executing Qore code, and before the Program context of the
     // thread is looked up: with no Program, or a Program with no jni data, the lookup uses the Qore thread state of
     // the thread, which a Java thread that Java started does not have until it is attached (qore#6828)
@@ -1640,6 +1646,20 @@ static jobject qore_object_closure_call_internal(JNIEnv* jenv, jclass, QoreProgr
         QoreExternalProgramContextHelper pch(&xsink, pgm);
         if (xsink) {
             throw XsinkException(xsink);
+        }
+        // the class of a registered shared class is compared within this entry of the receiver's Program, which keeps
+        // its namespace, before any of the call's code: a call that is refused here has run the Program's entry and exit
+        // handlers once, as any call into the Program does, and nothing else of it
+        if (shared_match && !jni_shared_class_matches(*object_handle->getObject()->getClass(), pgm, *shared_match)) {
+            jni_throw_runtime_exception(*env, "Invalid object in generated Qore method call: the object is not an "
+                "instance of the class of the method");
+            return nullptr;
+        }
+        // the Java varargs array of a variadic method bound to another class than the object's is passed as separate
+        // arguments only if the object's own method of the name takes them (see java_class_builder_do_normal_call());
+        // decided here, within the entry of the object's Program, which keeps its classes' data
+        if (call_bound_name && flatten) {
+            flatten = jni_method_takes_extra_args(*object_handle->getObject()->getClass(), m->getName());
         }
 
 #ifdef DEBUG
@@ -1930,56 +1950,77 @@ static JniExternalProgramData* generated_program_context(QoreProgram* pgm, jlong
     return jpc;
 }
 
-//! Returns true if this class was injected in place of the class with the given ID
-static bool jni_class_is_injected_as(const QoreClass& cls, qore_classid_t target) {
-    for (const QoreClass* i = cls.getInjectedAsClass(); i; i = i->getInjectedAsClass()) {
-        if (i->getID() == target) {
-            return true;
-        }
-    }
-    return false;
-}
-
-//! Returns true if the class or one of its parents was injected in place of the class with the given ID
-/** Uses libqore's flat view of the hierarchy: the depth and shape of a class hierarchy are not bounded, so it is not
-    walked recursively
+//! Calls the function with each class that the class was injected in place of, following the chain of injections
+/** A class appears at most once, so that a chain that returns to a class it has visited ends
 */
-static bool jni_class_injected_as(const QoreClass& cls, qore_classid_t target) {
-    if (jni_class_is_injected_as(cls, target)) {
-        return true;
+static void jni_for_injected_as(const QoreClass& cls, std::set<qore_classid_t>& visited,
+        const std::function<void(const QoreClass&)>& f) {
+    for (const QoreClass* i = cls.getInjectedAsClass(); i && visited.insert(i->getID()).second;
+            i = i->getInjectedAsClass()) {
+        f(*i);
     }
-    QoreClassHierarchyIterator ci(cls);
-    while (ci.next()) {
-        if (jni_class_is_injected_as(ci.get(), target)) {
-            return true;
-        }
-    }
-    return false;
 }
 
 //! Returns true if a class injection relates the receiver's class to the class of a method
 /** Only a declared injection counts (Program::importClass() with injection, which needs \c PO_ALLOW_INJECTION): either
-    the receiver's class, or a parent of it, was injected in place of the method's class, or the method's class was
-    injected in place of a class of the receiver.  A class that merely has the same name and signature does not.
+    the receiver's class, or a parent of it, was injected in place of the method's class or of a class that has the
+    method's class in its hierarchy, or the method's class was injected in place of a class of the receiver.  A class
+    that merely has the same name and signature does not.  The hierarchy is walked with libqore's flat view of it, as
+    its depth and shape are not bounded.
 */
 static bool jni_is_injected_receiver(const QoreClass& receiver, const QoreClass& method_class) {
-    for (const QoreClass* i = method_class.getInjectedAsClass(); i; i = i->getInjectedAsClass()) {
-        if (receiver.getClass(i->getID())) {
-            return true;
+    const qore_classid_t method_id = method_class.getID();
+    bool found = false;
+    std::set<qore_classid_t> visited;
+    jni_for_injected_as(method_class, visited, [&] (const QoreClass& target) {
+        if (!found && receiver.getClass(target.getID())) {
+            found = true;
         }
+    });
+    if (found) {
+        return true;
     }
-    return jni_class_injected_as(receiver, method_class.getID());
+    // the classes that the receiver's class, or a parent of it, stands in for: the method's class, or a class that
+    // inherits it
+    visited.clear();
+    auto check = [&] (const QoreClass& target) {
+        if (!found && (target.getID() == method_id || target.getClass(method_id))) {
+            found = true;
+        }
+    };
+    jni_for_injected_as(receiver, visited, check);
+    QoreClassHierarchyIterator ci(receiver);
+    while (!found && ci.next()) {
+        jni_for_injected_as(ci.get(), visited, check);
+    }
+    return found;
 }
 
-//! Returns true if the method of the class with the given name has a variant that takes variable arguments
-static bool jni_method_takes_extra_args(const QoreClass& cls, const char* name) {
-    const QoreMethod* method = cls.findMethod(name);
-    if (!method) {
-        return false;
+//! Returns true if the class has a variant that takes variable arguments of a method of the given name
+static bool jni_local_method_takes_extra_args(const QoreClass& cls, const char* name) {
+    for (const QoreMethod* method : {cls.findLocalMethod(name), cls.findLocalStaticMethod(name)}) {
+        if (!method) {
+            continue;
+        }
+        QoreExternalFunctionIterator i(*method->getFunction());
+        while (i.next()) {
+            if (i.getVariant()->getCodeFlags() & QCF_USES_EXTRA_ARGS) {
+                return true;
+            }
+        }
     }
-    QoreExternalFunctionIterator i(*method->getFunction());
-    while (i.next()) {
-        if (i.getVariant()->getCodeFlags() & QCF_USES_EXTRA_ARGS) {
+    return false;
+}
+
+//! Returns true if the class or a parent of it has a variant that takes variable arguments of a normal or static method
+//! of the given name, which a call of the method by name can select
+static bool jni_method_takes_extra_args(const QoreClass& cls, const char* name) {
+    if (jni_local_method_takes_extra_args(cls, name)) {
+        return true;
+    }
+    QoreClassHierarchyIterator ci(cls);
+    while (ci.next()) {
+        if (jni_local_method_takes_extra_args(ci.get(), name)) {
             return true;
         }
     }
@@ -2003,18 +2044,25 @@ static jobject JNICALL java_class_builder_do_normal_call(JNIEnv* jenv, jclass jc
         bool flatten = false;
         // by class ID: libqore's instance checks also accept a class of the same name and signature in another
         // namespace or Program; copies of a class imported into another Program have the same ID
+        // a registered shared class: the registrations are checked here, outside any entry, so that a call on the
+        // object of a Program that did not register runs no code of that Program; the class itself is compared within
+        // the call's entry of the receiver's Program (see qore_object_closure_call_internal())
+        std::optional<JniSharedClassMatch> shared_match;
         if (!obj->getClass()->getClass(method->getClass()->getID())) {
-            if (!jni_is_injected_receiver(*obj->getClass(), *method->getClass())
-                && !jni_classes_are_shared(env, *obj->getClass(), *method->getClass(), binding->pgm)) {
-                throw std::runtime_error("Invalid object in generated Qore method call: the object is not an "
-                    "instance of the class of the method");
+            if (!jni_is_injected_receiver(*obj->getClass(), *method->getClass())) {
+                JniSharedClassMatch match;
+                if (!jni_shared_class_registered(env, obj->getProgram(), *method->getClass(), binding->pgm, match)) {
+                    throw std::runtime_error("Invalid object in generated Qore method call: the object is not an "
+                        "instance of the class of the method");
+                }
+                shared_match.emplace(std::move(match));
             }
             // a class injected for the method's class, or the same registered shared class of another Program: the
             // object's own method of the bound name is called, never the body of the method of the other class, and
             // never a name that the caller gives; the Java varargs array of the bound variant is passed as separate
-            // arguments if the object's own method takes them, and otherwise as the list that it declares
-            flatten = variant && (variant->getCodeFlags() & QCF_USES_EXTRA_ARGS)
-                && jni_method_takes_extra_args(*obj->getClass(), method->getName());
+            // arguments if the object's own method takes them, and otherwise as the list that it declares, which is
+            // decided within the call's entry of the receiver's Program
+            flatten = variant && (variant->getCodeFlags() & QCF_USES_EXTRA_ARGS);
             call_bound_name = true;
             variant = nullptr;
         }
@@ -2025,7 +2073,7 @@ static jobject JNICALL java_class_builder_do_normal_call(JNIEnv* jenv, jclass jc
             pgm = binding->pgm;
         }
         return qore_object_closure_call_internal(jenv, jcls, pgm, handle.get(), nullptr, true, mname, args,
-            method, variant, flatten, call_bound_name);
+            method, variant, flatten, call_bound_name, shared_match ? &*shared_match : nullptr);
     });
 } JNI_NATIVE_CATCH(jenv, nullptr)
 

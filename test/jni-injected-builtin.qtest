@@ -57,6 +57,7 @@ class InjectedPool inherits Qore::SQL::AbstractDatasource {
 #! The parent of a class that has an injected replacement that does not inherit it
 class ParentTarget {
     string inherited() { return "parent-body"; }
+    string declared() { return "parent-declared"; }
 }
 
 class ChildTarget inherits ParentTarget {
@@ -67,6 +68,8 @@ class ChildTarget inherits ParentTarget {
 
 class ChildMock {
     string own() { return "mock-own"; }
+    # a method of the replaced class's parent, which this class does not inherit
+    string declared() { return "mock-declared"; }
     # replaces a variadic method with one that declares a list
     string variadicCall(string s, list<auto> l) { return sprintf("declared:%s:%d:%y", s, l.size(), l); }
     string listCall(string s, list<auto> l) { return sprintf("trailing:%s:%d:%y", s, l.size(), l); }
@@ -248,7 +251,7 @@ string sub call_args(object cls, object o, string method, int count) {
         addTestCase("Java compiled with the builtin class's byte code injected", \injectedByteCodeTest());
         addTestCase("variadic calls on an injected class", \injectedVariadicTest());
         addTestCase("variadic calls on a registered shared class", \sharedVariadicTest());
-        addTestCase("a parent method that the injected class does not have", \missingParentTest());
+        addTestCase("a parent method of the replaced class", \missingParentTest());
         set_return_value(main());
     }
 
@@ -326,7 +329,8 @@ string sub call_args(object cls, object o, string method, int count) {
         }
     }
 
-    #! a method of a parent of the replaced class is refused for an injected class without that parent
+    #! a method of a parent of the replaced class runs the injected class's method of that name, also if the injected
+    #! class does not inherit that parent
     missingParentTest() {
         Program p(PO_NEW_STYLE | PO_ALLOW_INJECTION | PO_NO_CHILD_PO_RESTRICTIONS);
         p.importClass("ParentTarget");
@@ -337,9 +341,11 @@ string sub call_args(object cls, object o, string method, int count) {
         hash<auto> compiled = p.callFunction("compile", ParentJava);
         object o = p.callFunction("make");
         assertEq("ok: mock-own", p.callFunction("call", compiled.cls, o, "own"));
+        # a method of a parent of the replaced class runs the injected class's own method of that name
+        assertEq("ok: mock-declared", p.callFunction("call", compiled.cls, o, "declared"));
+        # and if the injected class has none, the call fails as a call of a missing method
         string result = p.callFunction("call", compiled.cls, o, "inherited");
-        assertRegex("^exception: java.lang.RuntimeException: Invalid object in generated Qore method call: the object "
-            "is not an instance of the class of the method", result);
+        assertRegex("^exception: org.qore.jni.QoreExceptionWrapper: METHOD-DOES-NOT-EXIST", result);
 
         # a replacement that declares a list for a variadic method receives the list; a method bound with a trailing
         # list receives it as one argument
