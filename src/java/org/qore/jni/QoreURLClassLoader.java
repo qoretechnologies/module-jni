@@ -97,7 +97,9 @@ public class QoreURLClassLoader extends URLClassLoader {
     private static InheritableThreadLocal<QoreURLClassLoader> current =
         new InheritableThreadLocal<QoreURLClassLoader>();
 
-    private HashSet<String> classPathElements = new HashSet<String>();
+    //! the paths that the class loader's own additions have recorded; guarded by this object
+    private final HashSet<String> classPathElements = new HashSet<String>();
+    //! the paths of the class loader's own additions, in order; guarded by this object
     private String classPath = new String();
 
     //! Program pointer for the associated Qore Program
@@ -495,14 +497,28 @@ public class QoreURLClassLoader extends URLClassLoader {
     //! a new entry of code that a sandbox restricts for the network but not the filesystem: transparent
     private static final int ENTRY_TRANSPARENT = 2;
 
-    //! For tests only: called between the two steps of adding an entry, with the class loader; null otherwise
-    private static volatile java.util.function.Consumer<QoreURLClassLoader> entryStepHook;
+    //! For tests only: called with the class loader at named points of an addition, with its monitor held; null
+    //! otherwise
+    /** The points: "duplicate-check", just before a path that the class loader records is checked for a duplicate;
+        "before-add", between recording a transparent entry and adding a URL; "after-add", right after a URL is added
+        and before a grant is marked
+    */
+    private static volatile java.util.function.BiConsumer<QoreURLClassLoader, String> entryStepHook;
 
-    //! Adds a URL, and records the kind of its entry under the lock that every addition of a kind takes
+    //! Calls the test hook, if any, at a point of an addition
+    private void entryStep(String point) {
+        java.util.function.BiConsumer<QoreURLClassLoader, String> hook = entryStepHook;
+        if (hook != null) {
+            hook.accept(this, point);
+        }
+    }
+
+    //! Adds a URL, and records the kind of its entry, under this object's monitor, which every addition takes
     /** A transparent entry is recorded before its URL is added, as a bound entry is (QoreClasspathGuard.bind()), so
-        that no lookup sees it as a grant of the host; a grant is marked after its URL is added, so that a caller that
-        a sandbox restricts for the network, adding the same new path at the same time, cannot leave it transparent.
-        An entry that is already on the classpath keeps its kind, except that a grant of the host marks it a grant.
+        that no lookup sees it as a grant of the host.  A grant is marked after its URL is added: a transparent record
+        that a caller restricted only for the network made for the same path before, in an addition that ended first,
+        is then replaced, so a grant of the host is never left transparent.  A transparent or bound addition of a path
+        that is already on the classpath leaves its kind as it is; a grant of the host marks it a grant.
     */
     private void addEntryUrl(URL url, int kind) {
         File file = urlToFile(url);
@@ -511,11 +527,9 @@ public class QoreURLClassLoader extends URLClassLoader {
             if (kind == ENTRY_TRANSPARENT && path != null && isNewEntry(path)) {
                 noteTransparent(path);
             }
-            java.util.function.Consumer<QoreURLClassLoader> hook = entryStepHook;
-            if (hook != null) {
-                hook.accept(this);
-            }
+            entryStep("before-add");
             super.addURL(url);
+            entryStep("after-add");
             if (kind == ENTRY_GRANT && path != null) {
                 noteTrustedPath(path);
             }
@@ -537,7 +551,50 @@ public class QoreURLClassLoader extends URLClassLoader {
             checkClasspathLocation(url);
             kind = ENTRY_TRANSPARENT;
         }
-        addEntryUrl(url, kind);
+        synchronized (this) {
+            appendClassPath(file);
+            addEntryUrl(url, kind);
+        }
+    }
+
+    //! Adds a file of a classpath that the class loader records, once
+    /** The duplicate check, the addition, the kind of the entry and the record of its path are one step under this
+        object's monitor, which addEntryUrl() takes as well, so a concurrent addition of the same path by other code
+        cannot come between them: a grant of the host marks the entry a grant also if it is already on the classpath.
+        An entry whose addition raises an error is not recorded, so it is added again the next time.
+
+        @param kind the kind of the entry; overridden as for addFileUrl()
+        @param usable true if the file is a directory or an archive that the class loader opens
+        @param log_unusable true to log a file that is not used
+    */
+    private void addFileOnce(File file, int kind, boolean usable, boolean log_unusable) {
+        String path = file.getPath();
+        URL url = usable ? createUrl(file) : null;
+        if (locationChecked.get() != null) {
+            kind = ENTRY_TRANSPARENT;
+            if (url != null) {
+                // outside the lock: it reads the manifests that the URL reaches
+                checkClasspathLocation(url);
+            }
+        }
+        synchronized (this) {
+            entryStep("duplicate-check");
+            if (classPathElements.contains(path)) {
+                if (kind == ENTRY_GRANT) {
+                    noteTrustedPath(path);
+                }
+                return;
+            }
+            if (url != null) {
+                appendClassPath(file);
+                addEntryUrl(url, kind);
+            } else if (!usable && log_unusable) {
+                // a usable file whose URL cannot be made was logged by createUrl()
+                errorLog("ClassPath element '" + file + "' is not an existing directory and is not a file " +
+                    "ending with '.zip' or '.jar'");
+            }
+            classPathElements.add(path);
+        }
     }
 
     //! Returns true if no URL of the class loader names a path
@@ -2509,33 +2566,25 @@ public class QoreURLClassLoader extends URLClassLoader {
             if (basename != null && !basename.isEmpty()) {
                 fileentry = new File(fileentry, basename);
             }
-            // added by code that no sandbox restricts: the entry is a grant of the host, also if restricted code added
-            // it before (noteTrustedFile() makes no grant for a caller that a network policy restricts)
-            if (basename == null || basename.isEmpty()) {
-                noteTrustedFile(fileentry);
-            }
-            if (classPathElements.contains(fileentry.getPath())) {
-                //errorLog("Skipping duplicate classpath element '" + fileentry + "'.");
+            if (basename != null && !basename.isEmpty()) {
+                // the pattern is recorded once its files have been added
+                synchronized (this) {
+                    if (classPathElements.contains(fileentry.getPath())) {
+                        continue;
+                    }
+                }
+                addWildcardIntern(fileentry.getParentFile(), basename);
+                synchronized (this) {
+                    classPathElements.add(fileentry.getPath());
+                }
                 continue;
             }
-
-            if (basename != null && !basename.isEmpty()) {
-                //debugLog("addWildcard() parent: " + fileentry.getParentFile().getPath() + " basename: " + basename);
-                addWildcardIntern(fileentry.getParentFile(), basename);
-            } else if (!fileentry.exists()) { // s/never be due getCanonicalFile() above
-                //errorLog("Could not find classpath element '" + fileentry + "'");
-            } else if (fileentry.isDirectory()) {
-                //debugLog("adding dir: " + fileentry.getName() + " (" + fileentry.toString() + ")");
-                addFileUrl(fileentry, ENTRY_GRANT);
-            } else if (isLoadable(fileentry.getName())) {
-                //debugLog("adding jar: " + fileentry.getName() + " (" + fileentry.toString() + ")");
-                addFileUrl(fileentry, ENTRY_GRANT);
-            } else {
-                errorLog("ClassPath element '" + fileentry + "' is not an existing directory and is not a file " +
-                    "ending with '.zip' or '.jar'");
-            }
-            // recorded once it has been added: an entry whose addition raised an error is added again the next time
-            classPathElements.add(fileentry.getPath());
+            // added by code that no sandbox restricts: the entry is a grant of the host, also if restricted code added
+            // it before; a caller that a network policy restricts makes no grant (see addFileOnce())
+            // an entry that does not exist (it should not, after getCanonicalFile()) is recorded with no message
+            boolean exists = fileentry.exists();
+            addFileOnce(fileentry, ENTRY_GRANT, exists && (fileentry.isDirectory() || isLoadable(fileentry.getName())),
+                exists);
         }
         //infoLog("Class loader is using classpath: \"" + classPath + "\".");
     }
@@ -3240,22 +3289,13 @@ public class QoreURLClassLoader extends URLClassLoader {
                 errorLog(note);
             }
             File fileentry = rc.files.get(i);
-            if (fileentry != null && !rc.restricted && !rc.networkRestricted) {
-                // a sandbox that restricts nothing now: as for trusted code, and a policy set later does not apply
-                noteTrustedFile(fileentry);
-            }
-            if (fileentry == null || classPathElements.contains(fileentry.getPath())) {
+            if (fileentry == null) {
                 continue;
             }
-            if (rc.isWildcardMatch(i) || fileentry.isDirectory() || isLoadable(fileentry.getName())) {
-                addFileUrl(fileentry, rc.restricted ? ENTRY_BOUND
-                    : rc.networkRestricted ? ENTRY_TRANSPARENT : ENTRY_GRANT);
-            } else {
-                errorLog("ClassPath element '" + fileentry + "' is not an existing directory and is not a file " +
-                    "ending with '.zip' or '.jar'");
-            }
-            // recorded once it has been added: an entry whose addition raised an error is added again the next time
-            classPathElements.add(fileentry.getPath());
+            // with a sandbox that restricts neither the filesystem nor the network now: a grant, as for trusted code, to
+            // which a policy set later does not apply
+            addFileOnce(fileentry, rc.restricted ? ENTRY_BOUND : rc.networkRestricted ? ENTRY_TRANSPARENT : ENTRY_GRANT,
+                rc.isWildcardMatch(i) || fileentry.isDirectory() || isLoadable(fileentry.getName()), true);
         }
     }
 
@@ -3524,17 +3564,20 @@ public class QoreURLClassLoader extends URLClassLoader {
             if (url.getPath().endsWith(".jar")) {
                 url = URI.create("jar:" + uri + "!/").toURL();
             }
-            //infoLog("Added URL: '" + url.toString() + "'");
-            if (classPath.length() > 0) {
-                classPath += File.pathSeparator;
-            }
-            classPath += fileentry.getPath();
             return url;
         } catch (MalformedURLException thr) {
             errorLog("classpath element '" + fileentry + "' could not be used to create a valid file system URL (" +
                 thr + ")");
             return null;
         }
+    }
+
+    //! Appends a path to the list of the class loader's own additions; called with this object's monitor held
+    private void appendClassPath(File file) {
+        if (classPath.length() > 0) {
+            classPath += File.pathSeparator;
+        }
+        classPath += file.getPath();
     }
 
     private void setContextProgram(QoreURLClassLoader new_syscl) {

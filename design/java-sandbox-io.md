@@ -104,12 +104,15 @@ are `static_assert`ed to match) and calls `QoreSandboxManager::checkFilesystemAc
   loader that also has entries of restricted code.  Below the entries of restricted code, a `jar:` URL with more than
   one `!/` is refused: the class loader finds an entry at the last separator, but a connection to the URL opens the
   archive at the first one (`JarURLConnection` on JDK 21 and 25), so the file that was judged and the file that is read
-  could differ; a jar of a host grant at such a path is used.  "Enclosing" means the entry's path as the class
-  loader's URLs name it, not its real path: the rule keeps an entry of other code from widening by accident what
-  restricted code can read below its own entries, and does not contain the code that adds an entry, which its own
-  sandbox governs.  The kind of a new entry is recorded and its URL added under one lock: a transparent entry is
-  recorded before its URL is added, like a bound one, and a grant is marked after, so no lookup sees a transparent
-  entry as a grant and a grant is not left transparent by a concurrent addition of the same path.
+  could differ; a jar of a host grant at such a path is used, and a connection to one of its URLs reads the outer
+  archive, as for any class loader.  "Enclosing" means the entry's path as the class loader's URLs name it, not its
+  real path: the rule keeps an entry of other code from widening by accident what restricted code can read below its
+  own entries, and does not contain the code that adds an entry, which its own sandbox governs.  The kind of a new
+  entry is recorded and its URL added under the class loader's monitor, together with the duplicate check and the
+  record of its path (`classPathElements`), which are only used under it: a transparent entry is recorded before its
+  URL is added, like a bound one, and a grant is marked after, also for a path that is already on the classpath, so no
+  lookup sees a transparent entry as a grant and a grant is not left transparent by a concurrent addition of the same
+  path.
 - **Network-only callers.** A caller whose sandbox restricts the network but not the filesystem binds no filesystem
   policy and makes no per-file check: its entries have only their location checked, on every route, also the `global-*`
   module commands of a sandbox that allows uncontrolled APIs.  It is still sandboxed, so it makes no grant of the host:
@@ -119,7 +122,8 @@ are `static_assert`ed to match) and calls `QoreSandboxManager::checkFilesystemAc
   enclose it.  An entry that was already on the classpath keeps its kind.  Only a caller that no sandbox restricts for
   the filesystem or the network makes a grant of the host.  A global classpath of such a caller has the location of
   every entry checked before any is added, so a refusal adds nothing, as for `add-classpath`; an entry that the addition
-  skips (one that does not exist, or a wildcard in a directory that cannot be read) is skipped by the check too.
+  skips (one that does not exist, one that is neither a directory nor an archive, or a wildcard in a directory that
+  cannot be read) is skipped by the check too.
 - **Whose policy.** Only the captured manager is consulted (`checkClasspathRead0()`), never the thread's caller, so the
   result does not depend on the thread and a stricter thread cannot affect another lookup.
 - **No decision cache.** A `SandboxManager` can be changed at any time and has no change indicator, so a cached answer

@@ -461,6 +461,11 @@ sub network_nested_case(string root) {
         result("nested step grant", "found", ClasspathLookupProbe::entryStep(policy, p.callFunction("own_loader"),
             "grant", root + "/allowed/denied", "nested.txt"));
     }
+    {
+        Program p = new_program(get_policy(root, ("allowed",)), root + "/allowed");
+        result("nested step duplicate", "found", ClasspathLookupProbe::entryStep(policy, p.callFunction("own_loader"),
+            "duplicate", root + "/allowed/denied", "nested.txt"));
+    }
 
     # the control: an entry that code no sandbox restricts adds below a bound entry is a grant of the host
     {

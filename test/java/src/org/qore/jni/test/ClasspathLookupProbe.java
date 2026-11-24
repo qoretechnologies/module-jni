@@ -1897,18 +1897,21 @@ public class ClasspathLookupProbe {
         return Files.exists(Path.of(path));
     }
 
-    //! Runs a step at the point between the two steps of adding an entry, through the class loader's test hook
-    /** "transparent": a caller restricted only for the network adds \a path, and the hook looks \a name up while the
-        new entry is being added; returns what it found.  "grant": the host adds \a path, and the hook makes the same
-        caller add it at that point; returns what a lookup of \a name finds once both have added it.
+    //! Runs a step at a named point of an addition, through the class loader's test hook
+    /** "transparent": a caller restricted only for the network adds \a path, and right after its URL is added, a lookup
+        of \a name is made; returns what it found.  "grant": the host adds \a path, and the same caller adds it between
+        the steps of the host's addition; "duplicate": the same, just before the host's duplicate check.  Both return
+        what a lookup of \a name finds once both have added it.
     */
     public static String entryStep(QoreSandbox.Policy policy, QoreURLClassLoader loader, String mode, String path,
             String name) throws Exception {
         java.lang.reflect.Field field = QoreURLClassLoader.class.getDeclaredField("entryStepHook");
         field.setAccessible(true);
+        String point = mode.equals("transparent") ? "after-add" : mode.equals("grant") ? "before-add"
+            : "duplicate-check";
         String[] seen = {"the hook did not run"};
-        java.util.function.Consumer<QoreURLClassLoader> hook = cl -> {
-            if (cl != loader) {
+        java.util.function.BiConsumer<QoreURLClassLoader, String> hook = (cl, at) -> {
+            if (cl != loader || !at.equals(point)) {
                 return;
             }
             // once: the step can add an entry itself
