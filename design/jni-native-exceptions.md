@@ -58,7 +58,9 @@ address (qore#7068):
 
 - A handle is a keyed permutation of a counter, so it is never issued twice in a process and cannot be derived from
   another handle.  An entry has a kind (object, closure, invocation handler, exception, sandbox policy, connection
-  waiter); a lookup of another kind finds nothing.
+  waiter, classpath policy); a lookup of another kind finds nothing.  A classpath policy handle holds a reference to
+  the filesystem policy bound to classpath entries, which its release drops once; in Java the handle is the identity
+  of the hold, and two holds of the same policy are compared natively.
 - A lookup returns a `std::shared_ptr` that the native method holds for the call, so a release on another thread
   cannot free the state during its use.  A release removes the entry, and only one caller gets it; the state is
   destroyed with its last reference, outside of the registry's locks, on a thread attached to Qore and with any
@@ -73,13 +75,15 @@ address (qore#7068):
   a class that inherits the method's class, and the same class of another Program when both Programs registered its
   Java name with the `register-shared-class` module command.  The module records those registrations natively; a
   registration made only through the Java class loader method grants neither.  For a shared class, the
-  registrations are checked first, outside any entry, so that a call on the object of a Program that did not register,
-  or that has been deleted, runs no code of that Program.  The class itself is then compared within the call's own
-  entry of the object's Program, before any of the call's code: the class of the path is looked up in that Program and
-  compared with the object's class by ID, so that nothing is read from a namespace that the teardown of a Program can
-  delete.  An accepted call enters the object's Program once, as any call of a method of the object; a call that passes
-  the registration check and is then refused has run the Program's entry and exit handlers once, and its thread
-  initialization code if it was the thread's first entry, and none of the call's code.  A class of the same name and
+  registrations are checked first, outside any entry of the object's Program, so that a call on the object of a
+  Program that did not register, or that has been deleted, runs no code of that Program.  The class itself is then
+  compared within the call's own entry of the object's Program, before any of the call's code: the class of the path
+  is looked up in that Program and compared with the object's class by ID, so that nothing is read from a namespace
+  that the teardown of a Program can delete.  An accepted call enters the object's Program once, as any call of a
+  method of the object; a call that passes the registration check and is then refused has run the Program's entry and
+  exit handlers once, and its thread initialization code if it was the thread's first entry, and none of the call's
+  code.  Its refusal is raised in Java after the entry has been left, so that the exit handler runs with no Java
+  exception pending.  A class of the same name and
   signature is otherwise another class.  In these two cases, the Java varargs array of a variadic bound method is
   passed as separate arguments if the object's class, or a parent of it, has any variadic variant of a normal or
   static method of that name, and otherwise as one list; the choice is made by method name before Qore selects the

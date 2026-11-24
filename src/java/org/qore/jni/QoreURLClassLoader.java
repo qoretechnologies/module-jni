@@ -2800,7 +2800,7 @@ public class QoreURLClassLoader extends URLClassLoader {
             policies = bound;
         }
 
-        //! Called by the module: takes the reference to the policy manager \a ptr, unless an exception is raised
+        //! Called by the module: takes the opaque handle \a ptr of a policy, unless an exception is raised
         void bindPolicy(long ptr) {
             if (policies != null) {
                 throw new IllegalStateException("the classpath already has a policy");

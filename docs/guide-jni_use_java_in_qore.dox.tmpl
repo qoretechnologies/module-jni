@@ -20,7 +20,9 @@
       to the current program to the global runtime dynamic classpath
     - @code{.py} %module-cmd(jni) register-shared-class qore.Namespace.ClassName @endcode gives an exact dynamically
       projected %Qore class one Java identity across sibling %Program classloaders; the first registering %Program
-      owns the Java class and every later registrant delegates to it
+      owns the Java class and every later registrant delegates to it.  A method of the class that Java calls on an
+      object of another %Program runs only if both %Programs, the one of the method's class and the one of the
+      object, registered the class with this command
 
     A classpath with a NUL character is refused with \c JNI-ERROR by the classpath commands above (and with
     \c JDBC-OPTION-ERROR as the \c classpath option of the \c jdbc driver), as a file path cannot have one.

@@ -244,6 +244,8 @@ object sub make() {
         addTestCase("a method call on a registered shared class", \sharedClassReceiverTest());
         addTestCase("a registered shared class of a deleted Program", \sharedClassTeardownTest());
         addTestCase("a call on a registered shared class enters the Program once", \sharedClassEntryTest());
+        addTestCase("the handles of classpath policies", \classpathPolicyTest());
+        addTestCase("a shared call refused after the registration check", \sharedClassRefusedEntryTest());
         addTestCase("a shared class that is not registered by both Programs", \sharedClassRefusedTest());
         addTestCase("two classes injected for one class", \twoInjectedClassesTest());
         addTestCase("a native constructor with no Java object", \nullSelfTest());
@@ -647,6 +649,67 @@ sub give(Program target) { target.importClass(%y); }
         Program importer = importingProgram(sibling, "NativeHandleShared");
         importer.issueModuleCmd("jni", "register-shared-class " + name);
         assertEq("ok: sibling", NativeHandleProbe::callBinding("value", importer.callFunction("make"), binding));
+    }
+
+    #! a call that passes the registration check and is then refused enters the receiver's Program once, and raises
+    #! its refusal; the exit handler runs with no Java exception pending, so it can call Java
+    sharedClassRefusedEntryTest() {
+        string ns = "NativeHandleSharedRefusedEntry";
+        string name = "qore." + ns + ".Api";
+        Program owner = sharedProgram(ns, "owner");
+        owner.issueModuleCmd("jni", "register-shared-class " + name);
+        int binding = NativeHandleProbe::methodBinding(owner.callFunction("bytes"), "value");
+        # registered, with another signature: refused only by the comparison of the class
+        Program different = sharedProgram(ns, "different", "int extra() { return 1; }");
+        different.issueModuleCmd("jni", "register-shared-class " + name);
+        object o = different.callFunction("make");
+
+        Counter entries();
+        Counter exits();
+        *string exit_java;
+        different.setThreadEntryHandler(sub () { entries.inc(); }, sub (auto ignored) {
+            exits.inc();
+            try {
+                exit_java = sprintf("ok: %d", NativeHandleProbe::handleCaseNames().size());
+            } catch (hash<ExceptionInfo> ex) {
+                exit_java = ex.err + ": " + ex.desc;
+            }
+        });
+        on_exit different.setThreadEntryHandler();
+        assertNotInstance(NativeHandleProbe::callBinding("value", o, binding), "refused after the registration check");
+        assertEq(1, entries.getCount(), "the entry handler ran once");
+        assertEq(1, exits.getCount(), "the exit handler ran once");
+        assertRegex("^ok: [0-9]+$", exit_java ?? "the exit handler made no Java call");
+    }
+
+    #! the handles of the filesystem policies that are bound to classpath entries are validated
+    classpathPolicyTest() {
+        SandboxManager mgr();
+        mgr.setUncontrolledApiPolicy(True);
+        mgr.setFilesystemDefaultPolicy(False);
+        Program tenant(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        tenant.loadModule("jni");
+        tenant.issueModuleCmd("jni", "add-classpath " + get_script_dir() + "/../build/qore-jni-test.jar");
+        tenant.setSandboxManager(mgr);
+        tenant.parse("%modern
+%requires jni
+%module-cmd(jni) import org.qore.jni.test.NativeHandleProbe
+string sub double_release() { return NativeHandleProbe::classpathDoubleRelease(); }
+string sub wrong_kind() { return NativeHandleProbe::classpathWrongKind(); }
+", "native-handle-classpath-policy");
+
+        # a handle is released once; afterwards it is unknown
+        list<string> r = tenant.callFunction("double_release").split("; ");
+        assertEq("ok: released", r[0]);
+        assertTrue(r[1] =~ /^exception: .*invalid or released/, r[1]);
+        assertTrue(r[2] =~ /^exception: .*invalid or released/, r[2]);
+
+        # a handle of another kind is refused both ways; the live handle still works
+        r = tenant.callFunction("wrong_kind").split("; ");
+        foreach int i in (0, 1) {
+            assertTrue(r[i] =~ /^exception: .*invalid or released/, sprintf("%d: %s", i, r[i]));
+        }
+        assertEq("ok: false", r[2], "the policy denies reading /");
     }
 
     #! a call on the object of a registered Program enters that Program once, as any call of a method of the object

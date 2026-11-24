@@ -219,7 +219,65 @@ public final class NativeHandleProbe {
             new ArrayList<String>()));
         c.put("program.clearCompilationCache0", h -> () -> invoke(QoreURLClassLoader.getCurrent(), l,
             "clearCompilationCache0", new Class<?>[] {long.class, long.class}, h, h));
+        // the policies that are bound to classpath entries
+        c.put("classpath.checkClasspathRead0", h -> () -> invoke(null, QoreSandbox.class, "checkClasspathRead0",
+            new Class<?>[] {long.class, byte[].class}, h, "/".getBytes()));
+        c.put("classpath.releaseClasspathManager0", h -> () -> invoke(null, QoreSandbox.class,
+            "releaseClasspathManager0", J, h));
+        c.put("classpath.sameClasspathPolicy0", h -> () -> invoke(null, QoreSandbox.class, "sameClasspathPolicy0",
+            new Class<?>[] {long.class, long.class}, h, h));
         return c;
+    }
+
+    //! Returns the classpath policy handles of the calling code, whose sandbox must restrict the filesystem
+    private static long[] classpathHandles() throws Throwable {
+        long[] h = (long[])invoke(null, QoreSandbox.class, "classpathManagers0", J, 0L);
+        if (h.length == 0) {
+            throw new AssertionError("the calling code has no filesystem policy");
+        }
+        return h;
+    }
+
+    //! Releases a classpath policy handle of the calling code twice, and uses it after its release
+    /** @return the results of the first release, the second release, and a check after the release
+    */
+    public static String classpathDoubleRelease() throws Throwable {
+        long[] h = classpathHandles();
+        String first = attempt(() -> {
+            invoke(null, QoreSandbox.class, "releaseClasspathManager0", J, h[0]);
+            return "released";
+        });
+        String second = attempt(() -> {
+            invoke(null, QoreSandbox.class, "releaseClasspathManager0", J, h[0]);
+            return "released";
+        });
+        String check = attempt(() -> invoke(null, QoreSandbox.class, "checkClasspathRead0",
+            new Class<?>[] {long.class, byte[].class}, h[0], "/".getBytes()));
+        for (int i = 1; i < h.length; ++i) {
+            invoke(null, QoreSandbox.class, "releaseClasspathManager0", J, h[i]);
+        }
+        return first + "; " + second + "; " + check;
+    }
+
+    //! Uses a live classpath policy handle as a sandbox policy handle, and a sandbox policy handle as a classpath policy
+    /** @return the results of the two uses, then of a check with the live classpath policy handle
+    */
+    public static String classpathWrongKind() throws Throwable {
+        long[] h = classpathHandles();
+        Object captured = invoke(null, QoreSandbox.class, "capture0", J, 0L);
+        try {
+            String asSandbox = attempt(() -> invoke(null, QoreSandbox.class, "isSandboxed0", J, h[0]));
+            String sandboxAsPolicy = attempt(() -> invoke(null, QoreSandbox.class, "checkClasspathRead0",
+                new Class<?>[] {long.class, byte[].class}, captured, "/".getBytes()));
+            String live = attempt(() -> invoke(null, QoreSandbox.class, "checkClasspathRead0",
+                new Class<?>[] {long.class, byte[].class}, h[0], "/".getBytes()));
+            return asSandbox + "; " + sandboxAsPolicy + "; " + live;
+        } finally {
+            invoke(null, QoreSandbox.class, "release0", J, captured);
+            for (long x : h) {
+                invoke(null, QoreSandbox.class, "releaseClasspathManager0", J, x);
+            }
+        }
     }
 
     //! Returns the names of the cases that take a handle

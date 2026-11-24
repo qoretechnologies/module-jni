@@ -23,6 +23,7 @@ enum class JniHandleKind : unsigned char {
     ExceptionWrapper,
     SandboxPolicy,
     ConnectionWaiter,
+    ClasspathPolicy,
 };
 
 //! Raised when Java passes a value that is not a live handle of the expected kind

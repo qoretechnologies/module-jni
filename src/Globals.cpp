@@ -1643,14 +1643,19 @@ static jobject qore_object_closure_call_internal(JNIEnv* jenv, jclass, QoreProgr
     ExceptionSink xsink;
     try {
         // set program context before converting arguments
-        QoreExternalProgramContextHelper pch(&xsink, pgm);
+        std::optional<QoreExternalProgramContextHelper> pch;
+        pch.emplace(&xsink, pgm);
         if (xsink) {
             throw XsinkException(xsink);
         }
         // the class of a registered shared class is compared within this entry of the receiver's Program, which keeps
         // its namespace, before any of the call's code: a call that is refused here has run the Program's entry and exit
-        // handlers once, as any call into the Program does, and nothing else of it
+        // handlers once, as any call into the Program does, and nothing else of it.  The entry is left before the
+        // refusal is raised in Java, so that the exit handler runs with no Java exception pending; the refusal is the
+        // error of the call, and an error of the exit handler is dropped
         if (shared_match && !jni_shared_class_matches(*object_handle->getObject()->getClass(), pgm, *shared_match)) {
+            pch.reset();
+            xsink.clear();
             jni_throw_runtime_exception(*env, "Invalid object in generated Qore method call: the object is not an "
                 "instance of the class of the method");
             return nullptr;
@@ -2044,9 +2049,9 @@ static jobject JNICALL java_class_builder_do_normal_call(JNIEnv* jenv, jclass jc
         bool flatten = false;
         // by class ID: libqore's instance checks also accept a class of the same name and signature in another
         // namespace or Program; copies of a class imported into another Program have the same ID
-        // a registered shared class: the registrations are checked here, outside any entry, so that a call on the
-        // object of a Program that did not register runs no code of that Program; the class itself is compared within
-        // the call's entry of the receiver's Program (see qore_object_closure_call_internal())
+        // a registered shared class: the registrations are checked here, outside any entry of the object's Program, so
+        // that a call on the object of a Program that did not register runs no code of that Program; the class itself
+        // is compared within the call's entry of the receiver's Program (see qore_object_closure_call_internal())
         std::optional<JniSharedClassMatch> shared_match;
         if (!obj->getClass()->getClass(method->getClass()->getID())) {
             if (!jni_is_injected_receiver(*obj->getClass(), *method->getClass())) {

@@ -64,9 +64,18 @@ class ChildTarget inherits ParentTarget {
     string own() { return "target-own"; }
     string variadicCall(string s, ...) { return "target-variadic"; }
     string listCall(string s, list<auto> l) { return "target-list"; }
+    string inheritedVariadic(string s, ...) { return "target-inherited"; }
+    string staticVariadic(string s, ...) { return "target-static"; }
 }
 
-class ChildMock {
+#! the parent of the injected class, with a variadic method that it inherits
+class MockBase {
+    string inheritedVariadic(string s, ...) { return sprintf("inherited:%s:%d:%y", s, elements argv, argv); }
+}
+
+class ChildMock inherits MockBase {
+    # a variadic method that the injected class has only as a static method
+    static string staticVariadic(string s, ...) { return sprintf("static:%s:%d:%y", s, elements argv, argv); }
     string own() { return "mock-own"; }
     # a method of the replaced class's parent, which this class does not inherit
     string declared() { return "mock-declared"; }
@@ -167,13 +176,19 @@ binary sub target() {
 ";
 
         const SharedName = "qore.JniInjectedShared.Api";
+        const SharedBaseName = "qore.JniInjectedShared.Base";
 
         const SharedSource = "%modern
 %requires jni
 %module-cmd(jni) import org.qore.jni.QoreURLClassLoader
 %module-cmd(jni) import org.qore.jni.compiler.QoreJavaCompiler
 public namespace JniInjectedShared {
-    public class Api {
+    public class Base {
+        string inherited(string sql, ...) {
+            return sprintf(\"inherited:%s:%d:%s\", sql, elements argv, exists argv ? sprintf(\"%y\", argv) : \"none\");
+        }
+    }
+    public class Api inherits Base {
         string record(string sql, ...) {
             return sprintf(\"record:%s:%d:%s\", sql, elements argv, exists argv ? sprintf(\"%y\", argv) : \"none\");
         }
@@ -317,6 +332,7 @@ string sub call_args(object cls, object o, string method, int count) {
             p.issueModuleCmd("jni", "add-classpath " + get_script_dir() + "/../build/qore-jni-compiler.jar");
             p.parse(SharedSource, "jni-injected-shared");
             p.issueModuleCmd("jni", "register-shared-class " + SharedName);
+            p.issueModuleCmd("jni", "register-shared-class " + SharedBaseName);
         }
         hash<auto> compiled = owner.callFunction("compile", "public class SharedVariadicUser {\n" + VariadicMethod
             + "}\n");
@@ -325,6 +341,9 @@ string sub call_args(object cls, object o, string method, int count) {
             foreach hash<auto> shape in (Shapes.pairIterator()) {
                 assertEq("record:q:" + shape.value, owner.callFunction("variadic", compiled.cls, o, "record", "q",
                     shape.key), shape.key);
+                # a variadic method that the shared class inherits from a shared parent
+                assertEq("inherited:q:" + shape.value, owner.callFunction("variadic", compiled.cls, o, "inherited",
+                    "q", shape.key), "inherited " + shape.key);
             }
         }
     }
@@ -358,6 +377,13 @@ string sub call_args(object cls, object o, string method, int count) {
                 p.callFunction("call_args", compiled.cls, o, "variadicCall", c.count), "declared list");
             assertEq(sprintf("ok: trailing:q:%d:%s", c.count, c.list),
                 p.callFunction("call_args", compiled.cls, o, "listCall", c.count), "trailing list");
+            # the varargs of a variadic method that the injected class inherits, or has as a static method, are passed
+            # as separate arguments
+            string args = c.count ? c.list : "null";
+            assertEq(sprintf("ok: inherited:q:%d:%s", c.count, args),
+                p.callFunction("call_args", compiled.cls, o, "inheritedVariadic", c.count), "inherited variadic");
+            assertEq(sprintf("ok: static:q:%d:%s", c.count, args),
+                p.callFunction("call_args", compiled.cls, o, "staticVariadic", c.count), "static variadic");
         }
 
         # a null array for a declared list is no list: the call is refused with the error of the method's signature

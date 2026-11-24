@@ -120,7 +120,7 @@ final class QoreClasspathGuard {
         for (QoreSandbox.ClasspathPolicy p : b) {
             boolean found = false;
             for (QoreSandbox.ClasspathPolicy q : a) {
-                found = found || q.id() == p.id();
+                found = found || q.samePolicy(p);
             }
             if (!found) {
                 rv.add(p);
