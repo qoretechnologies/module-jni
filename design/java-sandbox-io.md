@@ -20,7 +20,9 @@ User documentation: `docs/guide-jni_use_java_in_qore.dox.tmpl`, section `jni_san
 
 The classes are embedded in the module like the other `org.qore.jni` classes (`generate_java()` in
 `CMakeLists.txt`) and listed in the module's class map, so user class loaders define the same classes.  No enum or
-anonymous class is used, so the only class files are `QoreSandbox` and `QoreSandbox$Policy`.
+anonymous class is used, so the class files are `QoreSandbox`, `QoreSandbox$Policy`, `QoreSandbox$ClasspathPolicy`,
+`QoreClasspathGuard`, `QoreCompilerClasspath`, `QoreCompilerClasspath$Budget`, `QoreCompilerClasspath$Copy` and
+`QoreCompilerClasspath$PrivateParent`.
 
 ## Which policy a check applies
 
@@ -72,6 +74,136 @@ The host name is resolved also when no sandbox applies, so Java code has one cod
 `checkFileAccess0(ptr, path, mode)` validates `mode` (a non-empty subset of the `QSEC_*` bits; the Java constants
 are `static_assert`ed to match) and calls `QoreSandboxManager::checkFilesystemAccess()`, which canonicalizes the path
 (symbolic links included, also for paths that do not exist yet) as Qore's `File` and `Dir` operations do.
+
+## Classpath lookups (qore#7276)
+
+`QoreClasspathGuard` applies a filesystem policy to each class and resource lookup below a classpath entry.
+
+- **Binding.** A class loader has a guard only once restricted code has added an entry (`addResolvedPath()` of a
+  restricted `ResolvedClasspath`).  The policy travels with the resolved classpath: the Java routes (`addPath()`,
+  `addParentPath()`, `addPathOrig()`, `addWildcard()`, a subclass's `addURL()`) bind the managers that a check by the
+  caller applies (`QoreSandbox.boundClasspath()`, native `classpathManagers0()`), and the module routes bind the manager
+  that checked the classpath (`jni_check_classpath_policy()`, `jni_bind_classpath_policy()`). **Operator rule: whoever
+  adds a classpath entry owns its policy.**  An entry that restricted code adds carries that code's policy and fails
+  closed; an entry that a trusted host deliberately adds is a host grant, and is not also checked against the policy of
+  the Program that owns the class loader. A restricted classpath with no policy is refused.  **An entry with no policy
+  is a grant of the host or transparent.** A grant is added by code that no sandbox restricted for the filesystem or the
+  network then (trusted code, no sandbox yet, or one that restricted neither); a lookup below it applies no policy, and
+  setting or tightening a policy later does not reach it, which is an operator rule in the guide; a per-lookup call for
+  permissive Programs is deliberately not made.  A transparent entry is a new entry of a caller that a sandbox restricts
+  for the network but not the filesystem (see below).  The `global-*` commands, which add no policy, are refused
+  under a filesystem policy.  Each path that a classpath reaches, also through a manifest, is recorded as the class
+  loader's URLs name it.
+- **Lookup.** `findClass()`, `findResource()` and `findResources()`, and the methods that called `super.findClass()`
+  directly, enumerate the matches and take the first that `allows()`: the file's real path must pass every policy of the
+  entries that contain it, up to the nearest entry of trusted code; a transparent entry is passed through, also a jar,
+  so the bound entries that enclose it apply, and none if no bound entry does.  A real path that the JVM's file name
+  encoding cannot represent exactly is refused, and a name with a parent element must resolve to the file of its URL.  A
+  denied file is skipped, so a later entry can provide it, and a denial and a missing file have the same outcome.  A URL
+  in no known entry is refused; on an unverified JDK this includes what the manifests of trusted jars name, in a class
+  loader that also has entries of restricted code.  Below the entries of restricted code, a `jar:` URL with more than
+  one `!/` is refused: the class loader finds an entry at the last separator, but a connection to the URL opens the
+  archive at the first one (`JarURLConnection` on JDK 21 and 25), so the file that was judged and the file that is read
+  could differ; a jar of a host grant at such a path is used, and a connection to one of its URLs reads the outer
+  archive, as for any class loader.  "Enclosing" means the entry's path as the class loader's URLs name it, not its
+  real path: the rule keeps an entry of other code from widening by accident what restricted code can read below its
+  own entries, and does not contain the code that adds an entry, which its own sandbox governs.  The kind of a new
+  entry is recorded and its URL added under the class loader's monitor, together with the duplicate check and the
+  record of its path (`classPathElements`), which are only used under it: a transparent entry is recorded before its
+  URL is added, and a grant is marked after, also for a file or directory that is already on the classpath, so no
+  lookup sees a transparent entry as a grant and a grant is not left transparent by a concurrent addition of the same
+  path.  A wildcard pattern is recorded once its addition completes, also when its directory does not exist or
+  matches nothing, so a caller restricted only for the network skips it only then, and a grant of the host always adds
+  it again: each loadable file that it matches is marked a grant before its URL is added and again after.  A bound
+  entry is recorded before its URL is added as well, but earlier and outside the monitor: its policy is bound before
+  any of its files is added.  When the host and restricted code add the same path, the kind depends on their order: a
+  later grant of the host replaces the binding, and a later binding applies its policy to the grant.  A sandboxed
+  caller never weakens a bound entry: a caller restricted only for the network leaves its kind as it is, and
+  restricted code adds its own policy to it.
+- **Network-only callers.** A caller whose sandbox restricts the network but not the filesystem binds no filesystem
+  policy and makes no per-file check: its entries have only their location checked, on every route, also the `global-*`
+  module commands of a sandbox that allows uncontrolled APIs.  It is still sandboxed, so it makes no grant of the host:
+  re-adding a path that filesystem-restricted code bound leaves that policy in place, also when the addition is refused
+  or adds only part of a classpath, and a new entry of such a caller simply has no filesystem policy: it is transparent,
+  so a lookup below it, also through the bound entry that encloses it, applies the policies of the bound entries that
+  enclose it.  An entry that was already on the classpath keeps its kind.  Only a caller that no sandbox restricts for
+  the filesystem or the network makes a grant of the host.  A global classpath of such a caller has the location of
+  every entry checked before any is added, so a refusal adds nothing, as for `add-classpath`; an entry that the addition
+  skips (one that does not exist, one that is neither a directory nor an archive, or a wildcard in a directory that
+  cannot be read) is skipped by the check too.
+- **Whose policy.** Only the captured manager is consulted (`checkClasspathRead0()`), never the thread's caller, so the
+  result does not depend on the thread and a stricter thread cannot affect another lookup.
+- **No decision cache.** A `SandboxManager` can be changed at any time and has no change indicator, so a cached answer
+  could outlive the rule it came from.  The policy is read for every lookup.
+- **Fast path.** With no guard (trusted code, sandboxes that restrict nothing) a lookup is the plain JDK lookup plus one
+  volatile read.
+- **Kotlin.** The compiler reads directories itself, so a restricted compile gets a private copy of the allowed class
+  and `.kotlin_module` files of each guarded directory (`QoreClasspathGuard.compilerLocations()`), judged per entry by
+  the same enclosing policies as a lookup, in a private directory that the class loader makes, for code that can reach
+  its Program.  A compilation opens one `QoreCompilerClasspath` for its class loader chain and closes it on every path;
+  there is no release by path.  Each `Copy` has an explicit state (making, ready, ending, done) and one owner: a release
+  while it is being made only marks it, its next charge fails, and the making thread removes it; only the transition to
+  done removes the directory and returns its charges, so that happens once.  Directories are created only one level
+  below a root that the copy owns.  What the live copies use (copies, files, bytes, directory entries visited) is
+  charged to a `Budget` object that the class loader of a Program shares with the class loaders derived from it, so the
+  limits hold across a chain, no Program pointer is a key, and clearing the Program ends the copies of all of them.
+  Derived loaders keep the Program's copy budget also when their own pointer is cleared; only a new Program gets a new
+  one, and a budget whose Program has ended refuses new copies.  A copy's charges are returned only once its directory
+  is confirmed to be gone: a failed removal leaves it charged and live in a retryable state, the other copies are still
+  ended, and the removal is tried again when its classpath or class loader is closed and at the end of its Program; a
+  release that arrives during a removal makes the removing thread try again if that attempt fails.  Every copy's root is
+  inside one private parent directory of the JVM (`PrivateParent`, mode 0700), so other local users cannot create,
+  rename or replace anything below it, and a root needs no identity of its own.  A retry only removes the directory it
+  created: before anything below the parent is removed, the parent is verified to be a directory and not a link, owned
+  by the JVM's user, with mode 0700 and the `fileKey()` that it had when it was created.  If a check fails or cannot be
+  made, nothing below it is touched, its copies stay charged, and a new copy uses a new parent.  The check and the
+  removal use one opened directory (`SecureDirectoryStream`), and only a directory is removed at the name of a root.
+  Where the platform has no POSIX attributes or no secure directory stream, only the first removal walks the copy by
+  path, and a retry leaves it charged until the process ends.  The parent is removed with its last copy if it is then
+  empty, under the lock that a new copy takes; only an empty directory can be removed this way.  That needs a secure
+  directory stream on the temporary directory, so the empty parent stays, and the next copy reuses it, where the JVM
+  cannot read that directory (for example mode 1733 of another owner, or 0300 owned by the JVM's user) or the JDK has no
+  such stream (for example a JDK on musl that does not find the functions that it needs for one).  A new parent that is
+  refused is removed by its path where there is no such stream, or where the JDK has one but cannot open the temporary
+  directory, so refusals do not accumulate.  That removal never follows a link and never removes a directory with
+  entries; anything else at that name could only have been put there by a party that could remove it itself.  A copy
+  is made and read by path, so a restricted copy is refused unless the real path of the JVM's `java.io.tmpdir`, read
+  once, is a directory owned by the JVM's numeric UID or by root that is not writable by group or
+  others or that has the sticky bit.  The JVM's UID comes from the JDK (`com.sun.security.auth.module.UnixSystem`), so
+  no user name is needed and nothing is created to find it; a new parent must then have that UID, which is recorded and
+  used when the parent is reused.  This is checked when a parent is created and each time one is used for a new copy,
+  and the refusal names no path.  If a UID cannot be read or the `unix` attribute view is missing on a POSIX platform,
+  the copy is refused; this includes a runtime image without the `jdk.security.auth` module.  A new parent and the root
+  of each new copy must have the expected UID, so a process whose effective UID differs, or changed before this copy's
+  root is created, makes no copy under another identity. The removal of a refused root is attempted through the verified
+  parent.  A root that cannot be removed stays inside the 0700 parent, keeps that parent in place, and blocks it: while
+  it is the current directory, compiles that need a copy are refused with their own error, with no path, and the block
+  is logged once.  The check, creation, UID check and discard of a root are made under one lock, so a parent holds at
+  most one such root.  No content is copied under it; the discard of a just-created root is recursive, and can only run
+  long if a process of the same user fills that root.  With no copy in flight, the next copy recovers: a parent that no
+  longer exists is replaced, and one that verifies and is empty is used again (emptiness is read through the opened,
+  verified directory; without a secure directory stream, the parent is verified by name and then listed, which needs no
+  read access to the temporary directory).  A leftover that never goes means refusal until the process restarts.
+  Trusted and permissive compiles make no copy and are not affected.  Only where the platform has no POSIX attributes at
+  all are the mode and owner not checked: a copy is made, and a retry stays fail-closed as above.  The directories above
+  it and ACLs are not judged.  Code in the same JVM is not defended against.  A removal that keeps failing is logged
+  once, with no path, through the class loader's error log.  A cleanup failure is suppressed in an error that is being
+  raised and never replaces it; a compile does not raise a failure to remove its own copy, which stays charged and is
+  retried.  Closing a class loader ends its own copies, except once the module's shutdown has started, when `close()`
+  does nothing and a running compile removes its copies when it ends.  A process that ends with `exit()` while a handle
+  is open leaves that copy in the JVM's temporary directory.  A copy over a limit fails closed (the system property
+  `qore.jni.compiler.maxEntries` can only lower the entries limit).  The default scripting plugin is disabled for a
+  restricted compile, as it discovers script definitions on the classpath and runs their code.  The JSR-223 script
+  engine takes its classpath from the class loaders and cannot be filtered, so a script of a restricted caller is
+  refused while a guarded directory, added directly or named by a manifest, is on its classpath.  A jar is used whole
+  once its policy has allowed it, and a directory with no bound policy does not refuse a script.
+- **Jars with a manifest `Class-Path` in a Kotlin compile.** A restricted Kotlin compile leaves out a jar with a
+  manifest `Class-Path` attribute, which fails closed: the classes of that jar and of what its manifest names are not
+  visible to the compile, also when the class loader's check accepted them.
+- **File name encoding.** The bytes that a policy judges use the encoding that is read once when the class is
+  initialized, as the file name encoding is fixed at startup.  In a JVM started first with Qore as a library, Java code
+  that runs before the module is initialized is part of the trusted host.
+- **Limit.** A check precedes the open, so a file replaced in between is not covered.
 
 ## Strings
 
@@ -223,7 +355,8 @@ and parse options (`src/jni-module.cpp`); before module API 2.3 they are the onl
   `kotlin-eval` (runs code) are refused (`JNI-SANDBOX-ERROR`) in a Program with
   `PO_NO_UNCONTROLLED_APIS` and to any governing sandbox that does not allow uncontrolled APIs
   (`jni_sandbox_restricts_caller(QoreSandboxManagerHelper::All)`, so a policy barrier or a system-policy capability
-  cannot use them either)
+  cannot use them either); the `global-*` classpath commands are also refused when the governing policy restricts the
+  filesystem, as an entry of the shared classpath carries no policy (qore#7276)
 - `jni_check_define_class_restricted()`: `define-class` and `define-pending-class` are refused in a Program with
   `PO_NO_UNCONTROLLED_APIS`, because defining a class runs its static initializer; `define-class` refuses a governing
   sandbox that does not allow uncontrolled APIs (`jni_sandbox_restricts_caller(QoreSandboxManagerHelper::All)`) a

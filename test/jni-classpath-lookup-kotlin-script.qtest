@@ -1,0 +1,183 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../build"
+%requires QUnit
+%requires Util
+%requires jni
+%module-cmd(jni) add-relative-classpath ../build/qore-jni.jar
+%module-cmd(jni) add-relative-classpath qore-jni-test.jar
+%module-cmd(jni) import org.qore.jni.QoreURLClassLoader
+%module-cmd(jni) import org.qore.jni.test.ClasspathLookupProbe
+
+%exec-class JniClasspathLookupKotlinScriptTest
+
+#! The Kotlin script compiler reads a classpath from the class loaders, so the policy cannot be applied to each file
+/** A script of code that a filesystem policy restricts is refused while a directory that such code added is on its
+    classpath; jars, and trusted code, are not affected.  Outside CI, the test is skipped if no Kotlin scripting jars
+    are installed.
+*/
+class JniClasspathLookupKotlinScriptTest inherits QUnit::Test {
+    public {
+        const TenantSource = "%modern
+%requires jni
+%module-cmd(jni) import org.qore.jni.test.ClasspathLookupProbe
+string sub ev_other_context(string script, bool bindings) {
+    return Jni::org::qore::jni::test::ClasspathLookupProbe::evalWithOtherContext(get_class_loader(), script, bindings);
+}
+string sub ev(string script) {
+    try {
+        return sprintf(\"result: %y\", kotlin_eval(script));
+    } catch (hash<ExceptionInfo> ex) {
+        return sprintf(\"%s: %s\", ex.err, ex.desc);
+    }
+}
+";
+        const UsesDenied = "val x: denied.Hidden? = null\n1";
+        const UsesJar = "val x: jarpkg.InJar? = null\n2";
+        const Plain = "3";
+    }
+
+    private {
+        string root;
+    }
+
+    constructor() : QUnit::Test("jni Kotlin scripts and classpath directories under a sandbox", "1.0") {
+        addTestCase("positive control: a trusted script reads the directory", \trustedTest());
+        addTestCase("a restricted script with a classpath directory is refused", \directoryTest());
+        addTestCase("a restricted script with a jar works", \jarTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        string base = sprintf("%s%sjni-classpath-kscript-%d-%d", tmp_location(), DirSep, getpid(),
+            now_us().durationMicroseconds());
+        mkdir(base, 0700);
+        root = realpath(base);
+        foreach string d in ("dir", "dir/denied", "src", "src/jarpkg", "jars") {
+            mkdir(root + "/" + d, 0700);
+        }
+        writeClass("dir/denied/Hidden.class", "denied/Hidden");
+        writeClass("src/jarpkg/InJar.class", "jarpkg/InJar");
+        ClasspathLookupProbe::writeJar(root + "/src", root + "/jars/app.jar", "");
+    }
+
+    globalTearDown() {
+        if (root) {
+            removeTree(root);
+        }
+    }
+
+    private writeClass(string path, string internal) {
+        binary b = <cafebabe00000034> + u2(5) + utf8(internal) + <07> + u2(1) + utf8("java/lang/Object") + <07> + u2(3);
+        b += u2(0x21) + u2(2) + u2(4) + u2(0) + u2(0) + u2(0) + u2(0);
+        File f();
+        f.open2(root + "/" + path, O_CREAT | O_WRONLY | O_TRUNC, 0600);
+        f.write(b);
+        f.close();
+    }
+
+    private static binary u2(int v) {
+        return parse_hex_string(sprintf("%04x", v));
+    }
+
+    private static binary utf8(string s) {
+        return <01> + u2(s.size()) + binary(s);
+    }
+
+    private removeTree(string path) {
+        hash<StatInfo> info = hlstat(path);
+        if (info.type == "DIRECTORY") {
+            foreach string e in (glob(path + "/*") ?? ()) {
+                removeTree(e);
+            }
+            rmdir(path);
+        } else {
+            unlink(path);
+        }
+    }
+
+    #! makes scripting available, or skips the test if it is not installed
+    private checkKotlin() {
+        if (kotlin_scripting_available()) {
+            return;
+        }
+        list<string> dirs = ();
+        if (ENV.KOTLIN_SCRIPTING_JARS) {
+            push dirs, ENV.KOTLIN_SCRIPTING_JARS;
+        }
+        if (ENV.KOTLIN_HOME) {
+            push dirs, ENV.KOTLIN_HOME + "/lib/scripting";
+        }
+        dirs += ("/usr/share/qore/java/kotlin/lib/scripting", "/opt/kotlin/lib/scripting");
+        foreach string dir in (dirs) {
+            *list<string> jars = glob(dir + "/*.jar");
+            if (!jars || !(select jars, $1 =~ /kotlin-scripting-jsr223/)) {
+                continue;
+            }
+            foreach string name in ("kotlin-stdlib.jar", "kotlin-reflect.jar") {
+                if (is_file(dirname(dir) + "/" + name)) {
+                    push jars, dirname(dir) + "/" + name;
+                }
+            }
+            QoreURLClassLoader loader = QoreURLClassLoader::getCurrent();
+            map loader.addPath($1), jars;
+            assertTrue(kotlin_scripting_retry(), "the installed Kotlin scripting jars must load");
+            return;
+        }
+        if (ENV.CI) {
+            throw "KOTLIN-MISSING", "the Kotlin scripting jars are required in CI for this test";
+        }
+        testSkip("the Kotlin scripting jars are not installed");
+    }
+
+    private Program newProgram(*SandboxManager sm, string classpath) {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse(TenantSource, "tenant");
+        if (sm) {
+            p.setSandboxManager(sm);
+        }
+        p.issueModuleCmd("jni", "add-classpath " + root + "/" + classpath);
+        return p;
+    }
+
+    private SandboxManager getPolicy() {
+        SandboxManager sm();
+        sm.setUncontrolledApiPolicy(True);
+        sm.setFilesystemDefaultPolicy(False);
+        sm.addFilesystemAllowedPath(root + "/dir", QSEC_READ);
+        sm.addFilesystemAllowedPath(root + "/jars", QSEC_READ);
+        sm.addFilesystemDeniedPath(root + "/dir/denied");
+        return sm;
+    }
+
+    trustedTest() {
+        checkKotlin();
+        Program p = newProgram(NOTHING, "dir");
+        assertEq("result: 1", p.callFunction("ev", UsesDenied));
+    }
+
+    directoryTest() {
+        checkKotlin();
+        Program p = newProgram(getPolicy(), "dir");
+        foreach string script in (UsesDenied, Plain) {
+            string rv = p.callFunction("ev", script);
+            assertRegex("cannot be evaluated by code that a sandbox filesystem policy restricts", rv, rv);
+            # the public API, whatever the thread's context class loader is
+            foreach bool bindings in (False, True) {
+                rv = p.callFunction("ev_other_context", script, bindings);
+                assertRegex("cannot be evaluated by code that a sandbox filesystem policy restricts", rv, rv);
+            }
+        }
+    }
+
+    jarTest() {
+        checkKotlin();
+        Program p = newProgram(getPolicy(), "jars/app.jar");
+        assertEq("result: 2", p.callFunction("ev", UsesJar));
+    }
+}

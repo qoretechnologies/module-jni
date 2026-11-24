@@ -89,6 +89,9 @@ public final class QoreSandbox {
     //! The policy that the static methods use on the current thread instead of the thread's %Qore caller
     private static final ThreadLocal<Policy> current = new ThreadLocal<>();
 
+    //! The encoding of the names that the JVM passes to the operating system; the file name encoding is fixed at startup
+    private static final Charset NAME_CHARSET = readNameCharset();
+
     private QoreSandbox() {
     }
 
@@ -305,6 +308,101 @@ public final class QoreSandbox {
         }
     }
 
+    //! A filesystem policy that is bound to classpath entries of a class loader
+    /** Applied to every class and resource lookup below the entries, on any thread, also one with no %Qore caller;
+        only this policy applies, so that the result of a lookup does not depend on the thread that makes it.  The
+        policy is read for each check, so a change to a bound policy applies to the next lookup; an entry that was added
+        when no filesystem policy restricted its code has no bound policy and stays unchecked.  A check that fails for any
+        reason is a denial.  Released when it is garbage-collected, or when the module shuts down, after which every
+        check is a denial.
+    */
+    static final class ClasspathPolicy {
+        //! the referenced native policy manager
+        private final NativeCleanup.Ref ref;
+        //! the address of the policy manager, which identifies it while this object holds its reference
+        private final long id;
+
+        //! Takes a reference to the native policy manager \a ptr, unless an exception is raised
+        ClasspathPolicy(long ptr) {
+            ref = NativeCleanup.register(this, ptr, NativeCleanup.KIND_CLASSPATH_POLICY);
+            id = ptr;
+        }
+
+        //! Returns the identity of the policy
+        long id() {
+            return id;
+        }
+
+        //! Returns true if the policy allows reading \a path, which is a real path in the JVM's file name encoding
+        boolean allowsRead(byte[] path) {
+            long p = ref.enter();
+            if (p == 0) {
+                return false;
+            }
+            try {
+                return checkClasspathRead0(p, path);
+            } catch (RuntimeException e) {
+                return false;
+            } finally {
+                ref.exit();
+                Reference.reachabilityFence(this);
+            }
+        }
+    }
+
+    //! Returns the filesystem policies that apply to the caller, to bind to the classpath entries that it adds
+    /** These are the policies that a check made by the caller applies: those of a task that runs with a captured
+        policy, and of the %Qore code that runs on the thread.
+
+        @throw JNI-SANDBOX-ERROR the policy of the caller cannot be determined
+    */
+    static ClasspathPolicy[] callerClasspathPolicies() {
+        Policy p = current.get();
+        long[] ptrs;
+        if (p != null) {
+            p.lock.readLock().lock();
+            try {
+                long pp = p.enterPtr();
+                try {
+                    ptrs = classpathManagers0(pp);
+                } finally {
+                    p.ref.exit();
+                }
+            } finally {
+                p.lock.readLock().unlock();
+                Reference.reachabilityFence(p);
+            }
+        } else {
+            ptrs = classpathManagers0(0);
+        }
+        int i = 0;
+        try {
+            ClasspathPolicy[] rv = new ClasspathPolicy[ptrs.length];
+            for (; i < ptrs.length; ++i) {
+                rv[i] = new ClasspathPolicy(ptrs[i]);
+            }
+            return rv;
+        } catch (Throwable e) {
+            // the references that no object has taken
+            for (; i < ptrs.length; ++i) {
+                releaseClasspathManager0(ptrs[i]);
+            }
+            throw e;
+        }
+    }
+
+    //! Resolves and checks a classpath for a class loader, and binds the policies of the caller to it
+    static QoreURLClassLoader.ResolvedClasspath boundClasspath(String classpath) {
+        QoreURLClassLoader.ResolvedClasspath rc = checkedClasspath(classpath);
+        rc.bindPolicies(callerClasspathPolicies());
+        return rc;
+    }
+
+    //! Returns the bytes of a real path for a policy check, or null if the file name encoding cannot represent it
+    static byte[] encodeRealPath(String path) {
+        return tryEncode(path);
+    }
+
     //! Captures the sandbox policy of the %Qore code that called into Java on the current thread
     /** Call it in the call from %Qore, before handing work to another thread; on a thread that runs a task with a
         policy (QoreSandbox.Policy.run(), ...), the policy of the task is captured.
@@ -392,8 +490,9 @@ public final class QoreSandbox {
     /** For a caller that a filesystem policy restricts, the classpath is resolved as for the \c add-classpath module
         command: each entry, the files that a wildcard selects, and the jars and directories that manifest
         \c Class-Path attributes name, and the policy is applied to each.  For a directory, the policy is applied to the
-        directory itself and not to the files below it; the Java compiler checks those as it lists them for a restricted
-        caller, but the class loader and the Kotlin compiler do not (qore#7276).  A compiler that is given the returned
+        directory itself here; the files below it are checked when they are used: by the Java compiler as it lists them,
+        by the class loader for each lookup, and by the Kotlin compiler, which is given a private copy of the allowed
+        files (qore#7276).  A compiler that is given the returned
         files resolves the manifest entries of a jar where they were checked.  A compiler does not resolve every entry
         as the class loader does, so a jar whose manifest has an entry for which the two can differ is refused, and so
         is a file whose real name, after symbolic links are resolved, is not an archive name, as its manifest is not
@@ -672,6 +771,15 @@ public final class QoreSandbox {
 
     //! Returns the encoding that the JVM uses for file names and other strings passed to the operating system
     private static Charset nameCharset() {
+        return NAME_CHARSET;
+    }
+
+    //! Reads the file name encoding once, as the file name encoding is fixed at startup
+    /** The class is initialized when the module is initialized (a static method ID is looked up for it).  In a JVM that
+        was started first, with %Qore as a library, Java code that runs before the module is initialized can change the
+        property that is read here; such code is part of the trusted host.
+    */
+    private static Charset readNameCharset() {
         String name = System.getProperty("sun.jnu.encoding");
         if (name != null) {
             try {
@@ -737,4 +845,13 @@ public final class QoreSandbox {
 
     //! Returns the JNI-SANDBOX-ERROR exception for a closed policy
     private static native RuntimeException closedError0();
+
+    //! Returns new references to the filesystem policies of the captured policy \a ptr, or of the current thread if 0
+    private static native long[] classpathManagers0(long ptr);
+
+    //! Returns true if the policy manager \a ptr alone allows reading \a path
+    private static native boolean checkClasspathRead0(long ptr, byte[] path);
+
+    //! Releases a reference returned by classpathManagers0()
+    private static native void releaseClasspathManager0(long ptr);
 }

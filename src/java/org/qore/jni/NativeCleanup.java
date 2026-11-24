@@ -238,6 +238,9 @@ public final class NativeCleanup {
     /** delete (QoreSandboxCapture*)ptr: releases a QoreSandbox.Policy that was not closed. */
     public static final int KIND_SANDBOX_POLICY = 4;
 
+    /** QoreSandboxManager::deref(): releases a policy bound to classpath entries of a class loader. */
+    public static final int KIND_CLASSPATH_POLICY = 5;
+
     /** Shared ReferenceQueue.  The C++ cleanup thread blocks on
         {@code queue.remove()} and dispatches by Ref.kind. */
     public static final ReferenceQueue<Object> queue = new ReferenceQueue<>();

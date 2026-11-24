@@ -113,6 +113,16 @@ public class KotlinScriptEngine {
         Object[] context = QoreURLClassLoader.saveContext();
         try {
             QoreURLClassLoader scope = QoreURLClassLoader.createDerivedForContext();
+            // the script compiler takes the classpath from the class loaders and reads the files below its directories
+            // itself, so the policy cannot be applied to each of them (qore#7276); checked once the context that the
+            // engine uses is established, for both of the thread's class loader contexts
+            if ((QoreURLClassLoader.hasGuardedDirectory(Thread.currentThread().getContextClassLoader())
+                    || QoreURLClassLoader.hasGuardedDirectory(QoreURLClassLoader.getCurrent()))
+                    && QoreSandbox.restrictsFilesystem()) {
+                throw new RuntimeException("Kotlin scripts cannot be evaluated by code that a sandbox filesystem "
+                    + "policy restricts while a directory that such code added is on its classpath; use jars for "
+                    + "that classpath");
+            }
             ScriptEngine engine = createEngine();
             if (bindings != null) {
                 // set before the script is compiled, as the compiler reads the engine's context

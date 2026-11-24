@@ -1,0 +1,511 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../build"
+%requires QUnit
+%requires Util
+%requires jni
+%module-cmd(jni) add-relative-classpath qore-jni-test.jar
+%module-cmd(jni) add-relative-classpath ../build/qore-jni-compiler.jar
+%module-cmd(jni) import org.qore.jni.test.ClasspathLookupProbe
+
+%exec-class JniClasspathLookupSandboxTest
+
+#! Every class and resource lookup below a classpath entry applies the filesystem policy of the code that added it
+/** The tree of the test has an allowed directory with content that the policy denies, in a nested directory and
+    through symbolic links, and allowed content next to it.  A file that the policy denies behaves as a file that does
+    not exist.  Entries that trusted code adds, and sandboxes that restrict nothing, are not affected.
+*/
+class JniClasspathLookupSandboxTest inherits QUnit::Test {
+    public {
+        #! the code of a Program that makes lookups through its own class loader
+        const TenantSource = "%modern
+%requires jni
+%module-cmd(jni) import org.qore.jni.test.ClasspathLookupProbe
+object sub own_loader() {
+    return get_class_loader();
+}
+string sub lookup(string op, string name) {
+    return ClasspathLookupProbe::lookup(get_class_loader(), op, name);
+}
+string sub lookup_with(object loader, string op, string name) {
+    return ClasspathLookupProbe::lookup(loader, op, name);
+}
+string sub lookup_on_thread(string op, string name) {
+    return ClasspathLookupProbe::lookupOnThread(get_class_loader(), op, name);
+}
+string sub add_path(string path) {
+    return ClasspathLookupProbe::addPath(get_class_loader(), path);
+}
+string sub add_wildcard(string dir, string pattern) {
+    return ClasspathLookupProbe::addWildcard(get_class_loader(), dir, pattern);
+}
+object sub capture_policy() {
+    return ClasspathLookupProbe::capturePolicy();
+}
+object sub derived() {
+    return ClasspathLookupProbe::derived(get_class_loader());
+}
+";
+
+        #! added to the code of a Program when the Kotlin compiler is available
+        const KotlinSource = "%module-cmd(jni) import org.qore.jni.compiler.QoreKotlinCompiler
+string sub kotlin_compile(string src) {
+    QoreKotlinCompiler compiler(get_class_loader(), NOTHING);
+    on_exit compiler.close();
+    try {
+        compiler.compile({\"KProbe\": src});
+        return \"compiled\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.desc =~ /unresolved reference/i ? \"unresolved\" : sprintf(\"%s: %s\", ex.err, ex.desc);
+    }
+}
+";
+
+        #! the lookups of a class
+        const ClassOps = ("forName", "loadClass");
+        #! the lookups of a resource
+        const ResourceOps = ("getResource", "getResourceAsStream", "getResources", "findResource", "findResources");
+    }
+
+    private {
+        #! the root of the test tree, as a real path
+        string root;
+        #! the Kotlin compiler and standard library jars, if available
+        *list<string> kotlin_jars;
+    }
+
+    constructor() : QUnit::Test("jni classpath lookups under a sandbox", "1.0") {
+        addTestCase("positive control: trusted code", \trustedTest());
+        addTestCase("positive control: a sandbox that restricts nothing", \permissiveTest());
+        addTestCase("a nested denied path", \nestedDeniedTest());
+        addTestCase("a symbolic link to denied content at any depth", \symlinkTest());
+        addTestCase("resource names with parent directory elements", \dotDotTest());
+        addTestCase("a denied file is the same as a missing file", \sameAsMissingTest());
+        addTestCase("a denied file does not hide a later entry", \laterEntryTest());
+        addTestCase("jar entries and directories named by a manifest", \jarTest());
+        addTestCase("delegation from a child class loader", \delegationTest());
+        addTestCase("a class loader subclass", \subclassTest());
+        addTestCase("a lookup on a Java thread, also one the JVM makes", \javaThreadTest());
+        addTestCase("every route for restricted code binds its policy", \routesTest());
+        addTestCase("an entry that a trusted host adds is a host grant", \hostGrantTest());
+        addTestCase("policies of two Programs do not mix", \twoPoliciesTest());
+        addTestCase("Kotlin: a classpath directory with denied content", \kotlinTest());
+        addTestCase("Kotlin: every policy of nested entries applies", \kotlinNestedTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        string base = sprintf("%s%sjni-classpath-lookup-%d-%d", tmp_location(), DirSep, getpid(),
+            now_us().durationMicroseconds());
+        mkdir(base, 0700);
+        root = realpath(base);
+        foreach string d in (("allowed/pkg", "allowed/denied", "allowed/deep/a/denied", "allowed/deep/a/ok",
+                "allowed/lazy", "secret/pkg", "second/denied", "jars/src/jarpkg", "mdir/okm", "mdir/denied",
+                "granted/gpkg", "other/opkg", "wild")) {
+            makeDirs(d);
+        }
+        writeClass("allowed", "pkg.Ok");
+        writeClass("allowed", "pkg.Ok2");
+        writeFile("allowed/pkg/ok.txt", "ok");
+        writeClass("allowed", "denied.Hidden");
+        writeFile("allowed/denied/hidden.txt", "denied");
+        writeClass("allowed", "denied.Both");
+        writeClass("second", "denied.Both");
+        writeClass("allowed/deep", "a.ok.Deep");
+        writeClass("allowed/deep", "a.denied.DeepHidden");
+        writeClass("allowed", "lazy.GoodChild", "pkg/Ok");
+        writeClass("allowed", "lazy.DeniedChild", "denied/Hidden");
+        # each class has the binary name that it is reached by through a link
+        writeClassAs("secret/S.class", "linked/S");
+        writeClassAs("secret/DeepS.class", "a/linked/DeepS");
+        writeClassAs("secret/LinkedS.class", "LinkedS");
+        writeClassAs("secret/LinkedPkg.class", "pkg/LinkedPkg");
+        writeClassAs("allowed/denied/NestedK.class", "NestedK");
+        writeFile("secret/s.txt", "secret");
+        writeClass("jars/src", "jarpkg.InJar");
+        writeFile("jars/src/jarpkg/r.txt", "jar");
+        writeClass("mdir", "okm.ViaManifest");
+        writeClass("mdir", "denied.ManifestHidden");
+        writeClass("granted", "gpkg.Granted");
+        writeClass("other", "opkg.OtherOnly");
+        symlink(root + "/secret", root + "/allowed/linked");
+        symlink(root + "/secret", root + "/allowed/deep/a/linked");
+        symlink(root + "/secret/s.txt", root + "/allowed/pkg/link.txt");
+        symlink(root + "/secret/LinkedS.class", root + "/allowed/LinkedS.class");
+        symlink(root + "/secret/LinkedPkg.class", root + "/allowed/pkg/LinkedPkg.class");
+        ClasspathLookupProbe::writeJar(root + "/jars/src", root + "/jars/app.jar", "");
+        ClasspathLookupProbe::writeJar(root + "/jars/src", root + "/jars/ref.jar", "../mdir/");
+        ClasspathLookupProbe::writeJar(root + "/jars/src", root + "/wild/w.jar", "");
+        *list<string> jars = getKotlinJars();
+        if (jars) {
+            # the Kotlin jars are on the classpath that every Program shares, as in Qorus
+            Program host(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+            host.loadModule("jni");
+            map host.issueModuleCmd("jni", "global-add-classpath " + $1), jars;
+            kotlin_jars = jars;
+        }
+    }
+
+    globalTearDown() {
+        if (root) {
+            removeTree(root);
+        }
+    }
+
+    private makeDirs(string d) {
+        string path = root;
+        foreach string e in (d.split("/")) {
+            path += "/" + e;
+            if (!is_dir(path)) {
+                mkdir(path, 0700);
+            }
+        }
+    }
+
+    private writeFile(string path, string data) {
+        File f();
+        f.open2(root + "/" + path, O_CREAT | O_WRONLY | O_TRUNC, 0600);
+        f.write(data);
+        f.close();
+    }
+
+    #! writes a minimal class file of a public class with no members
+    private writeClass(string dir, string name, string super_name = "java/lang/Object") {
+        string internal = replace(name, ".", "/");
+        writeClassAs(dir + "/" + internal + ".class", internal, super_name);
+    }
+
+    #! writes a minimal class file with the given internal name to a path of the tree
+    private writeClassAs(string path, string internal, string super_name = "java/lang/Object") {
+        binary b = <cafebabe00000034> + u2(5);
+        b += utf8(internal) + <07> + u2(1) + utf8(super_name) + <07> + u2(3);
+        # public super class; this class, super class; no interfaces, fields, methods or attributes
+        b += u2(0x21) + u2(2) + u2(4) + u2(0) + u2(0) + u2(0) + u2(0);
+        File f();
+        f.open2(root + "/" + path, O_CREAT | O_WRONLY | O_TRUNC, 0600);
+        f.write(b);
+        f.close();
+    }
+
+    private static binary u2(int v) {
+        return parse_hex_string(sprintf("%04x", v));
+    }
+
+    private static binary utf8(string s) {
+        return <01> + u2(s.size()) + binary(s);
+    }
+
+    private removeTree(string path) {
+        hash<StatInfo> info = hlstat(path);
+        if (info.type == "DIRECTORY") {
+            foreach string e in (glob(path + "/*") ?? ()) {
+                removeTree(e);
+            }
+            rmdir(path);
+        } else {
+            unlink(path);
+        }
+    }
+
+    #! returns a sandbox that allows the allowed directories of the tree and denies the nested paths
+    private SandboxManager getPolicy(*list<string> extra) {
+        SandboxManager sm();
+        sm.setUncontrolledApiPolicy(True);
+        sm.setFilesystemDefaultPolicy(False);
+        foreach string d in (("allowed", "second", "jars", "mdir", "wild") + (extra ?? ())) {
+            sm.addFilesystemAllowedPath(root + "/" + d, QSEC_READ);
+        }
+        foreach string d in (module_dirs()) {
+            sm.addFilesystemAllowedPath(d, QSEC_READ);
+        }
+        sm.addFilesystemDeniedPath(root + "/allowed/denied");
+        sm.addFilesystemDeniedPath(root + "/allowed/deep/a/denied");
+        sm.addFilesystemDeniedPath(root + "/mdir/denied");
+        return sm;
+    }
+
+    private list<string> module_dirs() {
+        list<string> rv = (get_script_dir() + "/../build", get_script_dir() + "/../qlib");
+        rv += map $1, (ENV.QORE_MODULE_DIR ?? "").split(PathSep), $1.val();
+        *string fn = get_module_hash().jni.filename;
+        if (fn) {
+            rv += dirname(fn);
+        }
+        return rv;
+    }
+
+    private Program newProgram(*SandboxManager sm) {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse(TenantSource + (kotlin_jars ? KotlinSource : ""), "tenant");
+        if (sm) {
+            p.setSandboxManager(sm);
+        }
+        return p;
+    }
+
+    #! returns a Program with a policy, whose classpath has been added under its policy
+    private Program restricted(string classpath = "allowed") {
+        Program p = newProgram(getPolicy());
+        addClasspath(p, classpath);
+        return p;
+    }
+
+    private addClasspath(Program p, string classpath) {
+        string cp = (map root + "/" + $1, classpath.split(":")).join(":");
+        p.issueModuleCmd("jni", "add-classpath " + cp);
+    }
+
+    private assertAllFound(Program p, softlist<string> classes, softlist<string> resources, string label) {
+        foreach string name in (classes) {
+            map assertEq("found", p.callFunction("lookup", $1, name), sprintf("%s: %s %s", label, $1, name)), ClassOps;
+        }
+        foreach string name in (resources) {
+            map assertEq("found", p.callFunction("lookup", $1, name), sprintf("%s: %s %s", label, $1, name)),
+                ResourceOps;
+        }
+    }
+
+    private assertNoneFound(Program p, softlist<string> classes, softlist<string> resources, string label) {
+        foreach string name in (classes) {
+            foreach string op in (ClassOps) {
+                string rv = p.callFunction("lookup", op, name);
+                assertRegex("^missing", rv, sprintf("%s: %s %s", label, op, name));
+            }
+        }
+        foreach string name in (resources) {
+            foreach string op in (ResourceOps) {
+                assertEq("missing", p.callFunction("lookup", op, name), sprintf("%s: %s %s", label, op, name));
+            }
+        }
+    }
+
+    trustedTest() {
+        Program p = newProgram();
+        addClasspath(p, "allowed");
+        assertAllFound(p, ("pkg.Ok", "denied.Hidden", "linked.S", "LinkedS", "pkg.LinkedPkg"),
+            ("pkg/ok.txt", "denied/hidden.txt", "linked/s.txt", "pkg/link.txt"), "trusted");
+    }
+
+    permissiveTest() {
+        SandboxManager sm();
+        sm.setUncontrolledApiPolicy(True);
+        sm.setFilesystemDefaultPolicy(True);
+        Program p = newProgram(sm);
+        addClasspath(p, "allowed");
+        assertAllFound(p, ("pkg.Ok", "denied.Hidden", "linked.S"),
+            ("pkg/ok.txt", "denied/hidden.txt", "linked/s.txt"), "permissive");
+    }
+
+    nestedDeniedTest() {
+        Program p = restricted();
+        assertAllFound(p, "pkg.Ok", "pkg/ok.txt", "allowed");
+        assertNoneFound(p, "denied.Hidden", "denied/hidden.txt", "nested denied");
+
+        p = restricted("allowed/deep");
+        assertAllFound(p, "a.ok.Deep", (), "allowed below");
+        assertNoneFound(p, "a.denied.DeepHidden", (), "deep denied");
+    }
+
+    symlinkTest() {
+        Program p = restricted();
+        assertNoneFound(p, ("linked.S", "LinkedS", "pkg.LinkedPkg"),
+            ("linked/s.txt", "deep/a/linked/s.txt", "pkg/link.txt", "LinkedS.class"), "symlink");
+        p = restricted("allowed/deep");
+        assertNoneFound(p, "a.linked.DeepS", "a/linked/s.txt", "deep symlink");
+    }
+
+    dotDotTest() {
+        Program p = restricted();
+        foreach string name in (("pkg/../denied/hidden.txt", "deep/../denied/hidden.txt", "../secret/s.txt",
+                "pkg/../../secret/s.txt", "linked/../secret/s.txt")) {
+            map assertEq("missing", p.callFunction("lookup", $1, name), sprintf("%s %s", $1, name)), ResourceOps;
+        }
+        map assertEq("found", p.callFunction("lookup", $1, "deep/../pkg/ok.txt"), $1), ResourceOps;
+    }
+
+    sameAsMissingTest() {
+        Program p = restricted();
+        foreach string op in (ClassOps) {
+            assertEq(p.callFunction("lookup", op, "denied.NoSuchClass"), p.callFunction("lookup", op, "denied.Hidden"),
+                op + " nested");
+            assertEq(p.callFunction("lookup", op, "NoSuchClass"), p.callFunction("lookup", op, "LinkedS"),
+                op + " link");
+        }
+        foreach string op in (ResourceOps) {
+            assertEq(p.callFunction("lookup", op, "denied/no-such.txt"), p.callFunction("lookup", op,
+                "denied/hidden.txt"), op + " nested");
+            assertEq(p.callFunction("lookup", op, "no-such.txt"), p.callFunction("lookup", op, "linked/s.txt"),
+                op + " link");
+        }
+    }
+
+    laterEntryTest() {
+        Program p = restricted("allowed:second");
+        string location = p.callFunction("lookup", "location", "denied.Both");
+        assertRegex("/second/$", location, location);
+        assertEq("found", p.callFunction("lookup", "getResource", "denied/Both.class"));
+    }
+
+    jarTest() {
+        Program p = restricted("jars/app.jar");
+        assertAllFound(p, "jarpkg.InJar", "jarpkg/r.txt", "jar");
+        # a jar with a manifest Class-Path attribute is refused on a JDK whose handling of it has not been verified
+        if (!ClasspathLookupProbe::manifestClassPathVerified()) {
+            assertThrows("JNI-CLASSPATH-ERROR", \restricted(), "jars/ref.jar");
+            return;
+        }
+        p = restricted("jars/ref.jar");
+        assertAllFound(p, ("jarpkg.InJar", "okm.ViaManifest"), ("jarpkg/r.txt", "okm/ViaManifest.class"), "manifest");
+        assertNoneFound(p, "denied.ManifestHidden", "denied/ManifestHidden.class", "manifest directory");
+    }
+
+    delegationTest() {
+        Program p = restricted();
+        object child = p.callFunction("derived");
+        assertEq("found", p.callFunction("lookup_with", child, "loadClass", "pkg.Ok"));
+        assertRegex("^missing", p.callFunction("lookup_with", child, "loadClass", "denied.Hidden"));
+        assertEq("missing", p.callFunction("lookup_with", child, "getResource", "denied/hidden.txt"));
+        assertEq("missing", p.callFunction("lookup_with", child, "getResourceAsStream", "linked/s.txt"));
+    }
+
+    subclassTest() {
+        # sandboxed code cannot make a class loader: trusted code makes it, and adds an entry under the captured policy
+        # of the sandboxed code
+        Program p = newProgram(getPolicy());
+        object policy = p.callFunction("capture_policy");
+        object sub_loader = ClasspathLookupProbe::newSubLoader(p.callFunction("own_loader"));
+        assertEq("ok", ClasspathLookupProbe::addUrlUnder(policy, sub_loader, root + "/allowed/"));
+        # a different class for each lookup: a class is defined only once by a class loader
+        foreach hash<auto> i in ({"op": "loadClass", "cls": "pkg.Ok"}, {"op": "findClass", "cls": "pkg.Ok2"}) {
+            string op = i.op;
+            assertEq("found", ClasspathLookupProbe::lookup(sub_loader, op, i.cls), op);
+            assertRegex("^missing", ClasspathLookupProbe::lookup(sub_loader, op, "denied.Hidden"), op);
+            assertRegex("^missing", ClasspathLookupProbe::lookup(sub_loader, op, "linked.S"), op);
+        }
+        foreach string op in (ResourceOps) {
+            assertEq("found", ClasspathLookupProbe::lookup(sub_loader, op, "pkg/ok.txt"), op);
+            assertEq("missing", ClasspathLookupProbe::lookup(sub_loader, op, "denied/hidden.txt"), op);
+        }
+    }
+
+    javaThreadTest() {
+        Program p = restricted();
+        assertEq("found", p.callFunction("lookup_on_thread", "loadClass", "pkg.Ok"));
+        assertRegex("^missing", p.callFunction("lookup_on_thread", "loadClass", "denied.Hidden"));
+        assertEq("missing", p.callFunction("lookup_on_thread", "getResource", "linked/s.txt"));
+        # the JVM resolves the superclass while it defines the class
+        assertEq("found", p.callFunction("lookup_on_thread", "init", "lazy.GoodChild"));
+        string rv = p.callFunction("lookup_on_thread", "init", "lazy.DeniedChild");
+        assertRegex("^missing: java.lang.NoClassDefFoundError", rv, rv);
+    }
+
+    routesTest() {
+        # the class loader's Java API
+        Program p = newProgram(getPolicy());
+        assertEq("ok", p.callFunction("add_path", root + "/allowed"));
+        assertEq("found", p.callFunction("lookup", "loadClass", "pkg.Ok"));
+        assertRegex("^missing", p.callFunction("lookup", "loadClass", "denied.Hidden"));
+        # a wildcard
+        p = newProgram(getPolicy());
+        assertEq("ok", p.callFunction("add_wildcard", root + "/wild", "*.jar"));
+        assertEq("found", p.callFunction("lookup", "loadClass", "jarpkg.InJar"));
+        # the same entry added again keeps its policy
+        p = restricted();
+        assertEq("ok", p.callFunction("add_path", root + "/allowed"));
+        assertRegex("^missing", p.callFunction("lookup", "loadClass", "denied.Hidden"));
+        # the commands that change the classpath of every Program would add an entry with no policy: they are refused
+        foreach string cmd in ("global-add-classpath " + root + "/allowed",
+                "global-add-relative-classpath ../allowed") {
+            Program issuer(PO_NEW_STYLE);
+            issuer.setSandboxManager(getPolicy());
+            assertThrows("JNI-SANDBOX-ERROR", \issuer.parse(), ("%requires jni\n%module-cmd(jni) " + cmd + "\n", "cmd"),
+                cmd);
+        }
+        assertRegex("^missing", p.callFunction("lookup", "loadClass", "denied.Hidden"));
+    }
+
+    hostGrantTest() {
+        # trusted code adds the entry to the class loader of a sandboxed Program
+        Program p = newProgram(getPolicy());
+        assertEq("ok", ClasspathLookupProbe::addPath(p.callFunction("own_loader"), root + "/granted"));
+        assertEq("found", p.callFunction("lookup", "loadClass", "gpkg.Granted"));
+        # an entry of restricted code next to it is still checked
+        addClasspath(p, "allowed");
+        assertRegex("^missing", p.callFunction("lookup", "loadClass", "denied.Hidden"));
+        assertEq("found", p.callFunction("lookup", "loadClass", "gpkg.Granted"));
+    }
+
+    twoPoliciesTest() {
+        Program a = restricted();
+        Program b = newProgram(getPolicy(("other",)));
+        addClasspath(b, "other");
+        assertEq("found", b.callFunction("lookup", "loadClass", "opkg.OtherOnly"));
+        assertRegex("^missing", a.callFunction("lookup", "loadClass", "opkg.OtherOnly"));
+        assertRegex("^missing", b.callFunction("lookup", "loadClass", "denied.Hidden"));
+    }
+
+    kotlinNestedTest() {
+        if (!kotlin_jars) {
+            if (ENV.CI) {
+                throw "KOTLIN-MISSING", "the Kotlin compiler JAR is required in CI for this test";
+            }
+            testSkip("Kotlin compiler JAR not available");
+        }
+        Program p = restricted();
+        # a second policy, which allows the nested directory, adds it as an entry of the same class loader
+        SandboxManager wide();
+        wide.setUncontrolledApiPolicy(True);
+        wide.setFilesystemDefaultPolicy(False);
+        wide.addFilesystemAllowedPath(root + "/allowed", QSEC_READ);
+        Program inner = newProgram(wide);
+        assertEq("ok", ClasspathLookupProbe::addPathUnder(inner.callFunction("capture_policy"),
+            p.callFunction("own_loader"), root + "/allowed/denied"));
+        assertEq("unresolved", p.callFunction("kotlin_compile", "class KProbe { fun f(x: NestedK?) = x }\n"));
+        assertEq("compiled", p.callFunction("kotlin_compile", "class KProbe { fun f(x: pkg.Ok?) = x }\n"));
+    }
+
+    kotlinTest() {
+        if (!kotlin_jars) {
+            if (ENV.CI) {
+                throw "KOTLIN-MISSING", "the Kotlin compiler JAR is required in CI for this test";
+            }
+            testSkip("Kotlin compiler JAR not available");
+        }
+        string Allowed = "class KProbe { fun f(x: pkg.Ok?) = x }\n";
+        string Nested = "class KProbe { fun f(x: denied.Hidden?) = x }\n";
+        string Linked = "class KProbe { fun f(x: linked.S?) = x }\n";
+
+        Program trusted = newProgram();
+        addClasspath(trusted, "allowed");
+        assertEq("compiled", trusted.callFunction("kotlin_compile", Allowed));
+        assertEq("compiled", trusted.callFunction("kotlin_compile", Nested));
+        assertEq("compiled", trusted.callFunction("kotlin_compile", Linked));
+
+        Program p = restricted();
+        assertEq("compiled", p.callFunction("kotlin_compile", Allowed));
+        assertEq("unresolved", p.callFunction("kotlin_compile", Nested));
+        assertEq("unresolved", p.callFunction("kotlin_compile", Linked));
+    }
+
+    #! returns the Kotlin compiler and standard library jars, if available
+    private static *list<string> getKotlinJars() {
+        list<string> homes = ();
+        if (ENV.KOTLIN_HOME) {
+            push homes, ENV.KOTLIN_HOME;
+        }
+        homes += ("/usr/share/qore/java/kotlin", "/opt/kotlin", "/opt/kotlinc", "/usr/share/kotlin", "/usr/lib/kotlin",
+            "/usr/local/kotlin");
+        foreach string home in (homes) {
+            string compiler = home + "/lib/kotlin-compiler.jar";
+            string stdlib = home + "/lib/kotlin-stdlib.jar";
+            if (is_file(compiler) && is_file(stdlib)) {
+                return (compiler, stdlib);
+            }
+        }
+    }
+}

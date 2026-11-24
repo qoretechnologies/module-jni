@@ -1074,7 +1074,9 @@ set (JNI_BIN_FILES
 
 # Java sources built in to the binary module with an indication of inner classes, if any
 generate_java(org/qore/jni/QoreJavaApi.java)
-generate_java(org/qore/jni/QoreSandbox.java $Policy)
+generate_java(org/qore/jni/QoreSandbox.java $Policy $ClasspathPolicy)
+generate_java(org/qore/jni/QoreClasspathGuard.java)
+generate_java(org/qore/jni/QoreCompilerClasspath.java $Budget $Copy $PrivateParent)
 generate_java(org/qore/jni/JavaCollectionTypes.java)
 generate_java(org/qore/jni/QoreExceptionWrapper.java)
 generate_java(org/qore/jni/QoreException.java)
@@ -1339,6 +1341,7 @@ set(JAVA_TEST_JAR_SRC
     test/java/src/org/qore/jni/test/JvmPrimaryReaperExit.java
     test/java/src/org/qore/jni/test/JvmPrimarySandboxTrust.java
     test/java/src/org/qore/jni/test/ClassLoaderAccessProbe.java
+    test/java/src/org/qore/jni/test/ClasspathLookupProbe.java
     test/java/src/qore/JniClassLoaderAccessFixture.java
     test/java/src/org/qore/jni/test/GeneratedBindings.java
     test/java/src/org/qore/jni/test/CachedProgramPtrProbe.java

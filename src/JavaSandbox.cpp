@@ -454,6 +454,69 @@ static void JNICALL qore_sandbox_check_named_path(JNIEnv* jenv, jclass, jlong pt
     });
 } JNI_NATIVE_CATCH(jenv)
 
+//! QoreSandbox.classpathManagers0(): returns new references to the filesystem policies that apply to the caller
+/** The policies that a check made with the captured policy \a ptr, or by the thread's Qore caller, applies, as they
+    are bound to the classpath entries that the caller adds: each lookup below an entry then applies them, on any
+    thread, with no Qore caller.
+*/
+static jlongArray JNICALL qore_sandbox_classpath_managers(JNIEnv* jenv, jclass, jlong ptr) try {
+    return sandbox_native<jlongArray>(jenv, nullptr,
+            [ptr, jenv](Env&, SandboxCallScope& scope, ExceptionSink* xsink) -> jlongArray {
+        if (scope.enter(ptr, xsink)) {
+            return nullptr;
+        }
+        std::vector<QoreSandboxManager*> restricting;
+        std::vector<jlong> ptrs;
+        for (QoreSandboxManager* sm : scope.managers()) {
+            if (sm->filesystemRestricts()) {
+                restricting.push_back(sm);
+                ptrs.push_back(reinterpret_cast<jlong>(sm));
+            }
+        }
+        jlongArray rv = jenv->NewLongArray(static_cast<jsize>(ptrs.size()));
+        if (!rv) {
+            // a Java exception is pending
+            return nullptr;
+        }
+        if (!ptrs.empty()) {
+            jenv->SetLongArrayRegion(rv, 0, static_cast<jsize>(ptrs.size()), ptrs.data());
+        }
+        // nothing can fail from here on: each element is a reference that the caller owns
+        for (QoreSandboxManager* sm : restricting) {
+            sm->ref();
+        }
+        return rv;
+    });
+} JNI_NATIVE_CATCH(jenv, nullptr)
+
+//! QoreSandbox.checkClasspathRead0(): returns true if the policy \a ptr alone allows reading a path
+/** Only the policy that is bound to the classpath entry applies, whatever code runs on the thread, so that the result
+    does not depend on the thread that makes the lookup.  Every failure of the check is a denial.
+*/
+static jboolean JNICALL qore_sandbox_check_classpath_read(JNIEnv* jenv, jclass, jlong ptr, jbyteArray jpath) try {
+    return sandbox_native<jboolean>(jenv, JNI_FALSE,
+            [=](Env& env, SandboxCallScope&, ExceptionSink*) -> jboolean {
+        std::string path = get_bytes(env, jpath);
+        if (path.empty()) {
+            return JNI_FALSE;
+        }
+        ExceptionSink check;
+        bool allowed = reinterpret_cast<QoreSandboxManager*>(ptr)->checkFilesystemAccess(path.c_str(), QSEC_READ,
+            &check);
+        allowed = allowed && !check;
+        check.clear();
+        return allowed ? JNI_TRUE : JNI_FALSE;
+    });
+} JNI_NATIVE_CATCH(jenv, JNI_FALSE)
+
+//! QoreSandbox.releaseClasspathManager0(): releases a reference returned by classpathManagers0()
+static void JNICALL qore_sandbox_release_classpath_manager(JNIEnv* jenv, jclass, jlong ptr) try {
+    sandbox_native<jboolean>(jenv, JNI_FALSE, [ptr](Env&, SandboxCallScope&, ExceptionSink*) -> jboolean {
+        jni_release_classpath_policy(ptr);
+        return JNI_TRUE;
+    });
+} JNI_NATIVE_CATCH(jenv)
+
 //! Returns a new JNI-SANDBOX-ERROR exception as a QoreExceptionWrapper, without throwing it
 /** @param msg the message in UTF-8; it may have NUL characters
 */
@@ -518,6 +581,12 @@ JNINativeMethod qoreSandboxNativeMethods[] = {
         reinterpret_cast<void*>(qore_sandbox_argument_error)},
     {const_cast<char*>("closedError0"), const_cast<char*>("()Ljava/lang/RuntimeException;"),
         reinterpret_cast<void*>(qore_sandbox_closed_error)},
+    {const_cast<char*>("classpathManagers0"), const_cast<char*>("(J)[J"),
+        reinterpret_cast<void*>(qore_sandbox_classpath_managers)},
+    {const_cast<char*>("checkClasspathRead0"), const_cast<char*>("(J[B)Z"),
+        reinterpret_cast<void*>(qore_sandbox_check_classpath_read)},
+    {const_cast<char*>("releaseClasspathManager0"), const_cast<char*>("(J)V"),
+        reinterpret_cast<void*>(qore_sandbox_release_classpath_manager)},
 };
 
 } // namespace
@@ -528,6 +597,26 @@ void jni_register_qore_sandbox_natives(Env& env, jclass cls) {
 
 void jni_release_sandbox_policy(jlong ptr) {
     delete reinterpret_cast<QoreSandboxCapture*>(ptr);
+}
+
+void jni_release_classpath_policy(jlong ptr) {
+    ExceptionSink xsink;
+    reinterpret_cast<QoreSandboxManager*>(ptr)->deref(&xsink);
+    // the release of a policy has no one to report an error to
+    xsink.clear();
+}
+
+void jni_bind_classpath_policy(Env& env, jobject rc, QoreSandboxManager* policy) {
+    policy->ref();
+    jvalue arg;
+    arg.j = reinterpret_cast<jlong>(policy);
+    try {
+        env.callVoidMethod(rc, Globals::methodResolvedClasspathBindPolicy, &arg);
+    } catch (...) {
+        // the classpath took no reference
+        jni_release_classpath_policy(arg.j);
+        throw;
+    }
 }
 
 } // namespace jni

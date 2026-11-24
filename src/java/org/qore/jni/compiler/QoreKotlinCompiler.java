@@ -36,6 +36,7 @@ import org.jetbrains.kotlin.cli.common.messages.MessageCollector;
 import org.jetbrains.kotlin.cli.jvm.K2JVMCompiler;
 import org.jetbrains.kotlin.config.Services;
 
+import org.qore.jni.QoreCompilerClasspath;
 import org.qore.jni.QoreSandbox;
 import org.qore.jni.QoreURLClassLoader;
 
@@ -116,6 +117,8 @@ public class QoreKotlinCompiler implements AutoCloseable {
             checkNames(injectedClasses.keySet());
         }
         final boolean restricted = QoreSandbox.restrictsFilesystem();
+        // the classpath of this compilation for a restricted caller, which owns its private copies
+        QoreCompilerClasspath compilerClasspath = null;
 
         try {
             // Create temporary directories for source and output
@@ -172,24 +175,31 @@ public class QoreKotlinCompiler implements AutoCloseable {
             // compiled the identical source: QoreJavaCompiler reads
             // `loader.getURLs()` - the parent - when it populates the file
             // manager's CLASS_PATH.
-            for (ClassLoader cl = classLoader; cl != null; cl = cl.getParent()) {
-                if (restricted) {
-                    // only the files that a class loader of the module has checked, as they were checked; the
-                    // compiler's classpath is one string, so an entry cannot contain its separator
+            if (restricted) {
+                // only the files that a class loader of the module has checked, as they were checked, with a private
+                // copy of the files that the policies of entries of restricted code allow below a directory; the
+                // compiler's classpath is one string, so an entry cannot contain its separator; checked for the
+                // entries themselves as well, as the path of a private copy has no separator
+                for (ClassLoader cl = classLoader; cl != null; cl = cl.getParent()) {
                     if (cl instanceof QoreURLClassLoader) {
                         for (File location : ((QoreURLClassLoader) cl).getCompilerLocations()) {
-                            if (location.getPath().indexOf(File.pathSeparatorChar) >= 0) {
-                                throw new QoreKotlinCompilerException("a classpath entry contains the path separator, "
-                                    + "so it cannot be given to the compiler", java.util.Collections.emptyList());
-                            }
-                            classpath.append(File.pathSeparator).append(location.getPath());
+                            checkClasspathEntry(location);
                         }
                     }
-                } else if (cl instanceof java.net.URLClassLoader) {
-                    for (java.net.URL url : ((java.net.URLClassLoader) cl).getURLs()) {
-                        String entry = urlToClasspathEntry(url);
-                        if (entry != null) {
-                            classpath.append(File.pathSeparator).append(entry);
+                }
+                compilerClasspath = classLoader.openCompilerClasspath();
+                for (File location : compilerClasspath.getLocations()) {
+                    checkClasspathEntry(location);
+                    classpath.append(File.pathSeparator).append(location.getPath());
+                }
+            } else {
+                for (ClassLoader cl = classLoader; cl != null; cl = cl.getParent()) {
+                    if (cl instanceof java.net.URLClassLoader) {
+                        for (java.net.URL url : ((java.net.URLClassLoader) cl).getURLs()) {
+                            String entry = urlToClasspathEntry(url);
+                            if (entry != null) {
+                                classpath.append(File.pathSeparator).append(entry);
+                            }
                         }
                     }
                 }
@@ -235,6 +245,10 @@ public class QoreKotlinCompiler implements AutoCloseable {
             args.setJvmTarget("21");
             args.setNoStdlib(false);
             args.setNoReflect(true);
+            if (restricted) {
+                // the scripting plugin discovers script definitions on the classpath and runs their code
+                args.setDisableDefaultScriptingPlugin(true);
+            }
 
             // Add any custom options
             // Note: K2JVMCompilerArguments doesn't have a direct way to add arbitrary options
@@ -339,8 +353,26 @@ public class QoreKotlinCompiler implements AutoCloseable {
             throw new QoreKotlinCompilerException("I/O error during compilation: " + e.getMessage(),
                 sources.keySet(), e);
         } finally {
-            // Clean up temp directory
-            cleanupTempDir();
+            try {
+                if (compilerClasspath != null) {
+                    compilerClasspath.close();
+                }
+            } catch (RuntimeException | Error e) {
+                // not reported to the caller, and never replaces the result or the error of the compilation: a copy
+                // that could not be removed stays charged, is removed again when its class loader is closed or its
+                // Program ends, and is logged if it keeps failing
+            } finally {
+                // Clean up temp directory
+                cleanupTempDir();
+            }
+        }
+    }
+
+    //! Refuses a classpath entry that contains the separator of the compiler's classpath string
+    private static void checkClasspathEntry(File location) throws QoreKotlinCompilerException {
+        if (location.getPath().indexOf(File.pathSeparatorChar) >= 0) {
+            throw new QoreKotlinCompilerException("a classpath entry contains the path separator, so it cannot be "
+                + "given to the compiler", java.util.Collections.emptyList());
         }
     }
 
@@ -682,12 +714,12 @@ public class QoreKotlinCompiler implements AutoCloseable {
                     }
                 }
             }
-        } catch (IOException | RuntimeException e) {
+        } catch (IOException | RuntimeException | Error e) {
             // the directory is still tried below
         }
         try {
             Files.deleteIfExists(path);
-        } catch (IOException | RuntimeException e) {
+        } catch (IOException | RuntimeException | Error e) {
             // nothing more can be done for this path
         }
     }
