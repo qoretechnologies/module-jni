@@ -2035,10 +2035,7 @@ static bool jni_method_takes_extra_args(const QoreClass& cls, const char* name) 
 static jobject JNICALL java_class_builder_do_normal_call(JNIEnv* jenv, jclass jcls, jstring mname, jlong qobj,
         jlong method_handle, jlong reserved, jobjectArray args) try {
     return generated_native_call<jobject>(jenv, [&](Env& env, ExceptionSink& xsink) -> jobject {
-        // the binding's entries are left with no Java exception pending (see JniJavaExceptionAside)
-        JniJavaExceptionAside aside;
         GeneratedBindingContext binding(method_handle, GeneratedBindingKind::Method, &xsink);
-        JniJavaExceptionAside::Guard aside_guard(aside);
         if (!qobj || reserved) {
             throw std::runtime_error("Invalid object or variant in generated Qore method call");
         }
@@ -2103,11 +2100,8 @@ static jobject JNICALL java_class_builder_do_static_call(JNIEnv* jenv, jclass jc
         jlong program_id, jlong method_handle, jlong reserved, jobjectArray args) try {
     return generated_native_call<jobject>(jenv, [&](Env& env, ExceptionSink& xsink) -> jobject {
         // a static method is called in the Program of the class (qore#7023)
-        // the binding's entries are left with no Java exception pending (see JniJavaExceptionAside)
-        JniJavaExceptionAside aside;
         GeneratedBindingContext binding(method_handle, GeneratedBindingKind::StaticMethod, &xsink, jni_check_governed_caller_reaches);
         GeneratedBindingContext cls(class_handle, GeneratedBindingKind::Class, &xsink, jni_check_governed_caller_reaches);
-        JniJavaExceptionAside::Guard aside_guard(aside);
         generated_program_context(binding->pgm, program_id);
         if (reserved || cls->cls != binding->cls) {
             throw std::runtime_error("Invalid class or variant in generated Qore static method call");
@@ -2122,10 +2116,7 @@ static jobject JNICALL java_class_builder_do_function_call(JNIEnv* jenv, jclass 
         jlong function_handle, jlong reserved, jobjectArray args) try {
     return generated_native_call<jobject>(jenv, [&](Env& env, ExceptionSink& xsink) -> jobject {
         // a function is called in the Program of the function (qore#7023)
-        // the binding's entries are left with no Java exception pending (see JniJavaExceptionAside)
-        JniJavaExceptionAside aside;
         GeneratedBindingContext binding(function_handle, GeneratedBindingKind::Function, &xsink, jni_check_governed_caller_reaches);
-        JniJavaExceptionAside::Guard aside_guard(aside);
         QoreProgram* pgm = binding->pgm;
         JniExternalProgramData* jpc = generated_program_context(pgm, program_id);
         if (reserved) {
@@ -2152,10 +2143,7 @@ static jobject JNICALL java_class_builder_get_constant_value(JNIEnv* jenv, jclas
     return generated_native_call<jobject>(jenv, [&](Env& env, ExceptionSink& xsink) -> jobject {
         JniExternalProgramData* caller_context = jni_get_context();
         // the value of a constant of the Program of the class or namespace (qore#7023)
-        // the binding's entries are left with no Java exception pending (see JniJavaExceptionAside)
-        JniJavaExceptionAside aside;
         GeneratedBindingContext binding(constant_handle, GeneratedBindingKind::Constant, &xsink, jni_check_governed_caller_reaches);
-        JniJavaExceptionAside::Guard aside_guard(aside);
         JniExternalProgramData* jpc = generated_program_context(binding->pgm, program_id, caller_context);
         ValueHolder val(binding->constant->getReferencedValue(), &xsink);
         return QoreToJava::toAnyObject(env, *val, jpc);
@@ -3412,10 +3400,7 @@ static jlong JNICALL qore_object_create(JNIEnv* jenv, jclass ignore, jlong class
         // an object of a class of another Program, or created in another Program, is not created for code that a
         // sandbox governs (qore#7023)
         jni_check_governed_caller_reaches(pgm);
-        // the binding's entries are left with no Java exception pending (see JniJavaExceptionAside)
-        JniJavaExceptionAside aside;
         GeneratedBindingContext binding(class_handle, GeneratedBindingKind::Class, &xsink, jni_check_governed_caller_reaches);
-        JniJavaExceptionAside::Guard aside_guard(aside);
         if (reserved_method || reserved_variant) {
             throw std::runtime_error("Invalid context or constructor binding; regenerate the class");
         }

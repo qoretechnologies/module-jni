@@ -42,11 +42,19 @@ escapes them, including C++ exceptions thrown from their catch handlers.
 ## Program entries and pending Java exceptions
 
 Leaving a Program's entry runs its exit handler, which can call Java, and no Java call can be made while a Java
-exception is pending.  The module therefore enters a Program with `JniProgramEntryHelper` (`src/Jvm.h`), never with
-`QoreExternalProgramContextHelper` directly: a Java exception that is pending when the entry is left (an error of the
-code that ran in it, of the conversion of a call's arguments or result, or of a save object callback) is set aside
-while the Program is left, and raised again after it.  It stays the error of the code that raised it, so a Java
-exception that the exit handler leaves pending is dropped.  Nested entries each set the exception aside in turn.
+exception is pending.  The module therefore enters a Program with `JniProgramEntryHelper` (`src/Jvm.h`), which wraps
+`QoreExternalProgramContextHelper`; `GeneratedBindingContext` (`src/GeneratedBinding.h`), which enters the Programs of
+a generated binding, holds its entries as `JniProgramEntryHelper` objects as well.  No other code of the module uses
+`QoreExternalProgramContextHelper`.  A Java exception that is pending when the entry is left (an error of the code that
+ran in it, of the conversion of a call's arguments or result, of a save object callback, or of a check that the caller
+makes after the entry, such as the check of a second binding of a call) is set aside while the Program is left, and
+raised again after it.
+
+When an exception has been set aside, it stays the error of the code that raised it: a Java exception that the exit
+handler leaves pending is cleared and dropped.  When no exception was pending as the entry was left, nothing is set
+aside, and an exception that the exit handler leaves pending stays pending, as for any other entry.  Each entry sets
+the exception aside in turn, so that nested entries, and a call that holds several entries (a binding's Program and
+the Program of its metadata, or two bindings), leave each Program with no Java exception pending.
 
 ## The lifetime of the Qore exception of a `QoreExceptionWrapper`
 

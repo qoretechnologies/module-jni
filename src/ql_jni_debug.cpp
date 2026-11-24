@@ -361,6 +361,8 @@ void dbg_jni_native_throw_point() {
 static std::mutex fail_point_lock;
 static DbgJniFailPoint fail_point = DbgJniFailPoint::Attach;
 static std::thread::id fail_point_thread;
+// the number of times that the point is still to be reached before it fails
+static int64 fail_point_skip = 0;
 std::atomic<bool> dbg_jni_fail_point_set{false};
 
 // the names of the fail points
@@ -370,9 +372,11 @@ static const std::map<std::string, DbgJniFailPoint> fail_points = {
     {"program-copy", DbgJniFailPoint::ProgramCopy},
     {"native-cleanup-stop", DbgJniFailPoint::NativeCleanupStop},
     {"classpath", DbgJniFailPoint::Classpath},
+    {"governed-stack", DbgJniFailPoint::GovernedStack},
 };
 
-int dbg_jni_set_fail_point(const char* name) {
+int dbg_jni_set_fail_point(const char* name, int64 skip) {
+    assert(skip >= 0);
     auto i = fail_points.find(name);
     if (i == fail_points.end()) {
         return -1;
@@ -380,6 +384,7 @@ int dbg_jni_set_fail_point(const char* name) {
     std::lock_guard<std::mutex> guard(fail_point_lock);
     fail_point = i->second;
     fail_point_thread = std::this_thread::get_id();
+    fail_point_skip = skip;
     dbg_jni_fail_point_set.store(true, std::memory_order_release);
     return 0;
 }
@@ -402,9 +407,12 @@ QoreStringNode* dbg_jni_set_env_fail_point() {
     deleted), \c "program-copy" (the copy of the jni data of a Program for a child Program fails to attach the thread
     to the JVM), \c "native-cleanup-stop" (stopping the NativeCleanup thread in the module's teardown fails to attach
     the thread to the JVM), \c "classpath" (the class loader raises a Java exception while the next classpath is
-    added on the calling thread, as for an entry that cannot be added: qore#6779, see test/jni-classpath-error.qtest).
-    The point fails only on the thread that set it (the module is torn down on the thread that ends the process), so
-    that a test can prove that the C++ exception thrown there does not escape into libqore (qore#6787, qore#6788,
+    added on the calling thread, as for an entry that cannot be added: qore#6779, see test/jni-classpath-error.qtest),
+    \c "governed-stack" (the Java call of the check that the Java code on the thread's stack reaches a Program fails,
+    and leaves its Java exception pending, so that a test can make a call fail while it has entered a Program - see
+    test/jni-native-handles.qtest).  The point is passed \a skip times on the thread and fails when it is reached the
+    next time, so that a test can make a later check of a call fail.  The point fails only on the thread that set it
+    (the module is torn down on the thread that ends the process), so that a test can prove that the C++ exception thrown there does not escape into libqore (qore#6787, qore#6788,
     qore#6789) - see test/jni-cpp-exception-escape.qtest.  DEBUG builds only.
 */
 static QoreValue f_dbg_jni_fail_point(const QoreListNode* args, RuntimeConfig& rtcfg, ExceptionSink* xsink) {
@@ -414,9 +422,15 @@ static QoreValue f_dbg_jni_fail_point(const QoreListNode* args, RuntimeConfig& r
         dbg_jni_fail_point_set.store(false, std::memory_order_release);
         return QoreValue();
     }
-    if (dbg_jni_set_fail_point(point->c_str())) {
+    int64 skip = get_param_value(args, 1).getAsBigInt();
+    if (skip < 0) {
+        xsink->raiseException("DBG-JNI-FAIL-POINT-ERROR", "skip %lld is negative", static_cast<long long>(skip));
+        return QoreValue();
+    }
+    if (dbg_jni_set_fail_point(point->c_str(), skip)) {
         xsink->raiseException("DBG-JNI-FAIL-POINT-ERROR", "unknown point '%s'; expecting \"attach\", "
-            "\"program-data\", \"program-copy\", \"native-cleanup-stop\" or \"classpath\"", point->c_str());
+            "\"program-data\", \"program-copy\", \"native-cleanup-stop\", \"classpath\" or \"governed-stack\"",
+            point->c_str());
     }
     return QoreValue();
 }
@@ -425,6 +439,10 @@ bool dbg_jni_fail_point_hit(DbgJniFailPoint point) {
     std::lock_guard<std::mutex> guard(fail_point_lock);
     if (!dbg_jni_fail_point_set.load(std::memory_order_relaxed) || fail_point != point
             || fail_point_thread != std::this_thread::get_id()) {
+        return false;
+    }
+    if (fail_point_skip) {
+        --fail_point_skip;
         return false;
     }
     dbg_jni_fail_point_set.store(false, std::memory_order_release);
@@ -954,8 +972,8 @@ void init_jni_debug_functions(QoreNamespace& ns) {
         nothingTypeInfo, 1, stringOrNothingTypeInfo, QoreValue(), "name");
     ns.addBuiltinVariant("dbg_jni_native_throw", f_dbg_jni_native_throw, QCF_NO_FLAGS, QDOM_DEFAULT,
         nothingTypeInfo, 1, stringOrNothingTypeInfo, QoreValue(), "kind");
-    ns.addBuiltinVariant("dbg_jni_fail_point", f_dbg_jni_fail_point, QCF_NO_FLAGS, QDOM_DEFAULT, nothingTypeInfo, 1,
-        stringOrNothingTypeInfo, QoreValue(), "point");
+    ns.addBuiltinVariant("dbg_jni_fail_point", f_dbg_jni_fail_point, QCF_NO_FLAGS, QDOM_DEFAULT, nothingTypeInfo, 2,
+        stringOrNothingTypeInfo, QoreValue(), "point", softBigIntTypeInfo, QoreValue((int64)0), "skip");
     ns.addBuiltinVariant("dbg_jni_context_program_counts", f_dbg_jni_context_program_counts, QCF_NO_FLAGS,
         QDOM_DEFAULT, hashTypeInfo);
     ns.addBuiltinVariant("dbg_jni_set_shutdown_window_hook", f_dbg_jni_set_shutdown_window_hook, QCF_NO_FLAGS,

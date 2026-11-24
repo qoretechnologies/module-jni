@@ -922,6 +922,30 @@ public final class NativeHandleProbe {
         return callBinding(name, obj, binding, new UnreadableMap());
     }
 
+    //! Calls a static method binding of a generated class through the public entry point
+    public static String callStaticBinding(String name, long classBinding, long programId, long binding,
+            Object... args) {
+        return attempt(() -> JavaClassBuilder.doStaticCall(name, classBinding, programId, binding, 0L, args));
+    }
+
+    //! Calls a Qore function in the Program of a class loader with QoreJavaApi.callFunction(), with the class loader as
+    //! the thread's class loader context
+    public static String callFunctionIn(QoreURLClassLoader loader, String function, Object... args) {
+        Object[] ctx = QoreURLClassLoader.saveContext();
+        loader.setContext();
+        try {
+            return attempt(() -> QoreJavaApi.callFunction(function, args));
+        } finally {
+            QoreURLClassLoader.restoreContext(ctx);
+        }
+    }
+
+    //! Calls a Qore function in the Program of a class loader with an argument whose conversion to Qore raises a Java
+    //! exception
+    public static String callFunctionInUnreadableArg(QoreURLClassLoader loader, String function) {
+        return callFunctionIn(loader, function, new UnreadableMap());
+    }
+
     private static volatile Object keptWrapper;
 
     //! Keeps the Java wrapper of a Qore object, so that a later call does not convert the object again

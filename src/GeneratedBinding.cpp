@@ -225,12 +225,12 @@ GeneratedBindingContext::GeneratedBindingContext(jlong handle, GeneratedBindingK
         check_program(binding->pgm);
     }
     if (binding->metadata_pgm != binding->pgm) {
-        metadata_context.reset(new QoreExternalProgramContextHelper(xsink, binding->metadata_pgm));
+        metadata_context.emplace(xsink, binding->metadata_pgm);
         if (*xsink) {
             throw XsinkException(*xsink);
         }
     }
-    context.reset(new QoreExternalProgramContextHelper(xsink, binding->pgm));
+    context.emplace(xsink, binding->pgm);
     if (*xsink) {
         throw XsinkException(*xsink);
     }

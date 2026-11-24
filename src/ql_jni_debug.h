@@ -152,6 +152,10 @@ enum class DbgJniFailPoint {
     NativeCleanupStop,
     //! JniExternalProgramData::addClasspath() or addParentClasspath(): the class loader raises a Java exception
     Classpath,
+    //! the check that the Java code on the thread's stack reaches a Program (see
+    //! jni_check_governed_caller_reaches()): its Java call fails, and leaves its Java exception pending
+    //! (jni::JavaException)
+    GovernedStack,
 };
 
 //! A JDK feature version that the sandbox check of manifest Class-Path attributes assumes as well as the running
@@ -163,9 +167,12 @@ enum class DbgJniFailPoint {
 DLLLOCAL extern std::atomic<int> dbg_jni_classpath_jdk_feature;
 
 //! Sets the fail point named \a name for the calling thread, as Jni::dbg_jni_fail_point() does
-/** @return 0 if set, -1 if \a name is not the name of a fail point
+/** @param name the name of the fail point
+    @param skip the number of times that the point is reached on the calling thread before it fails
+
+    @return 0 if set, -1 if \a name is not the name of a fail point
 */
-DLLLOCAL int dbg_jni_set_fail_point(const char* name);
+DLLLOCAL int dbg_jni_set_fail_point(const char* name, int64 skip = 0);
 
 //! Sets the fail point named in the \c QORE_JNI_DBG_FAIL_POINT environment variable, if any, for the calling thread
 /** Called at the start of the module's initialization, so that a test can make the initialization fail at a point
@@ -180,7 +187,7 @@ DLLLOCAL QoreStringNode* dbg_jni_set_env_fail_point();
 DLLLOCAL extern std::atomic<bool> dbg_jni_fail_point_set;
 
 //! Returns true once, and clears the fail point, if the fail point set with Jni::dbg_jni_fail_point() is \a point
-//! and was set by the calling thread
+//! and was set by the calling thread, once the point has been reached on the thread as many times as it was set to skip
 DLLLOCAL bool dbg_jni_fail_point_hit(DbgJniFailPoint point);
 
 //! Returns true if the code at \a point must fail with a C++ exception, as set with Jni::dbg_jni_fail_point()

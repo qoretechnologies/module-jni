@@ -416,8 +416,10 @@ public final class QoreSandbox {
             for (; i < ptrs.length; ++i) {
                 try {
                     releaseClasspathManager0(ptrs[i]);
-                } catch (RuntimeException re) {
-                    e.addSuppressed(re);
+                } catch (Throwable re) {
+                    if (re != e) {
+                        e.addSuppressed(re);
+                    }
                 }
             }
             throw e;

@@ -5333,6 +5333,14 @@ static bool jni_program_ptr_sandboxed(jlong ptr) {
     of its own before
 */
 static bool jni_stack_allows(const QoreProgram* pgm) {
+#ifdef DEBUG
+    // a test fail point: the Java call below fails, and leaves its Java exception pending
+    if (dbg_jni_fail_at(DbgJniFailPoint::GovernedStack)) {
+        Env env(false);
+        jni_throw_runtime_exception(*env, "DBG-JNI-FAIL-POINT: governed-stack");
+        throw JavaException();
+    }
+#endif
     if (!jni_governed_java_used.load(std::memory_order_acquire)) {
         return true;
     }
