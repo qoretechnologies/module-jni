@@ -554,9 +554,11 @@ public class QoreURLClassLoader extends URLClassLoader {
         addEntryUrl(url, kind);
     }
 
-    //! Adds the files that a wildcard pattern of a classpath matches, and records the pattern once they are added
-    /** A pattern is recorded only after its addition succeeds, so it means that its files are on the classpath; a
-        pattern whose addition raises an error is not recorded, and the error reaches the caller.  A caller restricted
+    //! Adds the files that a wildcard pattern of a classpath matches, and records the pattern once its addition
+    //! completes
+    /** A pattern is recorded once its addition completes, also when its directory does not exist or matches nothing,
+        so it means that the files that it matched are on the classpath; a pattern whose addition raises an error is
+        not recorded, and the error reaches the caller.  A caller restricted
         only for the network skips a recorded pattern.  A grant of the host always adds the pattern again, so each
         loadable file that it matches is marked a grant, also one that such a caller added as a transparent entry; the
         class loader drops a URL that it has already, so concurrent or repeated additions add each file once.
@@ -573,8 +575,11 @@ public class QoreURLClassLoader extends URLClassLoader {
                 }
             }
         }
-        synchronized (this) {
-            entryStep("pattern-add");
+        // the monitor is only taken for a test hook
+        if (entryStepHook != null) {
+            synchronized (this) {
+                entryStep("pattern-add");
+            }
         }
         addWildcardIntern(pattern.getParentFile(), basename);
         synchronized (this) {

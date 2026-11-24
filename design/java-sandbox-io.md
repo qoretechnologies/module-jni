@@ -112,13 +112,14 @@ are `static_assert`ed to match) and calls `QoreSandboxManager::checkFilesystemAc
   record of its path (`classPathElements`), which are only used under it: a transparent entry is recorded before its
   URL is added, and a grant is marked after, also for a file or directory that is already on the classpath, so no
   lookup sees a transparent entry as a grant and a grant is not left transparent by a concurrent addition of the same
-  path.  A wildcard pattern is recorded only once its files are added, so a caller restricted only for the network
-  skips it only then, and a grant of the host always adds it again: each file that it matches is marked a grant before
-  its URL is added and again after.  A bound entry is recorded before its URL is added as well, but earlier and outside the monitor: its
-  policy is bound before any of its files is added.  When the host and restricted code add the same path, the kind
-  depends on their order: a later grant of the host replaces the binding, and a later binding applies its policy to
-  the grant.  A sandboxed caller never weakens a bound entry: a caller restricted only for the network leaves its kind
-  as it is, and restricted code adds its own policy to it.
+  path.  A wildcard pattern is recorded once its addition completes, also when its directory does not exist or
+  matches nothing, so a caller restricted only for the network skips it only then, and a grant of the host always adds
+  it again: each loadable file that it matches is marked a grant before its URL is added and again after.  A bound
+  entry is recorded before its URL is added as well, but earlier and outside the monitor: its policy is bound before
+  any of its files is added.  When the host and restricted code add the same path, the kind depends on their order: a
+  later grant of the host replaces the binding, and a later binding applies its policy to the grant.  A sandboxed
+  caller never weakens a bound entry: a caller restricted only for the network leaves its kind as it is, and
+  restricted code adds its own policy to it.
 - **Network-only callers.** A caller whose sandbox restricts the network but not the filesystem binds no filesystem
   policy and makes no per-file check: its entries have only their location checked, on every route, also the `global-*`
   module commands of a sandbox that allows uncontrolled APIs.  It is still sandboxed, so it makes no grant of the host:
