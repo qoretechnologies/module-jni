@@ -374,8 +374,9 @@ class Outer {
     and a removal that keeps failing is logged once, with no path; a compile does not raise this failure.  The copies
     are kept in one directory of the JVM that only its user can access, which is removed with its last copy if it is
     then empty; it stays, empty, and is used by the next copy if the JVM cannot read the temporary directory (for
-    example mode 1733 of another owner, or 0300 owned by the JVM's user) or the JDK has no secure directory stream.  A
-    retry only removes the directory it created: if that private directory no longer verifies (its type, owner, mode or
+    example mode 1733 of another owner, or 0300 owned by the JVM's user) or the JDK has no secure directory stream, as
+    for example a JDK on Alpine Linux (musl) can.  A private directory whose creation is refused is removed in any
+    case, so refusals leave nothing behind.  A retry only removes the directory it created: if that private directory no longer verifies (its type, owner, mode or
     identity changed), nothing below it is touched and its copies keep their share of the limits.  On a platform without
     POSIX file attributes or a secure directory stream in the JDK, a retry does not walk the directory, so such a copy
     keeps its share of the limits until the process ends.  A compile that needs a copy is refused unless the real path

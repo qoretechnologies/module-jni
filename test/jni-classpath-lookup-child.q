@@ -295,6 +295,12 @@ sub tmpdir_owner_case(string root, string tmp) {
     {
         ClasspathLookupProbe::setUnknownJvmUid();
         on_exit ClasspathLookupProbe::restoreTempOwner(tmp);
+        if (!ClasspathLookupProbe::hasSecureDirectoryStream()) {
+            # with no secure directory stream, the empty private parent stays and is used again, judged by the UID
+            # recorded when it was created; once it is gone, a new one must be created, which is refused
+            result("owner unreadable JVM UID reuse", "copies=1", q.callFunction("copy_outcome"));
+            result("owner empty parent removed", 1, ClasspathLookupProbe::removeEmptyParents());
+        }
         result("owner unreadable JVM UID", TempRefusal, q.callFunction("copy_outcome"));
         result("owner unreadable nothing created", 0, ClasspathLookupProbe::copyDirectories());
     }

@@ -163,7 +163,10 @@ are `static_assert`ed to match) and calls `QoreSandboxManager::checkFilesystemAc
   empty, under the lock that a new copy takes; only an empty directory can be removed this way.  That needs a secure
   directory stream on the temporary directory, so the empty parent stays, and the next copy reuses it, where the JVM
   cannot read that directory (for example mode 1733 of another owner, or 0300 owned by the JVM's user) or the JDK has no
-  such stream.  A copy is made and read by path, so a restricted copy is refused unless the real path of the JVM's
+  such stream (for example a JDK on musl that does not find the functions that it needs for one).  A new parent that is
+  refused is removed by its path where there is no such stream, as an empty directory only and only if it is still a
+  directory, so refusals do not accumulate: the temporary directory has passed its check by then, so only code of the
+  JVM's user or root can rename what is in it.  A copy is made and read by path, so a restricted copy is refused unless the real path of the JVM's
   `java.io.tmpdir`, read once, is a directory owned by the JVM's numeric UID or by root that is not writable by group or
   others or that has the sticky bit.  The JVM's UID comes from the JDK (`com.sun.security.auth.module.UnixSystem`), so
   no user name is needed and nothing is created to find it; a new parent must then have that UID, which is recorded and

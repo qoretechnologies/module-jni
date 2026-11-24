@@ -388,6 +388,10 @@ public class ClasspathLookupProbe {
             } else {
                 handle.getClass().getMethod("close").invoke(handle);
             }
+            if (!hasSecureDirectoryStream()) {
+                // documented: a retry does not walk a copy by path, so the copies stay, charged
+                return retryLeftCharged(budget, roots, 2);
+            }
             for (Path root : roots) {
                 if (Files.exists(root, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
                     return "the retry left a directory";
@@ -410,6 +414,31 @@ public class ClasspathLookupProbe {
             QoreURLClassLoader.restoreContext(context);
         }
     }
+
+    //! Where the JDK has no secure directory stream: checks that a retry left the copies live, charged and in place
+    /** As documented, a retry then does not walk a copy by path; the test removes the copies itself afterwards
+        @return "clean", or what is wrong
+    */
+    private static String retryLeftCharged(Object budget, List<Path> roots, int live) throws Exception {
+        String rv = "clean";
+        synchronized (budget) {
+            if (((java.util.Set<?>) field(budget, "live")).size() != live) {
+                rv = "a retry with no secure directory stream released a copy";
+            } else if (((long[]) field(budget, "used"))[ENTRIES_KIND] == 0) {
+                rv = "a retry with no secure directory stream returned the charges";
+            }
+        }
+        for (Path root : roots) {
+            if (rv.equals("clean") && !Files.isDirectory(root, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+                rv = "a retry with no secure directory stream removed a copy";
+            }
+            removeTestTree(root);
+        }
+        return rv;
+    }
+
+    //! the index of the directory entries that a copy is charged for
+    private static final int ENTRIES_KIND = 2;
 
     //! A file system provider over the default one, whose deletions fail with an I/O error while \a fail is set
     /** So that a failed removal is real for any user, also for root, for whom permissions do not stop a deletion
@@ -694,6 +723,9 @@ public class ClasspathLookupProbe {
     public static String removalFailure(QoreURLClassLoader parent, String dir, String scenario) throws Exception {
         Object[] context = QoreURLClassLoader.saveContext();
         java.io.PrintStream savedOut = System.out;
+        // the field, the private parent and its real path: the parent is shared by the next copies, so its path is
+        // restored whatever happens
+        Object[] restore = new Object[3];
         try {
             QoreURLClassLoader loader = QoreURLClassLoader.createDerived(parent);
             loader.addPath(dir);
@@ -713,7 +745,13 @@ public class ClasspathLookupProbe {
             Path realParent = (Path) parentPath.get(parentObject);
             int failedState = constant(copyClass, "FAILED");
             int doneState = constant(copyClass, "DONE");
+            restore[0] = parentPath;
+            restore[1] = parentObject;
+            restore[2] = realParent;
             FailingProvider provider = new FailingProvider();
+            // paths made from the parent go through the provider too, for a removal that walks the copy by path
+            provider.wrapDerived = true;
+            boolean secure = hasSecureDirectoryStream();
             parentPath.set(parentObject, provider.wrap(realParent));
 
             if (scenario.equals("during")) {
@@ -734,6 +772,12 @@ public class ClasspathLookupProbe {
                     return "the removal did not fail";
                 }
                 parentPath.set(parentObject, realParent);
+                if (!secure) {
+                    // documented: the retry that the release asked for does not walk the copy by path
+                    return (int) field(copy, "state") != failedState
+                        ? "a retry with no secure directory stream ended the copy"
+                        : retryLeftCharged(budget, List.of(root), 1);
+                }
                 if ((int) field(copy, "state") != doneState) {
                     close.invoke(handle);
                     return "a release during a removal did not get its retry";
@@ -773,14 +817,20 @@ public class ClasspathLookupProbe {
             }
             if (scenario.startsWith("root-")) {
                 return changedRoot(scenario, handle, copy, budget, parentObject, parentPath, realParent, root,
-                    provider);
+                    provider, secure);
             }
             if (scenario.startsWith("parent-")) {
                 return tamperedParent(scenario, loader, handle, copy, budget, parentObject, parentPath, realParent,
-                    root, provider);
+                    root, provider, secure);
             }
             parentPath.set(parentObject, realParent);
             close.invoke(handle);
+            if (!secure) {
+                // documented: a retry does not walk the copy by path, so it stays, charged
+                return (int) field(copy, "state") != failedState
+                    ? "a retry with no secure directory stream ended the copy"
+                    : retryLeftCharged(budget, List.of(root), 1);
+            }
             if ((int) field(copy, "state") != doneState) {
                 return "the retry did not end the copy";
             }
@@ -789,6 +839,9 @@ public class ClasspathLookupProbe {
             }
             return chargesReturned(budget) ? "clean" : "the charges were not returned";
         } finally {
+            if (restore[0] != null) {
+                ((java.lang.reflect.Field) restore[0]).set(restore[1], restore[2]);
+            }
             System.setOut(savedOut);
             QoreURLClassLoader.restoreContext(context);
         }
@@ -800,7 +853,8 @@ public class ClasspathLookupProbe {
         opened.  Nothing is removed by path, what is at the name stays, and the copy stays charged until it is restored.
     */
     private static String changedRoot(String scenario, Object handle, Object copy, Object budget, Object parentObject,
-            java.lang.reflect.Field parentPath, Path parent, Path root, FailingProvider provider) throws Exception {
+            java.lang.reflect.Field parentPath, Path parent, Path root, FailingProvider provider, boolean secure)
+            throws Exception {
         java.lang.reflect.Method close = handle.getClass().getMethod("close");
         int failedState = constant(copy.getClass(), "FAILED");
         int doneState = constant(copy.getClass(), "DONE");
@@ -841,7 +895,8 @@ public class ClasspathLookupProbe {
             boolean swapped = Files.exists(moved, java.nio.file.LinkOption.NOFOLLOW_LINKS);
             if (provider.pathDeletes != 0) {
                 rv = "the retry deleted by path";
-            } else if (scenario.equals("root-unverified") && provider.handleFailures == 0) {
+            } else if (secure && scenario.equals("root-unverified") && provider.handleFailures == 0) {
+                // with no secure directory stream, a retry opens nothing to verify
                 rv = "the failure to read the opened directory was not injected";
             } else if ((int) field(copy, "state") != failedState) {
                 rv = "the retry did not leave the copy failed";
@@ -866,6 +921,12 @@ public class ClasspathLookupProbe {
         close.invoke(handle);
         if (!rv.equals("clean")) {
             return rv;
+        }
+        if (!secure) {
+            // documented: a retry does not walk the copy by path, also once its root is restored
+            return (int) field(copy, "state") != failedState
+                ? "a retry with no secure directory stream ended the copy"
+                : retryLeftCharged(budget, List.of(root), 1);
         }
         if ((int) field(copy, "state") != doneState) {
             return "the copy did not end once its root was restored";
@@ -1067,7 +1128,21 @@ public class ClasspathLookupProbe {
             }
             release.invoke(parent);
         }
-        return Files.exists(parentDir, java.nio.file.LinkOption.NOFOLLOW_LINKS) ? "the parent remains" : "clean";
+        String left = parentLeft(parentDir);
+        return left != null ? left : "clean";
+    }
+
+    //! Checks the private parent once its last copy has ended; returns null if it is as documented, or what is wrong
+    /** It is removed where the JDK has a secure directory stream; elsewhere it stays, empty, and is used again
+    */
+    private static String parentLeft(Path parent) throws IOException {
+        if (!Files.exists(parent, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+            return null;
+        }
+        if (hasSecureDirectoryStream()) {
+            return "the parent remains";
+        }
+        return countTree(parent) == 1 ? null : "the parent that stays is not empty";
     }
 
     //! Returns null if opening a compiler classpath raises the refusal; a classpath that is opened is closed again
@@ -1140,8 +1215,9 @@ public class ClasspathLookupProbe {
         if (!rv.equals("clean")) {
             return rv;
         }
-        if (Files.exists(real, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
-            return "the parent remains";
+        String left = parentLeft(real);
+        if (left != null) {
+            return left;
         }
         if (!chargesReturned(budget)) {
             return "the charges were not returned";
@@ -1379,7 +1455,9 @@ public class ClasspathLookupProbe {
                     }
                     close.invoke(held);
                     heldOpen = false;
-                    return copyWorks(open, loader, parent, false);
+                    // the parent is removed with its last copy; where it cannot be (no secure directory stream), it
+                    // stays, empty, and is used again, as documented
+                    return copyWorks(open, loader, parent, !hasSecureDirectoryStream());
                 }
                 case "in-flight-empty":
                 case "in-flight-removed": {
@@ -1397,7 +1475,9 @@ public class ClasspathLookupProbe {
                     }
                     counted = false;
                     release.invoke(parent);
-                    return copyWorks(open, loader, parent, false);
+                    // an empty parent stays and is used again where it cannot be removed, as documented
+                    return copyWorks(open, loader, parent,
+                        scenario.equals("in-flight-empty") && !hasSecureDirectoryStream());
                 }
                 case "newroot-check": {
                     int left = countTree(real);
@@ -1452,7 +1532,7 @@ public class ClasspathLookupProbe {
     //! Makes the private parent fail its verification; a retry touches nothing, and works again once it is restored
     private static String tamperedParent(String scenario, QoreURLClassLoader loader, Object handle, Object copy,
             Object budget, Object parentObject, java.lang.reflect.Field parentPath, Path parent, Path root,
-            FailingProvider provider) throws Exception {
+            FailingProvider provider, boolean secure) throws Exception {
         java.lang.reflect.Method close = handle.getClass().getMethod("close");
         int failedState = constant(copy.getClass(), "FAILED");
         int doneState = constant(copy.getClass(), "DONE");
@@ -1509,7 +1589,8 @@ public class ClasspathLookupProbe {
                     rv = "the retry changed the copy";
                 } else if (scenario.equals("parent-replaced") && !Files.exists(marker)) {
                     rv = "the retry touched the directory that replaced the parent";
-                } else if (scenario.equals("parent-handle") && provider.handleFailures == 0) {
+                } else if (secure && scenario.equals("parent-handle") && provider.handleFailures == 0) {
+                    // with no secure directory stream, a retry opens nothing to verify
                     rv = "the failure to read the opened directory was not injected";
                 }
             }
@@ -1542,14 +1623,21 @@ public class ClasspathLookupProbe {
             return rv;
         }
         close.invoke(handle);
+        if (!secure) {
+            // documented: a retry does not walk the copy by path, also once the parent is restored
+            return (int) field(copy, "state") != failedState
+                ? "a retry with no secure directory stream ended the copy"
+                : retryLeftCharged(budget, List.of(root), 1);
+        }
         if ((int) field(copy, "state") != doneState) {
             return "the copy did not end once the parent was restored";
         }
         if (Files.exists(root, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
             return "the copy remains once the parent was restored";
         }
-        if (Files.exists(parent, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
-            return "the parent remains after its last copy";
+        String left = parentLeft(parent);
+        if (left != null) {
+            return left + " after its last copy";
         }
         return chargesReturned(budget) ? "clean" : "the charges were not returned";
     }
@@ -1880,13 +1968,52 @@ public class ClasspathLookupProbe {
         }
     }
 
-    //! Returns the number of compiler copy directories in the JVM's temporary directory
-    public static int copyDirectories() throws IOException {
+    //! Returns true if the JDK opens a directory of the JVM's temporary directory as a secure directory stream
+    /** Without one (ex: a JDK on musl that does not find the functions that it needs at run time), the removal of a
+        compiler copy follows its documented limits: only the first removal walks the copy by path, a retry leaves it
+        charged, and the empty private parent directory stays and is used again
+    */
+    public static boolean hasSecureDirectoryStream() throws IOException {
+        try (java.nio.file.DirectoryStream<Path> entries = Files.newDirectoryStream(
+                Path.of(System.getProperty("java.io.tmpdir")))) {
+            return entries instanceof java.nio.file.SecureDirectoryStream;
+        }
+    }
+
+    //! Removes the empty private parent directories of the JVM's temporary directory; returns how many it removed
+    public static int removeEmptyParents() throws IOException {
         int rv = 0;
         try (java.nio.file.DirectoryStream<Path> entries = Files.newDirectoryStream(
                 Path.of(System.getProperty("java.io.tmpdir")), "qore-classpath-*")) {
             for (Path entry : entries) {
-                ++rv;
+                if (Files.isDirectory(entry, java.nio.file.LinkOption.NOFOLLOW_LINKS) && countTree(entry) == 1) {
+                    Files.delete(entry);
+                    ++rv;
+                }
+            }
+        }
+        return rv;
+    }
+
+    //! Returns the number of compiler copy directories in the JVM's temporary directory
+    /** Each copy left in a private parent directory counts, and so does a private parent directory, except an empty
+        one where the JDK has no secure directory stream, which stays as documented
+    */
+    public static int copyDirectories() throws IOException {
+        boolean secure = hasSecureDirectoryStream();
+        int rv = 0;
+        try (java.nio.file.DirectoryStream<Path> entries = Files.newDirectoryStream(
+                Path.of(System.getProperty("java.io.tmpdir")), "qore-classpath-*")) {
+            for (Path entry : entries) {
+                if (secure || !Files.isDirectory(entry, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+                    ++rv;
+                    continue;
+                }
+                try (java.nio.file.DirectoryStream<Path> roots = Files.newDirectoryStream(entry)) {
+                    for (Path root : roots) {
+                        ++rv;
+                    }
+                }
             }
         }
         return rv;

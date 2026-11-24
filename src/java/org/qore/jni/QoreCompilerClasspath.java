@@ -698,11 +698,31 @@ public final class QoreCompilerClasspath implements AutoCloseable {
                 return new PrivateParent(dir, temp);
             } catch (IOException | RuntimeException e) {
                 // its text can name a path
-                cleanup(e, () -> removeEmpty(dir));
+                cleanup(e, () -> discardNew(dir));
                 throw new IOException(TEMP_REFUSAL);
             } catch (Error e) {
-                cleanup(e, () -> removeEmpty(dir));
+                cleanup(e, () -> discardNew(dir));
                 throw e;
+            }
+        }
+
+        //! Removes a new private directory that was refused, which is empty, so that refusals do not accumulate
+        /** Through the temporary directory where the JDK has a secure directory stream; elsewhere by its path, as an
+            empty directory only, and only if it is still a directory: the temporary directory has passed its check, so
+            only code of the JVM's user or root can rename what is in it, and code of the same user is not defended
+            against
+        */
+        private static void discardNew(Path dir) {
+            if (removeEmpty(dir)) {
+                return;
+            }
+            try {
+                if (Files.isDirectory(dir, LinkOption.NOFOLLOW_LINKS)) {
+                    // removes only an empty directory: a directory with entries is refused
+                    Files.delete(dir);
+                }
+            } catch (IOException | RuntimeException e) {
+                // it stays, and is empty
             }
         }
 
