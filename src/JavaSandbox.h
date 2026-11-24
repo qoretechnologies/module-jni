@@ -49,7 +49,7 @@ DLLLOCAL void jni_register_qore_sandbox_natives(Env& env, jclass cls);
 */
 DLLLOCAL void jni_release_sandbox_policy(jlong ptr);
 
-//! Releases a policy bound to classpath entries; the thread must be a Qore thread
+//! Releases the handle of a policy bound to classpath entries; a value that is not a live handle releases nothing
 /** Called by NativeCleanup for a QoreSandbox.ClasspathPolicy.
 */
 DLLLOCAL void jni_release_classpath_policy(jlong ptr);

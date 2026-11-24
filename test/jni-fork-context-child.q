@@ -11,16 +11,18 @@
 # changed the save object callback)
 #
 # The child's stderr is the write end of a pipe, which stays open until the child has ended: the parent reads the
-# module's markers from it until the end of the data, with a generous limit for each read, so that a child that does
-# not end is reported instead of blocking the test.  The parent kills such a child, and collects the child's exit status
-# in every case, so that a child that crashes in its cleanup is reported as well.
+# module's markers from it until the end of the data, so that a child that is blocked (see wait_fork_child()) is reported
+# instead of blocking the test, with no limit on the time that a child that makes progress can take.  The parent kills a
+# blocked child, and collects the child's exit status in every case, so that a child that crashes in its cleanup is
+# reported as well.
 
 %modern
 %prepend-module-path "${SCRIPT_DIR}/../build"
 %requires jni
 %module-cmd(jni) import java.lang.StringBuilder
 
-const ChildLimit = 30s;
+%include jni-fork-progress.ql
+
 const Holds = {
     "lock": "Jni::org::qore::jni::dbg_jni_hold_context_lock",
     "program": "Jni::org::qore::jni::dbg_jni_hold_context_program",
@@ -44,9 +46,14 @@ if (Holds{hold}) {
 } else if (hold == "own-program") {
     call_function(OwnHold);
 }
+# the child until it has been collected: it is killed also if the parent fails, as it holds the parent's output open
+*int uncollected;
 # only the parent has the thread of the hold
 on_exit {
     if (getpid() == parent_pid) {
+        if (uncollected) {
+            kill(uncollected, SIGKILL);
+        }
         if (Holds{hold}) {
             call_function(ReleaseHold);
         } else if (hold == "own-program") {
@@ -112,27 +119,19 @@ if (!pid) {
         swap_callback();
     }
 } else {
+    uncollected = pid;
     pipe.write.close();
-    bool ended = False;
-    while (pipe.read.isDataAvailable(ChildLimit)) {
-        # one byte: a larger read would wait for that many bytes, past the limit
-        *binary data = pipe.read.readBinary(1);
-        if (!data) {
-            ended = True;
-            break;
-        }
-        print(data.toString());
-    }
+    bool ended = wait_fork_child(pipe.read, pid, sub (binary data) { print(data.toString()); });
     if (ended) {
-        printf("parent: the child has ended: %s\n", call_function(WaitChild, pid));
+        string child_status = call_function(WaitChild, pid);
+        remove uncollected;
+        printf("parent: the child has ended: %s\n", child_status);
     } else {
         printf("parent: the child did not exit: pid %d\n", pid);
         flush();
-        if (ENV.QORE_JNI_FORK_HANG_STACK) {
-            system(sprintf("gdb -q -batch -p %d -ex 'thread apply all bt 14' > %s 2>&1", pid,
-                ENV.QORE_JNI_FORK_HANG_STACK));
-        }
+        fork_hang_stack(pid);
         kill(pid, SIGKILL);
+        remove uncollected;
         call_function(WaitChild, pid);
     }
     flush();

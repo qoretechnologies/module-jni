@@ -12,6 +12,12 @@
 
 using namespace jni;
 
+// the state of the JVM that the entries of the binding contexts read (see JniProgramEntryHelper in Jvm.h): no JVM is
+// created here, so no thread is attached, and no Java exception is set aside when an entry is left
+thread_local JNIEnv* Jvm::env = nullptr;
+bool Jvm::forked_child = false;
+std::atomic<bool> Jvm::exiting{false};
+
 static void check(bool condition, const char* message) {
     if (!condition) {
         throw std::runtime_error(message);

@@ -413,12 +413,11 @@ public class QoreJavaApiTest {
 
     // Test QoreClosure double call to get() after cleanup
     public static boolean testClosureDoubleRelease(QoreClosure closure) throws Throwable {
-        // Call to verify it works
-        closure.call(1L);
-        // Get pointer should still work
-        long ptr1 = closure.get();
+        // The closure stays usable for repeated calls until it is released
+        Object first = closure.call(1L);
+        Object second = closure.call(1L);
         // Let the cleaner do its job (closure goes out of scope after this)
-        return ptr1 != 0;
+        return Long.valueOf(2).equals(first) && first.equals(second);
     }
 
     // Tests for classloader management improvements

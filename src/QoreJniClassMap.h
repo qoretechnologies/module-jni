@@ -185,6 +185,69 @@ private:
     QoreModuleInnerLockHelper inner_marker;
 };
 
+//! Returns the Qore class whose constructor the Java subclass with the Qore class \a cid runs
+/** Each Qore class of a Java class records its superclass when it is made, and the links are followed to the generated
+    class, so that the result always describes the class's hierarchy; a field of a Java class is not read again.
+
+    @param cid the ID of the Qore class of the Java subclass
+    @param ctor_cid set to the ID of the Qore class of its nearest generated superclass
+
+    @return true if the class has one
+*/
+DLLLOCAL bool jni_get_java_subclass_ctor_class(qore_classid_t cid, qore_classid_t& ctor_cid);
+
+//! Records that the Program registered the Java class name as shared with the \c register-shared-class module command
+/** This native record, and not the class loader's registry, which Java code can reach, decides whether an object of
+    one Program can receive a generated method of the same class of another Program
+*/
+DLLLOCAL void jni_record_shared_class(const char* bin_name, const QoreProgram& pgm);
+
+//! Removes the shared class records of a Program that is being torn down; does nothing in a forked child
+DLLLOCAL void jni_purge_shared_classes(const QoreProgram& pgm);
+
+#ifdef DEBUG
+//! Runs the function with the lock of the shared class records held, for tests of a child process created with fork()
+DLLLOCAL void dbg_jni_with_shared_class_lock(const std::function<void()>& f);
+#endif
+
+//! What the class of a receiver is compared with, for a registered shared class
+struct JniSharedClassMatch {
+    //! the namespace path of the method's class
+    std::string path;
+    //! the path and the signature of the method's class (see get_class_hash())
+    std::string class_hash;
+    //! the module of the method's class, if it has one
+    std::string module;
+    bool has_module = false;
+};
+
+//! Returns true if the Program of the receiver and the Program that holds the class of a generated method both
+//! registered the Java name of that class with the module command
+/** Reads nothing of the receiver's Program but its ID, and enters no Program, so that a refused call runs no code of the
+    receiver's Program; sets \a match for jni_shared_class_matches()
+
+    @param env the JNI environment of the thread
+    @param receiver_pgm the Program of the receiver, which the object keeps allocated, or nullptr
+    @param method_class the class of the method
+    @param method_pgm the Program of the method's binding, which the calling thread has entered
+    @param match set to what the receiver's class is compared with
+*/
+DLLLOCAL bool jni_shared_class_registered(Env& env, const QoreProgram* receiver_pgm, const QoreClass& method_class,
+    QoreProgram* method_pgm, JniSharedClassMatch& match);
+
+//! Returns true if the class of \a match's path in the receiver's Program is the receiver's class or one of its parents,
+//! with the module and the signature of the method's class
+/** The calling thread must have entered the receiver's Program, which keeps its namespace, and the classes in it, until
+    the thread has left it; nothing is read from the namespace of the receiver's class itself, which the teardown of the
+    Program that holds it can delete while the object still exists.
+
+    @param receiver the class of the receiver
+    @param receiver_pgm the Program of the receiver, which the calling thread has entered
+    @param match set by jni_shared_class_registered()
+*/
+DLLLOCAL bool jni_shared_class_matches(const QoreClass& receiver, QoreProgram* receiver_pgm,
+    const JniSharedClassMatch& match);
+
 class QoreJniClassMap : public QoreJniClassMapBase {
 public:
     // the global class-map lock; see JniClassMapLocker for the lock hierarchy it participates in
@@ -1075,7 +1138,7 @@ DLLLOCAL JniExternalProgramData* jni_get_create_call_context(QoreProgram*& pgm, 
 
     @note a C++ exception from the entry leaves \a epch empty
 */
-DLLLOCAL int jni_enter_call_program(std::optional<QoreExternalProgramContextHelper>& epch, QoreProgram*& pgm,
+DLLLOCAL int jni_enter_call_program(std::optional<JniProgramEntryHelper>& epch, QoreProgram*& pgm,
         ExceptionSink* xsink);
 
 //! Makes the Program that a Java class is added to current, for its namespaces to be changed under its parse lock
@@ -1101,7 +1164,7 @@ DLLLOCAL int jni_enter_call_program(std::optional<QoreExternalProgramContextHelp
     @throw XsinkException the Program cannot be entered (PROGRAM-ERROR if it is being torn down or parsed), or its
     entry handler or thread initialization code raised an exception; the entry is then left when \a epch is destroyed
 */
-DLLLOCAL void jni_enter_program_for_class_add(std::optional<QoreExternalProgramContextHelper>& epch,
+DLLLOCAL void jni_enter_program_for_class_add(std::optional<JniProgramEntryHelper>& epch,
         QoreProgram* pgm, ExceptionSink& xsink);
 
 //! Returns true if Java code that the calling code called can call into \a pgm (qore#6845, qore#7023)
@@ -1237,7 +1300,7 @@ private:
     //! the Program, dependency-referenced, or nullptr
     QoreProgram* pgm = nullptr;
     //! the entry into the Program; empty if the Program is current (see jni_enter_program_for_class_add())
-    std::optional<QoreExternalProgramContextHelper> epch;
+    std::optional<JniProgramEntryHelper> epch;
 
     //! Validates the pointer and dependency-references its Program (see the constructors)
     DLLLOCAL void acquire(Env& env, jlong ptr, jobject loader, bool callback = false);

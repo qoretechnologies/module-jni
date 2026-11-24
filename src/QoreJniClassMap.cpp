@@ -861,7 +861,7 @@ JniQoreClass* QoreJniClassMap::findCreateQoreClassInProgram(QoreString& name, co
     // no runtime entry when the Program is current: a module command can add the class to a Program that has code
     // pending (see jni_enter_program_for_class_add()); xsink, declared above, outlives the entry, which uses it when it
     // is left
-    std::optional<QoreExternalProgramContextHelper> epch;
+    std::optional<JniProgramEntryHelper> epch;
     jni_enter_program_for_class_add(epch, pgm, xsink);
 
     // grab current Program's parse lock before manipulating namespaces
@@ -1160,7 +1160,7 @@ void QoreJniClassMap::addClassToProgram(JniQoreClass* qc, const char* jpath, Qor
     // pending (see jni_enter_program_for_class_add()); the sink is declared before the entry, which uses it when it is
     // left
     ExceptionSink xsink;
-    std::optional<QoreExternalProgramContextHelper> epch;
+    std::optional<JniProgramEntryHelper> epch;
     jni_enter_program_for_class_add(epch, pgm, xsink);
 
     // grab current Program's parse lock before manipulating namespaces
@@ -1517,6 +1517,154 @@ void QoreJniClassMap::addSuperClasses(JniQoreClass* qc, Class* jc, const char* j
     }
 }
 
+namespace {
+// the superclass of the Qore class of each Java subclass: a generated class, or the Qore class of a Java superclass
+// with no binding of its own; never destroyed, as a Java thread can construct an object while the process exits
+struct JniSubclassLink {
+    qore_classid_t parent;
+    bool generated;
+};
+
+struct JniSubclassCtorMap {
+    std::mutex lock;
+    std::unordered_map<qore_classid_t, JniSubclassLink> links;
+};
+
+JniSubclassCtorMap& jni_subclass_ctors() {
+    static JniSubclassCtorMap* map = new JniSubclassCtorMap;
+    return *map;
+}
+
+void jni_set_java_subclass_link(qore_classid_t cid, qore_classid_t parent, bool generated) {
+    JniSubclassCtorMap& map = jni_subclass_ctors();
+    std::lock_guard<std::mutex> guard(map.lock);
+    map.links[cid] = JniSubclassLink{parent, generated};
+}
+}
+
+bool jni_get_java_subclass_ctor_class(qore_classid_t cid, qore_classid_t& ctor_cid) {
+    JniSubclassCtorMap& map = jni_subclass_ctors();
+    std::lock_guard<std::mutex> guard(map.lock);
+    // the links are followed when the object is constructed, as a superclass can still be in progress when the Qore
+    // class of its subclass is made; the number of links bounds the walk
+    for (size_t steps = 0, e = map.links.size(); steps < e; ++steps) {
+        auto i = map.links.find(cid);
+        if (i == map.links.end()) {
+            return false;
+        }
+        if (i->second.generated) {
+            ctor_cid = i->second.parent;
+            return true;
+        }
+        cid = i->second.parent;
+    }
+    return false;
+}
+
+namespace {
+//! The Programs that registered each shared class name with the module command, by Program ID, which is never reused
+struct JniSharedClassMap {
+    std::mutex lock;
+    std::map<std::string, std::set<qore_program_id_t>> names;
+};
+
+// never destroyed, like the other maps used by Java threads that can run while the process exits
+JniSharedClassMap& jni_shared_classes() {
+    static JniSharedClassMap* map = new JniSharedClassMap;
+    return *map;
+}
+
+//! Returns true if the class has the path, the module and the signature given
+bool jni_same_shared_class(const QoreClass& cls, const std::string& class_hash, const char* mod) {
+    const char* cls_mod = cls.getModuleName();
+    if (!cls_mod != !mod || (mod && strcmp(cls_mod, mod))) {
+        return false;
+    }
+    return get_class_hash(cls) == class_hash;
+}
+}
+
+void jni_record_shared_class(const char* bin_name, const QoreProgram& pgm) {
+    JniSharedClassMap& map = jni_shared_classes();
+    std::lock_guard<std::mutex> guard(map.lock);
+    map.names[bin_name].insert(pgm.getProgramId());
+}
+
+void jni_purge_shared_classes(const QoreProgram& pgm) {
+    if (Jvm::isForkedChild()) {
+        // a child process created with fork() after the JVM was started: the records are used only for calls from
+        // Java, which cannot be used here, and a thread of the parent can have held their lock when the process was
+        // created
+        return;
+    }
+    qore_program_id_t id = pgm.getProgramId();
+    JniSharedClassMap& map = jni_shared_classes();
+    std::lock_guard<std::mutex> guard(map.lock);
+    for (auto i = map.names.begin(); i != map.names.end();) {
+        i->second.erase(id);
+        if (i->second.empty()) {
+            i = map.names.erase(i);
+        } else {
+            ++i;
+        }
+    }
+}
+
+#ifdef DEBUG
+void dbg_jni_with_shared_class_lock(const std::function<void()>& f) {
+    JniSharedClassMap& map = jni_shared_classes();
+    std::lock_guard<std::mutex> guard(map.lock);
+    f();
+}
+#endif
+
+bool jni_shared_class_registered(Env& env, const QoreProgram* receiver_pgm, const QoreClass& method_class,
+        QoreProgram* method_pgm, JniSharedClassMatch& match) {
+    // the Program whose namespace holds the method's class; for an imported class, the importing Program, whose host
+    // declares with the module command that the class it holds under this name is the shared class.  The method's
+    // class is read freely: the binding holds its Program, which the calling thread has entered
+    const QoreProgram* method_source = method_class.getProgram();
+    if (!method_source || !method_pgm || !receiver_pgm || receiver_pgm == method_source) {
+        return false;
+    }
+    JniExternalProgramData* jpc = static_cast<JniExternalProgramData*>(method_pgm->getExternalData("jni"));
+    if (!jpc) {
+        return false;
+    }
+    LocalReference<jstring> jname = jpc->getJavaNameForClass(env, method_class);
+    Env::GetStringUtfChars name(env, jname);
+    {
+        JniSharedClassMap& map = jni_shared_classes();
+        std::lock_guard<std::mutex> guard(map.lock);
+        auto i = map.names.find(name.c_str());
+        if (i == map.names.end() || !i->second.count(method_source->getProgramId())
+            || !i->second.count(receiver_pgm->getProgramId())) {
+            return false;
+        }
+    }
+    match.path = method_class.getNamespacePath();
+    match.class_hash = get_class_hash(method_class);
+    const char* mod = method_class.getModuleName();
+    match.has_module = mod != nullptr;
+    if (mod) {
+        match.module = mod;
+    }
+    return true;
+}
+
+bool jni_shared_class_matches(const QoreClass& receiver, QoreProgram* receiver_pgm, const JniSharedClassMatch& match) {
+    // the calling thread has entered the receiver's Program, which keeps its namespace until the thread has left it:
+    // the class of the path is looked up there, and the receiver's class is compared with it by ID only
+    ExceptionSink xsink;
+    const QoreClass* shared = receiver_pgm->findClass(match.path.c_str(), &xsink);
+    if (xsink) {
+        xsink.clear();
+        return false;
+    }
+    return shared && shared->getProgram() == receiver_pgm && receiver.getClass(shared->getID())
+        && jni_same_shared_class(*shared, match.class_hash, match.has_module ? match.module.c_str() : nullptr);
+}
+
 void QoreJniClassMap::addSuperClass(Env& env, JniQoreClass& qc, jni::Class* parent, bool interface, QoreProgram* pgm,
         JniExternalProgramData* jpc) {
     QoreClassUserDataHolder udh(parent);
@@ -1539,6 +1687,7 @@ void QoreJniClassMap::addSuperClass(Env& env, JniQoreClass& qc, jni::Class* pare
                 if (qore_parent->isFinal()) {
                     throw_exception = true;
                 } else {
+                    jni_set_java_subclass_link(qc.getID(), qore_parent->getID(), true);
                     qc.addBaseClass(qore_parent, true);
                     qc.addBuiltinVirtualBaseClass(QC_OBJECT);
                     return;
@@ -1584,6 +1733,9 @@ void QoreJniClassMap::addSuperClass(Env& env, JniQoreClass& qc, jni::Class* pare
         bool priv;
         if (qc.getClass(*pc, priv))
             return;
+    } else {
+        // a Java superclass with no binding of its own, which can still be in progress
+        jni_set_java_subclass_link(qc.getID(), pc->getID(), false);
     }
 
     qc.addBuiltinVirtualBaseClass(pc);
@@ -2840,6 +2992,12 @@ std::unique_ptr<GeneratedBindingLease> JniExternalProgramData::tryGetQoreClass(E
         jvalue arg;
         arg.l = Globals::javaQoreClassField;
         LocalReference<jobject> field = env.callObjectMethod(jcls, Globals::methodClassGetDeclaredField, &arg);
+        // the field of a generated class is static and final: a value that can change after the Qore class of a
+        // Java subclass was made from it would no longer describe that class
+        constexpr jint StaticFinal = 0x0008 | 0x0010;  // java.lang.reflect.Modifier.STATIC | FINAL
+        if ((env.callIntMethod(field, Globals::methodFieldGetModifiers, nullptr) & StaticFinal) != StaticFinal) {
+            return nullptr;
+        }
         arg.l = nullptr;
         jlong handle = env.callLongMethod(field, Globals::methodFieldGetLong, &arg);
         return std::make_unique<GeneratedBindingLease>(handle, GeneratedBindingKind::Class);
@@ -4582,10 +4740,10 @@ jobject QoreJniClassMap::getJavaObject(const QoreObject* o) {
 
     // return a new Java QoreObject with a weak reference to the actual Qore object; the handle also captures the
     // sandbox of the code that hands the object to Java, which governs the calls that Java makes
-    std::unique_ptr<JniObjectHandle> handle(new JniObjectHandle(const_cast<QoreObject*>(o)));
-    jvalue arg;
-    arg.j = reinterpret_cast<jlong>(handle.get());
     Env env;
+    JniHandleGuard<JniObjectHandle> handle(jni_make_native_state(new JniObjectHandle(const_cast<QoreObject*>(o))));
+    jvalue arg;
+    arg.j = handle.get();
     jobject rv = env.newObject(Globals::classQoreObject, Globals::ctorQoreObject, &arg).release();
     // the Java object owns the handle now; if it could not be created, the handle releases the weak reference
     handle.release();
@@ -4603,10 +4761,10 @@ jobject QoreJniClassMap::getJavaClosure(const ResolvedCallReferenceNode* call) {
     // return a new Java QoreClosure; weak references are not needed, as ResolvedCallReferenceNode objects always
     // implement a weak reference to any captured QoreObject*s; the handle references the closure and captures the
     // sandbox of the code that hands it to Java, which governs every call that Java makes and the release
-    std::unique_ptr<JniClosureHandle> handle(new JniClosureHandle(call));
-    jvalue arg;
-    arg.j = reinterpret_cast<jlong>(handle.get());
     Env env;
+    JniHandleGuard<JniClosureHandle> handle(jni_make_native_state(new JniClosureHandle(call)));
+    jvalue arg;
+    arg.j = handle.get();
     jobject rv = env.newObject(Globals::classQoreClosure, Globals::ctorQoreClosure, &arg).release();
     // the Java object owns the handle now; if it could not be created, the handle releases the closure
     handle.release();
@@ -4720,7 +4878,7 @@ static QoreValue exec_java_method(const QoreMethod& meth, BaseMethod* m, QoreObj
         // the current one (see jni_enter_call_program()); its jni data is looked up only then, as the Program's
         // teardown can destroy the data of a Program that the thread is not in; the entry is left when epch is
         // destroyed, also when an exception propagates; a call within the object's Program costs only the comparison
-        std::optional<QoreExternalProgramContextHelper> epch;
+        std::optional<JniProgramEntryHelper> epch;
         if (pgm && pgm != ::getProgram() && jni_enter_call_program(epch, pgm, xsink)) {
             return QoreValue();
         }
@@ -4966,7 +5124,7 @@ bool JniExternalProgramData::hasProgramData(const QoreProgram* pgm) {
     return reg.pgms.find(pgm) != reg.pgms.end();
 }
 
-void jni_enter_program_for_class_add(std::optional<QoreExternalProgramContextHelper>& epch, QoreProgram* pgm,
+void jni_enter_program_for_class_add(std::optional<JniProgramEntryHelper>& epch, QoreProgram* pgm,
         ExceptionSink& xsink) {
     assert(pgm);
     assert(!xsink);
@@ -5175,6 +5333,14 @@ static bool jni_program_ptr_sandboxed(jlong ptr) {
     of its own before
 */
 static bool jni_stack_allows(const QoreProgram* pgm) {
+#ifdef DEBUG
+    // a test fail point: the Java call below fails, and leaves its Java exception pending
+    if (dbg_jni_fail_at(DbgJniFailPoint::GovernedStack)) {
+        Env env(false);
+        jni_throw_runtime_exception(*env, "DBG-JNI-FAIL-POINT: governed-stack");
+        throw JavaException();
+    }
+#endif
     if (!jni_governed_java_used.load(std::memory_order_acquire)) {
         return true;
     }
@@ -5354,7 +5520,7 @@ void JniJavaProgramRef::release() noexcept {
     }
 }
 
-int jni_enter_call_program(std::optional<QoreExternalProgramContextHelper>& epch, QoreProgram*& pgm,
+int jni_enter_call_program(std::optional<JniProgramEntryHelper>& epch, QoreProgram*& pgm,
         ExceptionSink* xsink) {
     assert(!*xsink);
     if (!pgm || pgm == ::getProgram()) {
@@ -5872,9 +6038,9 @@ LocalReference<jobject> JniExternalProgramData::getJavaObject(const QoreObject* 
     jmethodID ctor = env.getMethod(jcls, "<init>", "(Lorg/qore/jni/QoreJavaObjectPtr;)V");
     // the handle makes the weak reference to the object and captures the sandbox of the code that hands the object to
     // Java, which governs the calls that Java makes
-    std::unique_ptr<JniObjectHandle> handle(new JniObjectHandle(const_cast<QoreObject*>(o)));
+    JniHandleGuard<JniObjectHandle> handle(jni_make_native_state(new JniObjectHandle(const_cast<QoreObject*>(o))));
     jvalue arg;
-    arg.j = reinterpret_cast<jlong>(handle.get());
+    arg.j = handle.get();
     LocalReference<jobject> jarg = env.newObject(Globals::classQoreJavaObjectPtr, Globals::ctorQoreJavaObjectPtr,
         &arg);
 

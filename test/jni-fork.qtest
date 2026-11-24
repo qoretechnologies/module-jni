@@ -7,8 +7,8 @@
 # so the child cannot use Java, and the module's cleanup in the child must not wait for any of them.
 #
 # Each child exits with exit() and writes its result to a pipe whose write end it keeps open until it has exited:
-# the parent reads until the end of the data, so it waits for the child's exit deterministically.  A child that
-# waits forever makes the parent wait forever (the test runner's time limit is only a guard).
+# the parent reads until the end of the data, so it waits for the child's exit deterministically.  A child that is
+# blocked is reported (see wait_fork_child()), and a child that makes progress can take as long as it needs.
 
 %modern
 %no-child-restrictions
@@ -21,6 +21,8 @@
 %module-cmd(jni) add-relative-classpath qore-jni-test.jar
 %module-cmd(jni) import org.qore.jni.test.GeneratedBindings
 %module-cmd(jni) import java.lang.StringBuilder
+
+%include jni-fork-progress.ql
 
 %exec-class JniForkTest
 
@@ -44,7 +46,17 @@ class JniForkTest inherits QUnit::Test {
             "binary sub bytes(string name) {\n"
             "    return QoreURLClassLoader::getCurrent().generateByteCode(\"qore.EmbeddedBindingTest.\" + name);\n"
             "}\n"
-            "sub wait_entered() { entered.get(); }\n"
+            "bool sub wait_entered(int ms) {\n"
+            "    try {\n"
+            "        entered.get(ms);\n"
+            "        return True;\n"
+            "    } catch (hash<ExceptionInfo> ex) {\n"
+            "        if (ex.err == \"QUEUE-TIMEOUT\") {\n"
+            "            return False;\n"
+            "        }\n"
+            "        rethrow;\n"
+            "    }\n"
+            "}\n"
             "sub release() { gate.push(1); }\n";
     }
 
@@ -53,6 +65,10 @@ class JniForkTest inherits QUnit::Test {
         addTestCase("a child raises JNI-FORK-ERROR when it uses Java", \javaInChildTest());
         addTestCase("a child deletes a Program whose binding a Java thread is calling", \bindingLeaseTest());
         addTestCase("a child ends its script, and the module is deleted", \moduleCleanupTest());
+        addTestCase("a child that blocks in its cleanup is reported", \blockedCleanupTest());
+        addTestCase("a child that crashes after writing its result is reported", \crashAfterResultTest());
+        addTestCase("a child whose result cannot be written exits at once", \writeFailureTest());
+        addTestCase("a child exits while a thread of the parent held the module's locks", \heldLocksTest());
         addTestCase("a child ends while another thread holds the context lock", \contextLockTest());
         addTestCase("a child ends while another thread holds the context Program", \contextProgramTest());
         addTestCase("a child ends while another thread holds the Program registry", \programRegistryTest());
@@ -62,6 +78,37 @@ class JniForkTest inherits QUnit::Test {
         addTestCase("a child ends with no hold on the context", \contextNoHoldTest());
         addTestCase("threads of a child change the save object callback", \saveObjectSwapTest());
         set_return_value(main());
+    }
+
+    # a Java thread of the parent holds the locks of the shared class records and of the handle registry at fork():
+    # they are locked forever in the child, which deletes a Program and exits by both routes
+    heldLocksTest() {
+        checkFork();
+        # a status other than 0 shows that the status of a child is read
+        hash<auto> control = runLocksChild("exit", 7);
+        if (control.status =~ /^skip:/) {
+            testSkip(trim(control.status));
+        }
+        checkLocksChild(control, "status: exited 7");
+        checkLocksChild(runLocksChild("exit", 0), "status: exited 0");
+        checkLocksChild(runLocksChild("end", 0), "status: exited 0");
+    }
+
+    #! checks how the child of heldLocksTest() ended, and that it reported finishing the deletion of its Program
+    private checkLocksChild(hash<auto> child, string status) {
+        assertEq(status, child.status);
+        assertRegex("(?s)child: ending\n.*child: deleted the Program\n", child.output, status);
+    }
+
+    #! runs the child script of heldLocksTest() and returns its output and the line with its result
+    /** The script reports a child that is blocked; see wait_fork_child()
+    */
+    private hash<auto> runLocksChild(string route, int status) {
+        string script = get_script_dir() + "/jni-fork-locks-child.q";
+        string output = backquote(sprintf("%s -b --enable-debug %s %s %d 2>&1",
+            shellQuote(QORE_ARGV[0]), shellQuote(script), route, status));
+        *list<*string> m = (output =~ x/^((?:status|skip): .*)$/m);
+        return {"status": exists m ? m[0] : "no result: " + output, "output": output};
     }
 
     # the child exits with exit(), which runs the module's exit handler; it waited forever for the NativeCleanup
@@ -115,43 +162,75 @@ class JniForkTest inherits QUnit::Test {
         assertEq(8, f.function(7));
         object thread = f.functionInThread("hold", 1);
         # the Java thread is in the call when hold() has signaled it
-        p.callFunction("wait_entered");
+        wait_fork_holder(p, thread);
+        int parent_pid = getpid();
+        bool released = False;
+        code release = sub () {
+            # only the parent has the thread; it leaves the call
+            if (!released && getpid() == parent_pid) {
+                released = True;
+                release_fork_holder(p, thread);
+            }
+        };
+        # also if the fork or the read of the child's result fails
+        on_exit release();
         string result = runChild(string sub () {
             delete p;
             return "deleted";
-        }, sub () {
-            # the parent's thread leaves the call
-            p.callFunction("release");
-            thread.join();
-        });
+        }, release);
         assertEq("deleted", result);
         assertEq(8, f.function(7));
     }
 
     # the child ends its script normally, so the module is deleted in it; it waited forever for the NativeCleanup
-    # thread, which does not exist in the child.  The script runs in another process, whose output, and the child's,
-    # is read until both have exited.
+    # thread, which does not exist in the child.  The script reports a child that is blocked (see wait_fork_child()).
     moduleCleanupTest() {
         checkFork();
-        TmpFile script(NOTHING, ".q");
-        # the processes load the jni module that this test loaded
-        script.file.write(sprintf("%%prepend-module-path \"%s\"\n", dirname(get_module_hash().jni.filename))
-            + "%modern\n%requires jni\n"
-            "%module-cmd(jni) import java.lang.StringBuilder\n"
-            "StringBuilder sb(\"used\");\n"
-            "printf(\"parent: %s\\n\", sb.toString());\n"
-            "flush();\n"
-            "if (!fork()) {\n"
-            "    printf(\"child: done\\n\");\n"
-            "} else {\n"
-            "    printf(\"parent: done\\n\");\n"
-            "}\n");
-        script.file.close();
-        string output = backquote(sprintf("%s -b --enable-debug %s 2>&1", shellQuote(QORE_ARGV[0]),
-            shellQuote(script.path)));
+        string output = runCleanupChild("none");
         assertRegex("parent: used", output);
         assertRegex("child: done", output);
-        assertRegex("parent: done", output);
+        # the wait status, or "unknown" with no /proc
+        assertRegex("parent: the child has ended: (0|unknown)\n", output);
+    }
+
+    # a child that blocks in the cleanup of its script is reported and killed, instead of blocking the test
+    blockedCleanupTest() {
+        checkFork();
+        if (!is_dir("/proc/self/task")) {
+            testSkip("a blocked child cannot be told from a slow one without /proc");
+        }
+        string output = runCleanupChild("block");
+        assertRegex("child: done", output);
+        assertRegex("parent: the child did not exit", output);
+    }
+
+    #! runs the child script of the module cleanup tests and returns its output
+    private string runCleanupChild(string mode) {
+        return backquote(sprintf("%s -b --enable-debug %s %s 2>&1", shellQuote(QORE_ARGV[0]),
+            shellQuote(get_script_dir() + "/jni-fork-cleanup-child.q"), mode));
+    }
+
+    # the exit status of a child is checked: this child writes its result, and is then killed before it exits
+    crashAfterResultTest() {
+        checkFork();
+        if (!is_dir("/proc/self/task")) {
+            testSkip("the exit status of a child is not known without /proc");
+        }
+        hash<auto> h = runChildStatus(string sub () { return "written"; }, NOTHING, "crash");
+        assertEq("written", h.result);
+        assertEq(SIGKILL, h.status & 0x7f, "the status shows the signal that ended the child");
+    }
+
+    # a child whose result cannot be written exits at once with an error status: it must not unwind into the test
+    # framework, which would run the remaining tests in the child
+    writeFailureTest() {
+        checkFork();
+        if (!is_dir("/proc/self/task")) {
+            testSkip("the exit status of a child is not known without /proc");
+        }
+        hash<auto> h = runChildStatus(string sub () { return "unwritten"; }, NOTHING, "write-fails");
+        assertNothing(h.result, "the child wrote no result");
+        assertEq(1 << 8, h.status, "the child exited with status 1");
     }
 
     # the module's cleanup in a child does not wait for a lock or a holder that a thread of the parent left: that thread
@@ -197,26 +276,26 @@ class JniForkTest inherits QUnit::Test {
         }
     }
 
-    #! skips the test if the module's debug hooks or the bound of the child script are not available
+    #! skips the test if the module's debug hooks are not available
     private checkContextHooks() {
         checkFork();
         try {
             call_function("Jni::org::qore::jni::dbg_jni_context_program_counts");
         } catch (hash<ExceptionInfo> ex) {
-            testSkip("the jni module's debug hooks require a debug build");
-        }
-        # the script limits its wait for the child; this limit is for the script itself
-        if (system("command -v timeout > /dev/null 2>&1")) {
-            if (ENV.CI) {
-                throw "TIMEOUT-MISSING", "the timeout command is required in CI for this test";
+            # only the hook's absence from a build that is not a debug build is a skip
+            if (ex.err == "NO-FUNCTION" && ex.desc =~ /dbg_jni_context_program_counts/) {
+                testSkip("the jni module's debug hooks require a debug build");
             }
-            testSkip("the timeout command is not available");
+            rethrow;
         }
     }
 
-    #! runs the child script, with a limit, and returns its output
+    #! runs the child script and returns its output
+    /** The script reports a child that is blocked (see wait_fork_child()); a limit on the time of the whole script would
+        measure the start of the JVM in the parent, which depends on the load
+    */
     private string runContextChild(string hold, string ending) {
-        return backquote(sprintf("timeout -s KILL 150 %s -b --enable-debug %s %s %s 2>&1", shellQuote(QORE_ARGV[0]),
+        return backquote(sprintf("%s -b --enable-debug %s %s %s 2>&1", shellQuote(QORE_ARGV[0]),
             shellQuote(get_script_dir() + "/jni-fork-context-child.q"), hold, ending));
     }
 
@@ -260,8 +339,27 @@ class JniForkTest inherits QUnit::Test {
 
         @param child the code run in the child
         @param parent code run in the parent after fork(), before the result is read
+
+        @return the child's result; the child must have exited with status 0
     */
     private string runChild(code child, *code parent) {
+        hash<auto> h = runChildStatus(child, parent);
+        # not known without /proc
+        if (exists h.status) {
+            assertEq(0, h.status, "the exit status of the child: " + h.result);
+        }
+        return h.result;
+    }
+
+    #! runs the code in a child process as runChild() does, and returns its result and its wait status
+    /** @param child the code run in the child
+        @param parent code run in the parent after fork(), before the result is read
+        @param mode \c "crash": the child is killed after it has written its result, instead of exiting;
+        \c "write-fails": the write of the result fails, while the child still holds the pipe
+
+        @return a hash with \c result and \c status, the wait status of the child, if it is known
+    */
+    private hash<auto> runChildStatus(code child, *code parent, *string mode) {
         # an anonymous pipe needs no file, and the parent cannot block in the open of a named pipe that a child
         # ending early never opens
         hash<PipeInfo> pipe = File::getPipe();
@@ -271,26 +369,48 @@ class JniForkTest inherits QUnit::Test {
         if (!pid) {
             # the child holds the write end until it has exited: if it ends before it has written its result, the
             # parent reads to the end of what it wrote
-            pipe.read.close();
-            string result;
+            # nothing here may unwind into the test framework, which would run the remaining tests in this process
             try {
-                result = child();
+                pipe.read.close();
+                string result;
+                try {
+                    result = child();
+                } catch (hash<ExceptionInfo> ex) {
+                    result = "exception: " + ex.err;
+                }
+                if (mode == "write-fails") {
+                    # a file that is not open: the write end of the pipe stays open until this process has exited
+                    File unopened();
+                    unopened.write(result);
+                }
+                pipe.write.write(result);
+                if (mode == "crash") {
+                    # a signal that cannot be handled or blocked, and that leaves no core file
+                    kill(getpid(), SIGKILL);
+                }
             } catch (hash<ExceptionInfo> ex) {
-                result = "exception: " + ex.err;
+                Qore::exit(1);
             }
-            pipe.write.write(result);
             Qore::exit(0);
         }
         pipe.write.close();
         assertGt(0, pid);
+        # a child that has not ended is killed also if the code below fails: it holds the test's standard output open
+        bool ended = False;
+        on_exit {
+            if (!ended) {
+                kill(pid, SIGKILL);
+            }
+        }
         if (parent) {
             parent();
         }
         string result;
-        while (*binary data = pipe.read.readBinary(4096)) {
-            result += data.toString();
+        if (!wait_fork_child(pipe.read, pid, sub (binary data) { result += data.toString(); })) {
+            return {"result": "child blocked: " + result};
         }
-        return result;
+        ended = True;
+        return {"result": result, "status": fork_child_exit_status(pid)};
     }
 
     private static string shellQuote(string arg) {

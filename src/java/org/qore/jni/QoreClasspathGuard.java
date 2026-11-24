@@ -117,10 +117,11 @@ final class QoreClasspathGuard {
         for (QoreSandbox.ClasspathPolicy p : a) {
             rv.add(p);
         }
+        // each policy of b is compared with those kept so far, so that b's own duplicates are dropped as well
         for (QoreSandbox.ClasspathPolicy p : b) {
             boolean found = false;
-            for (QoreSandbox.ClasspathPolicy q : a) {
-                found = found || q.id() == p.id();
+            for (QoreSandbox.ClasspathPolicy q : rv) {
+                found = found || q.samePolicy(p);
             }
             if (!found) {
                 rv.add(p);

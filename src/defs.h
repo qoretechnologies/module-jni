@@ -35,9 +35,11 @@
 #include <qore/QoreSandboxManager.h>
 
 #include "jni.h"
+#include "JniHandleRegistry.h"
 
 #include <stdarg.h>
 #include <memory>
+#include <mutex>
 
 //! Returns true if a sandbox that does not trust the calling code governs it
 /** With a %Qore that has the uncontrolled-API policy of sandboxes (\c SandboxManager::setUncontrolledApiPolicy()),
@@ -497,8 +499,7 @@ private:
 };
 
 //! The native state of a Java \c org.qore.jni.QoreObjectBase object: a weak reference to a Qore object in Java
-/** The pointer to the handle is the \c obj field of the Java object, which the generated Java classes of Qore
-    classes pass to the native methods unchanged.  Java can call the methods of the object on any thread, including
+/** Java holds an opaque handle of this state (see JniHandleRegistry.h), never its address.  Java can call the methods of the object on any thread, including
     a thread that Qore did not start and that has no Qore caller, so they are called, and the object is destroyed,
     under the sandbox of the code that handed the object to Java, captured when the handle is created (for an object
     that Java creates, the code that runs the Java constructor).
@@ -513,12 +514,6 @@ public:
     //! Releases the weak reference
     DLLLOCAL ~JniObjectHandle() {
         obj->tDeref();
-    }
-
-    //! Returns the handle that a Java object carries
-    DLLLOCAL static JniObjectHandle* fromJava(jlong ptr) {
-        assert(ptr);
-        return reinterpret_cast<JniObjectHandle*>(ptr);
     }
 
     //! Returns the object
@@ -539,6 +534,58 @@ private:
     JniObjectHandle(const JniObjectHandle&) = delete;
     JniObjectHandle& operator=(const JniObjectHandle&) = delete;
 };
+
+//! The native state of a Java \c org.qore.jni.QoreExceptionWrapper: a Qore exception held for Java
+/** The lock serializes reading the exception with taking it, as Java can do both on any thread
+*/
+class JniExceptionHandle {
+public:
+    DLLLOCAL JniExceptionHandle() {
+        sink.markExternallyManaged();
+    }
+
+    DLLLOCAL ~JniExceptionHandle() {
+        sink.clear();
+    }
+
+    std::mutex lock;
+    ExceptionSink sink;
+
+    JniExceptionHandle(const JniExceptionHandle&) = delete;
+    JniExceptionHandle& operator=(const JniExceptionHandle&) = delete;
+};
+
+template <>
+struct JniHandleTraits<JniClosureHandle> {
+    static constexpr JniHandleKind kind = JniHandleKind::Closure;
+};
+
+template <>
+struct JniHandleTraits<JniObjectHandle> {
+    static constexpr JniHandleKind kind = JniHandleKind::Object;
+};
+
+template <>
+struct JniHandleTraits<JniExceptionHandle> {
+    static constexpr JniHandleKind kind = JniHandleKind::ExceptionWrapper;
+};
+
+//! Runs the release of native state on any thread
+/** The last reference to the state can be dropped on a thread that is not attached to Qore, or with a Java exception
+    pending, and the release can run Qore code (a destructor): the thread is attached for the release, the record of
+    the calling code is cleared, and a pending Java exception is kept.  Nothing is thrown.
+*/
+DLLLOCAL void jni_release_native_state(void (*release)(void*), void* state) noexcept;
+
+//! Returns a shared pointer that releases the state with jni_release_native_state()
+/** If the pointer cannot be allocated, the state is released and std::bad_alloc is thrown
+*/
+template <typename T>
+std::shared_ptr<T> jni_make_native_state(T* state) {
+    return std::shared_ptr<T>(state, [](T* p) {
+        jni_release_native_state([](void* v) { delete static_cast<T*>(v); }, p);
+    });
+}
 
 //! Counts an attachment of the calling thread to Qore by the module (\a attached true) or its end (false)
 /** A thread that the module attached is one that Java started: its Qore caller is not known (qore#7023)

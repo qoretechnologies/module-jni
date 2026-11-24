@@ -317,20 +317,48 @@ public final class QoreSandbox {
         check is a denial.
     */
     static final class ClasspathPolicy {
-        //! the referenced native policy manager
+        //! the opaque handle of the native policy, which holds a reference to it
         private final NativeCleanup.Ref ref;
-        //! the address of the policy manager, which identifies it while this object holds its reference
+        //! the handle, which identifies this object's hold of the policy
         private final long id;
 
-        //! Takes a reference to the native policy manager \a ptr, unless an exception is raised
-        ClasspathPolicy(long ptr) {
-            ref = NativeCleanup.register(this, ptr, NativeCleanup.KIND_CLASSPATH_POLICY);
-            id = ptr;
+        //! Takes the opaque handle \a handle of a native policy, unless an exception is raised
+        ClasspathPolicy(long handle) {
+            ref = NativeCleanup.register(this, handle, NativeCleanup.KIND_CLASSPATH_POLICY);
+            id = handle;
         }
 
-        //! Returns the identity of the policy
+        //! Returns the identity of this object's hold of the policy
         long id() {
             return id;
+        }
+
+        //! Returns true if both objects hold the same native policy
+        boolean samePolicy(ClasspathPolicy other) {
+            if (other == this || other.id == id) {
+                return true;
+            }
+            long p = ref.enter();
+            if (p == 0) {
+                return false;
+            }
+            try {
+                long q = other.ref.enter();
+                if (q == 0) {
+                    return false;
+                }
+                try {
+                    return sameClasspathPolicy0(p, q);
+                } catch (RuntimeException e) {
+                    return false;
+                } finally {
+                    other.ref.exit();
+                }
+            } finally {
+                ref.exit();
+                Reference.reachabilityFence(this);
+                Reference.reachabilityFence(other);
+            }
         }
 
         //! Returns true if the policy allows reading \a path, which is a real path in the JVM's file name encoding
@@ -383,9 +411,16 @@ public final class QoreSandbox {
             }
             return rv;
         } catch (Throwable e) {
-            // the references that no object has taken
+            // the handles that no object has taken; a failure to release one neither stops the release of the others
+            // nor replaces the original exception
             for (; i < ptrs.length; ++i) {
-                releaseClasspathManager0(ptrs[i]);
+                try {
+                    releaseClasspathManager0(ptrs[i]);
+                } catch (Throwable re) {
+                    if (re != e) {
+                        e.addSuppressed(re);
+                    }
+                }
             }
             throw e;
         }
@@ -846,12 +881,16 @@ public final class QoreSandbox {
     //! Returns the JNI-SANDBOX-ERROR exception for a closed policy
     private static native RuntimeException closedError0();
 
-    //! Returns new references to the filesystem policies of the captured policy \a ptr, or of the current thread if 0
+    //! Returns new opaque handles of the filesystem policies of the captured policy \a ptr, or of the current thread
+    //! if 0; each handle holds the policy until it is released with releaseClasspathManager0()
     private static native long[] classpathManagers0(long ptr);
 
-    //! Returns true if the policy manager \a ptr alone allows reading \a path
+    //! Returns true if the policy of the classpath policy handle \a ptr alone allows reading \a path
     private static native boolean checkClasspathRead0(long ptr, byte[] path);
 
-    //! Releases a reference returned by classpathManagers0()
+    //! Releases a handle returned by classpathManagers0()
     private static native void releaseClasspathManager0(long ptr);
+
+    //! Returns true if two live classpath policy handles hold the same native policy
+    private static native boolean sameClasspathPolicy0(long a, long b);
 }

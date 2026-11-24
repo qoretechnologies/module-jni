@@ -77,15 +77,19 @@ public final class ReleasedHandleCalls {
     }
 
     //! sets NativeCleanup's release wait hook (with reflection, so that the class loads with any version of the
-    //! module); returns false if the module has none
+    //! module); returns false if the module has none, or is not a debug build
     private static boolean setReleaseWaitHook(Runnable hook) {
         try {
             Method m = Class.forName("org.qore.jni.NativeCleanup").getMethod("setReleaseWaitHook", Runnable.class);
-            m.invoke(null, hook);
-            return true;
+            return Boolean.TRUE.equals(m.invoke(null, hook));
         } catch (ReflectiveOperationException e) {
             return false;
         }
+    }
+
+    //! Returns true if the module runs the release wait hook
+    public static boolean releaseWaitHookEnabled() {
+        return setReleaseWaitHook(null);
     }
 
     //! Releases the object kept while a call of its method "block" (which calls blockInCall()) is in progress on
@@ -98,6 +102,16 @@ public final class ReleasedHandleCalls {
         release, and the result of className() after the release
     */
     public static String releaseWhileInUse() throws InterruptedException {
+        return releaseWhileInUse(false, false);
+    }
+
+    //! As releaseWhileInUse(), with a hook that throws after it opens the gate if \a throwing is true
+    public static String releaseWhileInUse(boolean throwing) throws InterruptedException {
+        return releaseWhileInUse(throwing, false);
+    }
+
+    //! As releaseWhileInUse(boolean); with \a force, the hook is also stored directly in NativeCleanup's private field
+    public static String releaseWhileInUse(boolean throwing, boolean force) throws InterruptedException {
         QoreObject obj = (QoreObject)kept;
         inCall = new CountDownLatch(1);
         gate = new CountDownLatch(1);
@@ -112,10 +126,28 @@ public final class ReleasedHandleCalls {
         t.start();
         inCall.await();
         final boolean[] ran = {false};
-        boolean hook = setReleaseWaitHook(() -> {
+        Runnable waitHook = () -> {
             ran[0] = true;
             gate.countDown();
-        });
+            if (throwing) {
+                throw new IllegalStateException("the hook failed");
+            }
+        };
+        boolean hook = setReleaseWaitHook(waitHook);
+        if (force) {
+            try {
+                java.lang.reflect.Field f = Class.forName("org.qore.jni.NativeCleanup")
+                    .getDeclaredField("releaseWaitHook");
+                f.setAccessible(true);
+                f.set(null, waitHook);
+            } catch (ReflectiveOperationException e) {
+                throw new AssertionError("cannot set the hook field", e);
+            }
+        }
+        // a module that runs no hook: the release waits for the call, which must be able to return
+        if (!hook) {
+            gate.countDown();
+        }
         String release;
         try {
             obj.release();
@@ -202,6 +234,7 @@ public final class ReleasedHandleCalls {
         Field ptr = refClass.getDeclaredField("ptr");
         Field claimed = refClass.getDeclaredField("claimed");
         Field users = refClass.getDeclaredField("users");
+        ptr.setAccessible(true);
         claimed.setAccessible(true);
         users.setAccessible(true);
         synchronized (ref) {
@@ -235,17 +268,28 @@ public final class ReleasedHandleCalls {
     //! Ends a use of the handle of the object kept that was never begun, before and after the object is released;
     //! each must raise an IllegalStateException and change nothing, so that a call on the object still works before
     //! the release
-    public static String exitUnmatched() {
+    public static String exitUnmatched() throws Throwable {
         QoreObject obj = (QoreObject)kept;
         String before = exitResult(obj);
         String call = call("classname");
         // a valid use still begins and ends
-        long p = obj.qoreJniEnterHandle();
-        obj.qoreJniExitHandle();
+        long p = (Long)handleUse(obj, "qoreJniEnterHandle");
+        handleUse(obj, "qoreJniExitHandle");
         String valid = p != 0 ? "ok" : "no handle";
         obj.release();
         return "before: " + before + "; call: " + call + "; valid: " + valid + "; released: " + exitResult(obj)
             + "; after: " + call("classname");
+    }
+
+    //! calls a method of the object that is internal to the module, and raises the exception that it raises
+    private static Object handleUse(QoreObject obj, String name) throws Throwable {
+        Method m = QoreObjectBase.class.getDeclaredMethod(name);
+        m.setAccessible(true);
+        try {
+            return m.invoke(obj);
+        } catch (InvocationTargetException e) {
+            throw e.getCause();
+        }
     }
 
     //! ends a use of the object's handle that was never begun; returns the exception and the number of uses in
@@ -253,7 +297,7 @@ public final class ReleasedHandleCalls {
     private static String exitResult(QoreObject obj) {
         String rv;
         try {
-            obj.qoreJniExitHandle();
+            handleUse(obj, "qoreJniExitHandle");
             rv = "no exception";
         } catch (Throwable t) {
             rv = t.getClass().getName() + ": " + t.getMessage();
