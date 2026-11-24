@@ -1132,6 +1132,34 @@ DLLLOCAL bool jni_governed_caller_reaches_intern(const QoreProgram* pgm);
 */
 DLLLOCAL bool jni_restricting_sandbox_governs();
 
+//! Returns the Program of the calling code that a restricting sandbox governs, through library code (qore#7394)
+/** \a pgm is the Program of the calling code as the Program context of the call, or the frame of a builtin call,
+    names it.  The code of a library (a module's Program, which the code of every Program that calls it shares) runs
+    with its own Program as both: for code that a restricting sandbox governs (jni_restricting_sandbox_governs()), the
+    Program of the calling code is then the Program of the code that the library code serves, the caller Program of
+    libqore's call chain (qore_get_caller_program()), never the library's shared Program, for the Java state that the
+    module creates or places for the calling code and for the checks of the Program that Java code reaches.  Code that
+    no restricting sandbox governs keeps \a pgm.
+
+    Only the current Program is resolved: a Program other than the current one (the Program of an object or a class
+    that the call has entered, or the Program of a callback that the module set as the Program context) is returned as
+    it is.
+
+    @param pgm the Program of the calling code
+    @param known set to false if the Program is not known: library code that a restricting sandbox governs serves code
+    that the call chain does not identify, or code of a Program that the thread does not run in (work handed to the
+    thread, whose caller the thread does not hold), or the sandbox could not be resolved
+
+    @return the Program of the calling code, or nullptr if it is not known (fail closed)
+*/
+DLLLOCAL QoreProgram* jni_calling_code_program(QoreProgram* pgm, bool& known) noexcept;
+
+//! As jni_calling_code_program(), for the Java state that the module creates or places for the calling code
+/** @throw BasicException the Program of the calling code is not known: the state would otherwise be placed in the
+    library's shared Program
+*/
+DLLLOCAL QoreProgram* jni_calling_code_program_for_state(QoreProgram* pgm);
+
 //! Returns true if \a sm restricts its code: filesystem or network access, or uncontrolled APIs
 /** Resource limits and interrupts are not isolation; a sandbox that refuses uncontrolled APIs restricts its code
 */

@@ -256,6 +256,10 @@ public:
 
 private:
     //! Qore Program context
+    /** The Program context of the code that opens the connection, which is the library's Program when library code
+        opens it: the connection belongs to its datasource, which can outlive the code that opened it and serve other
+        code, so it is not placed in the Program of the code that library code serves (qore#7394)
+    */
     QoreProgram* pgm = qore_get_call_program_context();
     //! JNI program context
     JniExternalProgramData* jpc = nullptr;

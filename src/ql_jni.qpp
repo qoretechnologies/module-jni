@@ -534,11 +534,12 @@ set_save_object_callback(save_object_callback: callback);
     @see @ref jni_qore_object_lifecycle_managementguide for more information
 */
 set_save_object_callback(*code save_object_callback) [dom=PROCESS;flags=NAMED_ARGS] {
-    // NOTE: this must be qore_get_call_program_context() and not jni::jni_get_program_context() or jni_get_context()
-    // as the caller's program context must be used in all cases
-    QoreProgram* pgm = qore_get_call_program_context();
     // qore#6789: creating the Program's jni context can fail with a C++ exception, which must not leave the builtin
     try {
+        // NOTE: this must be qore_get_call_program_context() and not jni::jni_get_program_context() or jni_get_context()
+        // as the caller's program context must be used in all cases; never the shared Program of library code that a
+        // sandbox governs, whose callback would get the objects of every caller (qore#7394)
+        QoreProgram* pgm = jni_calling_code_program_for_state(qore_get_call_program_context());
         // holds the global context Program, if the callback is set in it (qore#6829)
         JniContextProgramHolder ctx_holder;
         JniExternalProgramData* jpc = pgm ? JniExternalProgramData::getCreateJniProgramData(pgm)

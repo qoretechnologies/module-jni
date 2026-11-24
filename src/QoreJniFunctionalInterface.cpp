@@ -33,7 +33,10 @@
 
 namespace jni {
 QoreJniFunctionalInterface::QoreJniFunctionalInterface(jobject obj)
-        : obj(GlobalReference<jobject>::fromLocal(obj)), src_pgm(qore_get_call_program_context()) {
+        : obj(GlobalReference<jobject>::fromLocal(obj)),
+        // never the shared Program of library code that a sandbox governs, whose callable would run there for every
+        // caller (qore#7394)
+        src_pgm(jni_calling_code_program_for_state(qore_get_call_program_context())) {
     assert(src_pgm);
     // the callable is a callback of the code that obtained it from Java: the code that called Java, also when it
     // obtained it from a Java object of another Program, whose Program is the Program context of the call; in a call

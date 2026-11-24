@@ -6,6 +6,14 @@
 
     @section jni_3_0_0 jni Module Version 3.0.0
 
+    - <b>Security</b>: the Java state that the module creates or places for code that a restricting sandbox governs
+      (a class that it defines, its save object callback, the objects that it creates, the Program that a Java closure
+      runs in) belongs to the Program of that code also when the code calls a library (the code of a
+      module, which every Program that calls it shares) that creates it, and never to the library's shared Program;
+      the Java code that library code calls for such code reaches only that code's Program.  When the code that the
+      library code serves is not known, or is not code that the thread runs in, the state is refused (qore#7394)
+    - <b>Behavior change</b> (qore#7394): for code that a restricting sandbox governs, Java code that library code
+      calls cannot call into the library's Program by a Program pointer
     - <b>Behavior change</b> (qore#7340): when the %Qore program ends while a Java thread is still inside a call of
       %Qore code, the process now ends without running any exit handler, so Java's shutdown hooks do not run and the
       JVM is not destroyed (the process does not wait for the call); see @ref jni_process_exit_in_call

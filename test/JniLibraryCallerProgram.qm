@@ -1,0 +1,98 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#! test module for jni-library-caller-program.qtest: library code that creates Java state for the code that calls it
+
+%modern
+%requires jni
+%module-cmd(jni) add-relative-classpath qore-jni-test.jar
+%module-cmd(jni) import org.qore.jni.test.HostObjectProbe
+%module-cmd(jni) import org.qore.jni.QoreJavaApi
+
+module JniLibraryCallerProgram {
+    version = "1.0";
+    desc = "library code that creates Java state for the code that calls it";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+#! the name that Java's calls into this module's Program see; not exported
+string sub jlcp_name() {
+    return "library";
+}
+
+#! the class of the objects that Java creates in this module's Program; not exported
+class JlcpMarker {
+    public {
+        string owner = "library";
+    }
+}
+
+public namespace JniLibraryCallerProgram {
+#! defines a Java class with the class loader of the calling code
+public object sub jlcp_define_class(string name, binary bytecode) {
+    return define_class(name, bytecode);
+}
+
+#! sets the save object callback of the calling code
+public nothing sub jlcp_set_save_object_callback(*code callback) {
+    set_save_object_callback(callback);
+}
+
+#! returns a Java byte array
+public object sub jlcp_byte_array(binary b) {
+    return JavaArray::get(b);
+}
+
+#! returns the length of a Java byte array that a thread that this function starts creates, or the exception
+public string sub jlcp_byte_array_background(binary b) {
+    Queue q();
+    background sub () {
+        try {
+            q.push(sprintf("%d", JavaArray::get(b).length()));
+        } catch (hash<ExceptionInfo> ex) {
+            q.push(sprintf("%s: %s", ex.err, ex.desc));
+        }
+    }();
+    return q.get();
+}
+
+#! returns the class of a Java array
+public object sub jlcp_array_class(object array) {
+    return array.getClass();
+}
+
+#! returns a Java object used as a Qore closure
+public code sub jlcp_java_closure() {
+    return HostObjectProbe::caller();
+}
+
+#! Java creates an object of the class given in the Program of the calling code
+public object sub jlcp_new_object(string class_name) {
+    return QoreJavaApi::newObjectSave(class_name);
+}
+
+#! Java code calls into Qore with the class loader of this module's Program
+public string sub jlcp_call_qore(string func) {
+    return HostObjectProbe::staticCallQore(func);
+}
+
+#! the same calls through the static methods of a class of the library
+public class Lib {
+    static object defineClass(string name, binary bytecode) {
+        return define_class(name, bytecode);
+    }
+
+    static object byteArray(binary b) {
+        return JavaArray::get(b);
+    }
+
+    static code javaClosure() {
+        return HostObjectProbe::caller();
+    }
+
+    static object newObject(string class_name) {
+        return QoreJavaApi::newObjectSave(class_name);
+    }
+}
+}

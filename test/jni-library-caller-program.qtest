@@ -1,0 +1,276 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../build"
+%requires QUnit
+%requires jni
+
+%exec-class JniLibraryCallerProgramTest
+
+#! Java state that library code creates for sandboxed code belongs to the Program of that code (qore#7394)
+/** The code of a library (a module's Program, which every Program that calls it shares) runs with its own Program as
+    the Program of the calls that it makes, in every execution mode.  The Java state that the module creates or places
+    for the calling code (the classes that it defines, its save object callback, the objects that it creates, the
+    Program that a Java closure runs in) belongs, for code that a restricting sandbox governs, to the Program of the
+    code that the library code serves, never to the library's shared Program, where the code of every other caller
+    would share it; Java code that the library code calls for such code reaches only that code's Program.  Two
+    sandboxed Programs reach each of them through the functions and the static methods of a library module
+    (JniLibraryCallerProgram.qm).
+*/
+class JniLibraryCallerProgramTest inherits QUnit::Test {
+    public {
+        #! the code of each sandboxed Program
+        const TenantSource = "%modern
+%requires jni
+%requires JniLibraryCallerProgram
+%module-cmd(jni) import org.qore.jni.QoreJavaApi
+
+our string tenant_name_value;
+our list<string> saved;
+# the callback owns the objects that it is given
+our list<object> kept;
+
+nothing sub set_tenant_name(string name) {
+    tenant_name_value = name;
+}
+
+string sub jlcp_name() {
+    return tenant_name_value;
+}
+
+class JlcpMarker {
+    public {
+        string owner;
+    }
+
+    constructor() {
+        owner = tenant_name_value;
+    }
+}
+
+# returns \"OK: <value>\" or the exception
+string sub run(code c) {
+    try {
+        return sprintf(\"OK: %s\", c());
+    } catch (hash<ExceptionInfo> ex) {
+        return sprintf(\"%s: %s\", ex.err, ex.desc);
+    }
+}
+
+hash<auto> sub define_class_via(string how, string name, binary bytecode) {
+    try {
+        object cls = how == \"static\"
+            ? Lib::defineClass(name, bytecode)
+            : jlcp_define_class(name, bytecode);
+        return {\"own\": cls.getClassLoader().equals(get_class_loader()), \"cls\": cls};
+    } catch (hash<ExceptionInfo> ex) {
+        return {\"err\": sprintf(\"%s: %s\", ex.err, ex.desc)};
+    }
+}
+
+nothing sub set_callback() {
+    jlcp_set_save_object_callback(sub (object obj) {
+        saved += sprintf(\"%s:%s\", tenant_name_value, obj.owner);
+        kept += obj;
+    });
+}
+
+list<string> sub get_saved() {
+    return saved;
+}
+
+# Java creates an object in the Program of the code that calls it, directly
+string sub new_object_direct() {
+    return run(string sub () { return QoreJavaApi::newObjectSave(\"JlcpMarker\").owner; });
+}
+
+# Java creates an object for the code that calls the library
+string sub new_object_via(string how) {
+    return run(string sub () {
+        return (how == \"static\" ? Lib::newObject(\"JlcpMarker\") : jlcp_new_object(\"JlcpMarker\")).owner;
+    });
+}
+
+object sub byte_array_via(string how) {
+    return how == \"static\" ? Lib::byteArray(<0102>) : jlcp_byte_array(<0102>);
+}
+
+string sub byte_array_background() {
+    return jlcp_byte_array_background(<0102>);
+}
+
+object sub array_class_via(object array) {
+    return jlcp_array_class(array);
+}
+
+string sub java_closure_via(string how) {
+    return run(string sub () {
+        code c = how == \"static\" ? Lib::javaClosure() : jlcp_java_closure();
+        return c(\"jlcp_name\");
+    });
+}
+
+string sub call_qore_via() {
+    return jlcp_call_qore(\"jlcp_name\");
+}
+";
+
+        #! the byte code of org.qore.jni.test.jcp.Defined, an empty public class
+        const DefinedByteCode = "cafebabe00000037000a0a000200030700040c000500060100106a6176612f6c616e672f4f626a6563"
+            "740100063c696e69743e01000328295607000801001d6f72672f716f72652f6a6e692f746573742f6a63702f446566696e6564"
+            "010004436f6465002100070002000000000001000100050006000100090000001100010001000000052ab70001b1000000000000";
+
+        #! the name of the class of DefinedByteCode
+        const DefinedName = "org/qore/jni/test/jcp/Defined";
+
+        #! the error of a refused call into another Program
+        const NotGoverned = "Java code called by code that a sandbox governs cannot call into a Qore Program other "
+            "than the one of the calling code";
+
+        #! the error of state that library code would create for code that is not known
+        const CallerNotKnown = "cannot hold Java state for its caller, which is not known";
+
+        #! the ways that the tenants call the library
+        const Hows = ("function", "static");
+    }
+
+    constructor() : QUnit::Test("jni library caller Program", "1.0") {
+        load_module(get_script_dir() + DirSep + "JniLibraryCallerProgram.qm");
+        addTestCase("a Java class defined through library code", \defineClassTest());
+        addTestCase("the save object callback set through library code", \saveObjectCallbackTest());
+        addTestCase("an object that Java creates for library code", \newObjectTest());
+        addTestCase("a Java array created through library code", \byteArrayTest());
+        addTestCase("a Java array created by a thread that library code starts", \backgroundTest());
+        addTestCase("a Java closure obtained through library code", \javaClosureTest());
+        addTestCase("Java code that library code calls", \callQoreTest());
+        set_return_value(main());
+    }
+
+    #! returns a new sandboxed Program with the library, by name
+    private Program tenant(string name) {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse(TenantSource, "tenant-" + name);
+        p.callFunction("set_tenant_name", name);
+        SandboxManager sm();
+        # only a tenant trusted with uncontrolled APIs can call Java code; the filesystem and the network stay
+        # restricted, so the sandbox restricts
+        sm.setUncontrolledApiPolicy(True);
+        p.setSandboxManager(sm);
+        return p;
+    }
+
+    #! returns the two tenants of a test case, new ones for each case
+    private hash<string, Program> tenants() {
+        return {
+            "A": tenant("A"),
+            "B": tenant("B"),
+        };
+    }
+
+    #! returns the ID of the Program that owns an object, or NOTHING without the debug function of the module
+    private static *int objectProgramId(object obj) {
+        try {
+            return call_function("Jni::org::qore::jni::dbg_jni_object_program_id", obj);
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "NO-FUNCTION") {
+                return;
+            }
+            rethrow;
+        }
+    }
+
+    #! asserts that an object belongs to the Program given, when the module can tell
+    private assertOwnProgram(Program p, object obj, string msg) {
+        *int id = objectProgramId(obj);
+        if (exists id) {
+            assertEq(p.getProgramId(), id, msg);
+        }
+    }
+
+    defineClassTest() {
+        binary bytecode = parse_hex_string(DefinedByteCode);
+        foreach string how in (Hows) {
+            # two tenants define a class of the same name: each in its own class loader, so neither is refused as a
+            # duplicate in a class loader that they share
+            foreach hash<auto> i in (tenants().pairIterator()) {
+                hash<auto> rv = i.value.callFunction("define_class_via", how, DefinedName, bytecode);
+                assertEq(NOTHING, rv.err, how + " " + i.key);
+                assertTrue(rv.own, how + " " + i.key + ": own class loader");
+                if (rv.cls) {
+                    assertOwnProgram(i.value, rv.cls, how + " " + i.key + ": Program");
+                }
+            }
+        }
+    }
+
+    saveObjectCallbackTest() {
+        hash<string, Program> ts = tenants();
+        foreach hash<auto> i in (ts.pairIterator()) {
+            i.value.callFunction("set_callback");
+        }
+        # each tenant's callback is its own: the objects that Java creates in its Program, also for library code, are
+        # given to its callback only
+        foreach hash<auto> i in (ts.pairIterator()) {
+            assertEq("OK: " + i.key, i.value.callFunction("new_object_direct"), i.key + " direct");
+            assertEq("OK: " + i.key, i.value.callFunction("new_object_via", "function"), i.key + " function");
+        }
+        foreach hash<auto> i in (ts.pairIterator()) {
+            assertEq((i.key + ":" + i.key, i.key + ":" + i.key), i.value.callFunction("get_saved"), i.key);
+        }
+    }
+
+    newObjectTest() {
+        foreach string how in (Hows) {
+            foreach hash<auto> i in (tenants().pairIterator()) {
+                assertEq("OK: " + i.key, i.value.callFunction("new_object_via", how), how + " " + i.key);
+            }
+        }
+    }
+
+    byteArrayTest() {
+        if (!exists objectProgramId(new Mutex())) {
+            testSkip("the module has no dbg_jni_object_program_id() (not a debug build)");
+        }
+        foreach string how in (Hows) {
+            foreach hash<auto> i in (tenants().pairIterator()) {
+                object array = i.value.callFunction("byte_array_via", how);
+                assertEq(2, array.length(), how + " " + i.key + ": length");
+                assertOwnProgram(i.value, array, how + " " + i.key + ": array");
+                # the class of the array belongs to the Program of the array
+                assertOwnProgram(i.value, i.value.callFunction("array_class_via", array), how + " " + i.key
+                    + ": class");
+            }
+        }
+    }
+
+    backgroundTest() {
+        # a thread that library code starts for a sandboxed Program does not run in that Program: the state is
+        # refused, not placed in the library's Program
+        foreach hash<auto> i in (tenants().pairIterator()) {
+            string rv = i.value.callFunction("byte_array_background");
+            assertRegex(CallerNotKnown, rv, i.key + ": " + rv);
+        }
+        # trusted code that calls the library has the state placed as libqore names the Program
+        assertEq("2", call_function("JniLibraryCallerProgram::jlcp_byte_array_background", <0102>));
+    }
+
+    javaClosureTest() {
+        # the closure runs in the Program of the code that obtained it, which Java's calls into Qore reach
+        foreach string how in (Hows) {
+            foreach hash<auto> i in (tenants().pairIterator()) {
+                assertEq("OK: ok: " + i.key, i.value.callFunction("java_closure_via", how), how + " " + i.key);
+            }
+        }
+    }
+
+    callQoreTest() {
+        # Java code that the library code calls for a sandboxed Program reaches only that Program: not the library's
+        foreach hash<auto> i in (tenants().pairIterator()) {
+            string rv = i.value.callFunction("call_qore_via");
+            assertRegex(NotGoverned, rv, i.key + ": " + rv);
+        }
+    }
+}

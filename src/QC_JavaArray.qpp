@@ -174,8 +174,9 @@ static JavaArray JavaArray::get(binary binary_value) [dom=UNCONTROLLED_API;flags
     // builtin
     try {
         Env env;
-        return new QoreObject(QC_JAVAARRAY, qore_get_call_program_context(),
-            new Array(QoreToJava::makeByteArray(env, *binary_value)));
+        // never the shared Program of library code that a sandbox governs (qore#7394)
+        QoreProgram* pgm = jni_calling_code_program_for_state(qore_get_call_program_context());
+        return new QoreObject(QC_JAVAARRAY, pgm, new Array(QoreToJava::makeByteArray(env, *binary_value)));
     } catch (jni::Exception& e) {
         e.convert(xsink);
         return QoreValue();
