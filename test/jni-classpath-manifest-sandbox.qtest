@@ -85,6 +85,7 @@ class JniClasspathManifestSandboxTest inherits QUnit::Test {
         addTestCase("coverage: a Class-Path that names an allowed jar is followed", \allowedTest());
         addTestCase("coverage: Class-Path attributes with no sandbox are unchanged", \unsandboxedTest());
         addTestCase("regression: a Class-Path is refused on an unverified JDK version", \jdkGateTest());
+        addTestCase("regression: the manifest checks of callers not restricted for the filesystem", \callersTest());
         set_return_value(main());
     }
 
@@ -94,7 +95,7 @@ class JniClasspathManifestSandboxTest inherits QUnit::Test {
         makeDir(base);
         root = realpath(base);
         foreach string d in (("a", "a/lib", "d", "d/lib", "s", "outside", "m", "cy", "n", "n/b", "n/b/c", "h", "w",
-                "w/lib", "o", "o/deep", "o/lib", "j", "j/lib", "v", "v/lib")) {
+                "w/lib", "o", "o/deep", "o/lib", "j", "j/lib", "v", "v/lib", "gr", "gr/lib", "gu", "gu/lib")) {
             makeDir(root + DirSep + d);
         }
         copyJar("cp-ref.jar", "a/cp-ref.jar");
@@ -117,6 +118,12 @@ class JniClasspathManifestSandboxTest inherits QUnit::Test {
         copyJar("cp-nestb.jar", "n/b/cp-nestb.jar");
         copyJar("cp-nestc.jar", "n/b/c/cp-nestc.jar");
         copyJar("cp-http.jar", "h/cp-http.jar");
+        # the jars of the callers case (qore#7364): for the running JDK and an unverified one
+        foreach string d in ("gr", "gu") {
+            copyJar("cp-ref.jar", d + "/cp-ref.jar");
+            copyJar("cp-target.jar", d + "/lib/cp-target.jar");
+            copyJar("cp-http.jar", d + "/cp-http.jar");
+        }
         copyJar("cp-upref.jar", "w/cp-upref.jar");
         makeLink(root + "/o/deep", "w/up");
         copyJar("cp-up.jar", "o/deep/cp-up.jar");
@@ -280,6 +287,29 @@ class JniClasspathManifestSandboxTest inherits QUnit::Test {
         ));
     }
 
+    callersTest() {
+        if (skip_reason) {
+            testSkip("the module is not a debug build: " + skip_reason);
+        }
+        list<string> expected = ();
+        foreach string jdk in ("running JDK", "unverified JDK") {
+            expected += map sprintf("result: callers: %s: %s: OK", jdk, $1), (
+                "an open sandbox adds a jar with a Class-Path",
+                "the class of the named jar is loaded",
+                "an open sandbox adds a jar whose Class-Path names a URL",
+                "the class of that jar is loaded",
+                "an open sandbox is refused a special file that a Class-Path names",
+                "the error names the special file",
+                "a network-only sandbox adds a jar with a local Class-Path",
+                "the class of the named jar is loaded with it",
+                "a network-only sandbox refuses a Class-Path that names a URL",
+                "the error names the entry",
+                "the class of the refused jar is not loaded",
+            );
+        }
+        checkCase("callers", expected);
+    }
+
     #! runs a case of the child and checks its results, and that it reached its end
     private checkCase(string name, list<string> expected) {
         # the variables that could add to the child's classpath or make the JVM print a notice are removed
@@ -293,7 +323,7 @@ class JniClasspathManifestSandboxTest inherits QUnit::Test {
         list<string> lines = select out.split("\n"), $1 =~ /^result: /;
         *list<*string> gate = (out =~ x/^jdk-gate: (verified|refused) ([0-9]+)$/m);
         assertEq(2, gate.size(), "the child did not report the JDK gate: " + out);
-        if (gate[0] == "verified" || name == "unsandboxed") {
+        if (gate[0] == "verified" || name == "unsandboxed" || name == "callers") {
             assertEq(expected, lines, out);
         } else {
             # the JDK is outside the verified versions: every check of the documented refusal must hold (qore#7204)

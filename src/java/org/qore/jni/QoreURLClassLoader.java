@@ -686,7 +686,8 @@ public class QoreURLClassLoader extends URLClassLoader {
         has entries of restricted code, what the manifests of trusted jars name is then not found (fail closed).
     */
     static java.util.Set<String> reachableRoots(java.util.List<File> entries) {
-        ResolvedClasspath rc = new ResolvedClasspath(0, false, false);
+        // the guard fails closed: a manifest Class-Path on an unverified JDK leaves its entries out (qore#7364)
+        ResolvedClasspath rc = new ResolvedClasspath(0, false, false, true);
         HashSet<String> rv = new HashSet<String>();
         for (File entry : entries) {
             rv.add(entry.getPath());
@@ -923,9 +924,11 @@ public class QoreURLClassLoader extends URLClassLoader {
         directory, or a file URL in the form of a directory, has no manifest (a \c jar: URL in that form is refused, as
         the class loader opens it as an archive); a regular file is read, and one that is not
         an archive has no entries; any other path could become an archive that the class loader opens later, so it is
-        refused.  This follows the resolution of the JDK's class loader, so a manifest Class-Path attribute is refused
-        on a JDK version that has not been verified for it, as for a filesystem policy.  A file that is replaced after
-        it has been checked is not covered.
+        refused.  This follows the resolution of the JDK's class loader; on a JDK version that has not been verified
+        for it, what the class loader follows is not assumed, and every manifest Class-Path entry that is not a local
+        file is refused, whatever \c jdk.net.URLClassPath.disableClassPathURLCheck says, while local entries are
+        followed as on a verified version (qore#7364).  A file that is replaced after it has been checked is not
+        covered.
 
         @throw JNI-SANDBOX-ERROR the URL or an entry names another location, or its location cannot be confirmed
     */
@@ -947,11 +950,9 @@ public class QoreURLClassLoader extends URLClassLoader {
             if (classpath == null || !new StringTokenizer(classpath).hasMoreTokens()) {
                 continue;
             }
-            int feature = Runtime.version().feature();
-            if (!isVerifiedClassPathJdk(feature)) {
-                throw QoreSandbox.classpathLocationUncheckedError("a manifest Class-Path attribute on an unverified "
-                    + "JDK version " + feature);
-            }
+            // on a JDK whose class loader has not been verified, what it follows is not assumed: every entry that is
+            // not a local file is refused (qore#7364)
+            boolean refuses_non_file = follows_non_file || !isVerifiedClassPathJdk(Runtime.version().feature());
             for (StringTokenizer st = new StringTokenizer(classpath); st.hasMoreTokens();) {
                 String token = st.nextToken();
                 if (++entries > MAX_MANIFEST_ENTRIES) {
@@ -965,7 +966,7 @@ public class QoreURLClassLoader extends URLClassLoader {
                     continue;
                 }
                 if (!"file".equals(entry.getProtocol())) {
-                    if (follows_non_file) {
+                    if (refuses_non_file) {
                         throw QoreSandbox.classpathLocationError();
                     }
                     continue;
@@ -2698,6 +2699,13 @@ public class QoreURLClassLoader extends URLClassLoader {
         private final boolean restricted;
         //! true if the policy restricts network access, so that a manifest entry cannot name another location
         private final boolean networkRestricted;
+        //! true if a manifest Class-Path entry that cannot be checked refuses the classpath: for a caller whose policy
+        //! restricts filesystem or network access; for any other caller, the manifests are only followed to refuse a
+        //! special file that the class loader would open (qore#7364)
+        private final boolean checksManifests;
+        //! true for the roots of the classpath guard (reachableRoots()): a manifest Class-Path on an unverified JDK
+        //! leaves its entries out, so that what it names is not found (fail closed, qore#7364)
+        private final boolean guard;
         //! the policies that apply to each lookup below the entries of a restricted classpath
         private QoreSandbox.ClasspathPolicy[] policies;
         //! every path that an element names, as the class loader's URLs name it
@@ -2713,8 +2721,16 @@ public class QoreURLClassLoader extends URLClassLoader {
             @param networkRestricted true if the policy restricts network access
         */
         private ResolvedClasspath(int assumedFeature, boolean restricted, boolean networkRestricted) {
+            this(assumedFeature, restricted, networkRestricted, false);
+        }
+
+        //! Makes a resolved classpath; with \a guard, for the roots that the classpath guard derives
+        //! (reachableRoots()), which leave out every manifest Class-Path on an unverified JDK (fail closed)
+        private ResolvedClasspath(int assumedFeature, boolean restricted, boolean networkRestricted, boolean guard) {
             this.restricted = restricted;
+            this.guard = guard;
             this.networkRestricted = networkRestricted;
+            checksManifests = restricted || networkRestricted;
             int running = Runtime.version().feature();
             if (!isVerifiedClassPathJdk(running)) {
                 unverifiedFeature = running;
@@ -2887,7 +2903,13 @@ public class QoreURLClassLoader extends URLClassLoader {
         private void addJar(File real, boolean match) {
             URL url = loaderUrl(real);
             if (url == null) {
-                // its manifest could not be resolved as the class loader resolves it
+                // its manifest could not be resolved as the class loader resolves it, which only matters for a caller
+                // whose policy restricts filesystem or network access; for any other caller, the jar is added and its
+                // manifest is not followed (qore#7364)
+                if (!checksManifests) {
+                    add(real, real, match, null);
+                    return;
+                }
                 refuse(real, null, "the classpath jar '" + real + "' cannot be represented as a URL to check the "
                     + "jars that its manifest Class-Path attribute names against the sandbox policy");
                 return;
@@ -2919,7 +2941,8 @@ public class QoreURLClassLoader extends URLClassLoader {
                 // the JDK 21 builds that were tested have no jar index support to enable; an index is still refused
                 // below Java 22 as a defense for other builds of those versions, as this check does not resolve the
                 // jars that an index lists
-                if (Runtime.version().feature() < 22 && jf.getEntry("META-INF/INDEX.LIST") != null) {
+                if ((checksManifests || guard) && Runtime.version().feature() < 22
+                    && jf.getEntry("META-INF/INDEX.LIST") != null) {
                     refuse(jar, null, "the classpath jar '" + jar + "' has a jar index, whose jars cannot be checked "
                         + "against the sandbox policy");
                     return;
@@ -2928,8 +2951,11 @@ public class QoreURLClassLoader extends URLClassLoader {
                 Attributes attrs = man == null ? null : man.getMainAttributes();
                 classpath = attrs == null ? null : attrs.getValue(Attributes.Name.CLASS_PATH);
             } catch (IOException | RuntimeException e) {
-                refuse(jar, null, "cannot read the manifest of the classpath jar '" + jar + "' to check the jars that "
-                    + "its Class-Path attribute names against the sandbox policy: " + e);
+                // the class loader cannot follow a manifest that cannot be read either
+                if (checksManifests) {
+                    refuse(jar, null, "cannot read the manifest of the classpath jar '" + jar + "' to check the jars "
+                        + "that its Class-Path attribute names against the sandbox policy: " + e);
+                }
                 return;
             }
             // an attribute with no entries (as the class loader splits it) names nothing
@@ -2937,8 +2963,10 @@ public class QoreURLClassLoader extends URLClassLoader {
                 return;
             }
             // the entries can only be resolved as the class loader resolves them on a JDK whose class loader has been
-            // verified
-            if (unverifiedFeature != 0) {
+            // verified, which a filesystem policy and the classpath guard need; the location check of a caller whose
+            // policy restricts only network access refuses every entry that is not a local file, whatever the JDK
+            // follows, and a caller whose policy restricts neither has nothing to check (qore#7364)
+            if (unverifiedFeature != 0 && (restricted || guard)) {
                 refuse(jar, null, "the classpath jar '" + jar + "' has a manifest Class-Path attribute, which cannot "
                     + "be checked against the sandbox policy on an unverified JDK version "
                     + unverifiedFeature + " for manifest Class-Path checking (verified: "
@@ -2949,9 +2977,10 @@ public class QoreURLClassLoader extends URLClassLoader {
             for (StringTokenizer st = new StringTokenizer(classpath); st.hasMoreTokens();) {
                 String entry = st.nextToken();
                 if (++manifestEntries > MAX_MANIFEST_ENTRIES) {
+                    // the bound of the work, for every caller: past it, an entry could not be checked, also for the
+                    // special file that the class loader would open
                     refuse(jar, jar.getPath(), "the manifest Class-Path attributes of the classpath name more than "
-                        + MAX_MANIFEST_ENTRIES + " entries, which cannot be checked against the sandbox "
-                        + "policy");
+                        + MAX_MANIFEST_ENTRIES + " entries, which cannot be checked against the sandbox policy");
                     return;
                 }
                 addManifestEntry(base, jar, entry);
@@ -2983,11 +3012,20 @@ public class QoreURLClassLoader extends URLClassLoader {
                 // as the class loader resolves the entry: against the URL of the jar as the class loader opens it
                 url = new URL(base, entry);
             } catch (MalformedURLException e) {
-                refuse(jar, referrer, "the manifest Class-Path attribute of the classpath jar '" + jar + "' has an "
-                    + "invalid entry '" + entry + "': " + e.getMessage());
+                // the class loader drops the jar with such an entry; the guard stops at it, so that nothing that the
+                // jar's manifest names becomes a root (fail closed)
+                if (checksManifests || guard) {
+                    refuse(jar, referrer, "the manifest Class-Path attribute of the classpath jar '" + jar + "' has an "
+                        + "invalid entry '" + entry + "': " + e.getMessage());
+                }
                 return;
             }
-            // only a file can be checked against the filesystem policy
+            // a caller whose policy restricts neither filesystem nor network access is not affected by an entry that
+            // is not a local file (qore#7364)
+            if (!checksManifests && !"file".equals(url.getProtocol())) {
+                return;
+            }
+            // only a file can be checked against the filesystem policy, and only a local file is at no other location
             if (!"file".equals(url.getProtocol())) {
                 refuse(jar, referrer, "the manifest Class-Path attribute of the classpath jar '" + jar + "' names '"
                     + url + "', which is not a file, so it cannot be checked against the sandbox policy");
@@ -3016,6 +3054,13 @@ public class QoreURLClassLoader extends URLClassLoader {
             }
             String path = decodeUrlPath(file);
             if (path == null || path.indexOf('\0') != -1 || !new File(path).isAbsolute()) {
+                // the class loader opens it at a path that is not known here: a caller whose policy restricts neither
+                // filesystem nor network access is not affected, and for one whose policy restricts only network
+                // access, an entry in the form of a directory has no manifest that could name another location
+                // (qore#7364)
+                if (!checksManifests || (!restricted && dir)) {
+                    return;
+                }
                 refuse(jar, referrer, "the manifest Class-Path attribute of the classpath jar '" + jar + "' names '"
                     + url + "', which cannot be resolved to a file to check against the sandbox policy");
                 return;

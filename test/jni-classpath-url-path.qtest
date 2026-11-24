@@ -497,9 +497,16 @@ list<string> sub compiler_classpath_paths(string classpath) {
                 assertNRegex("cannot be checked exactly", rv.desc, label);
                 if (verified()) {
                     if (c.undecodable) {
-                        # refused for any sandbox manager, as before this check
-                        assertEq("JNI-CLASSPATH-ERROR", rv.err, label);
-                        assertRegex("cannot be resolved to a file", rv.desc, label);
+                        # the class loader opens it at a path that is not known: a caller that restricts neither the
+                        # filesystem nor the network is not affected, and for one that restricts only the network, a
+                        # directory entry has no manifest that could name another location, but an archive entry has
+                        # (qore#7364)
+                        if (!open_network && c.archive) {
+                            assertEq("JNI-CLASSPATH-ERROR", rv.err, label);
+                            assertRegex("cannot be resolved to a file", rv.desc, label);
+                        } else {
+                            assertEq("ok", rv.err, label + ": " + rv.desc);
+                        }
                         continue;
                     }
                     assertEq("ok", rv.err, label + ": " + rv.desc);
@@ -736,12 +743,25 @@ list<string> sub compiler_classpath_paths(string classpath) {
 
     networkUnverifiedJdkTest() {
         hash<ClasspathUrlCase> exact = ExactCases[0];
+        # what the JDK follows is not assumed: an entry that is not a file is refused, as when the JDK follows it
+        # (qore#7364); first, as the classpaths that the routes add are shared; the jar that the manifest names is in a
+        # directory of its own, so that a wildcard selects only the jar with the manifest
+        foreach string route in (JavaRoutes) {
+            string x = newDir();
+            mkdir(x + "/lib", 0700);
+            ClasspathUrlProbe::writeMarkerJar(x + "/lib/dep.jar", Allowed);
+            ClasspathUrlProbe::writeManifestJar(x + "/main.jar", "http://example.invalid/x.jar lib/dep.jar");
+            Program p = getPermissiveProgram(False);
+            assertRegex("^refused: .*" + OtherLocation, p.callFunction("java_add_unverified", route, x + "/main.jar"),
+                route + ": an entry that is not a file");
+            assertNothingRead(p, route + ": an entry that is not a file");
+        }
+        # the location of a local manifest Class-Path entry is checked as on a verified version (qore#7364)
         foreach string route in (JavaRoutes) {
             string x = makeCase(exact);
             Program p = getPermissiveProgram(False);
-            assertRegex("^refused: .*unverified JDK version", p.callFunction("java_add_unverified", route,
-                x + "/main/main.jar"), route);
-            assertNothingRead(p, route);
+            assertEq("ok", p.callFunction("java_add_unverified", route, x + "/main/main.jar"), route);
+            assertEq(ClasspathUrlProbe::plainReads(x + "/main/main.jar"), p.callFunction("read_all"), route);
         }
         # an archive with no manifest Class-Path is not affected
         string x = newDir();
@@ -827,8 +847,11 @@ list<string> sub compiler_classpath_paths(string classpath) {
         foreach string name in ("undecodable.jar", "special.jar", "absent.jar") {
             assertRegex("^refused: .*" + UncheckedLocation, p.callFunction("compiler_classpath", x + "/" + name), name);
         }
-        assertRegex("^refused: .*unverified JDK version", p.callFunction("compiler_classpath_unverified",
-            x + "/plain.jar"));
+        # on an unverified JDK, the location of the entries is checked as on a verified one, and what the JDK follows
+        # is not assumed: an entry that is not a file is refused (qore#7364)
+        assertEq("ok: 1", p.callFunction("compiler_classpath_unverified", x + "/plain.jar"), "an unverified JDK");
+        assertRegex("^refused: .*" + OtherLocation, p.callFunction("compiler_classpath_unverified",
+            x + "/nonfile.jar"), "an entry that is not a file on an unverified JDK");
         assertEq("ok: 1", p.callFunction("compiler_classpath_unverified", x + "/dep.jar"), "no manifest Class-Path");
         assertEq((x + "/plain.jar", x + "/dep.jar"), p.callFunction("compiler_classpath_paths",
             x + "/plain.jar" + PathSep + x + "/dep.jar"));

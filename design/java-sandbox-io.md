@@ -131,6 +131,20 @@ are `static_assert`ed to match) and calls `QoreSandboxManager::checkFilesystemAc
   every entry checked before any is added, so a refusal adds nothing, as for `add-classpath`; an entry that the addition
   skips (one that does not exist, one that is neither a directory nor an archive, or a wildcard in a directory that
   cannot be read) is skipped by the check too.
+- **Manifest checks by caller.** The manifest `Class-Path` attributes of a classpath's jars are resolved and followed
+  for every sandboxed caller, also on the native route (`jni_check_classpath_policy()`), but what an entry that cannot
+  be checked does depends on the policy (`ResolvedClasspath`, `checkClasspathLocation()`; qore#7364): a caller whose
+  sandbox restricts the filesystem needs an exact, checkable path for each entry, and an unverified JDK, a jar index
+  (before Java 22), a manifest that cannot be read, an entry that cannot be decoded and more than the bound of entries
+  refuse its classpath; a caller restricted only for the network has the location of each entry checked, transitively:
+  an entry that is not a local file (another protocol, or a `file:` URL with another authority) is refused on every
+  JDK, also an unverified one, whatever `jdk.net.URLClassPath.disableClassPathURLCheck` says, as are a jar index, a
+  manifest that cannot be read, an archive entry that cannot be decoded (its own manifest could not be followed) and
+  more than the bound of entries, while a directory entry that cannot be decoded has no manifest and is kept; a caller
+  restricted for neither (a sandbox of limits or interrupts only) is not affected by any of these: only a special file
+  that the class loader would open is refused (a FIFO named as an archive would block it), and more than the bound of
+  entries, past which none could be checked.  The roots that the guard derives (`reachableRoots()`) still leave out
+  every manifest `Class-Path` on an unverified JDK (fail closed).
 - **Whose policy.** Only the captured manager is consulted (`checkClasspathRead0()`), never the thread's caller, so the
   result does not depend on the thread and a stricter thread cannot affect another lookup.
 - **No decision cache.** A `SandboxManager` can be changed at any time and has no change indicator, so a cached answer
