@@ -420,11 +420,13 @@ public class ClasspathLookupProbe {
         @return "clean", or what is wrong
     */
     private static String retryLeftCharged(Object budget, List<Path> roots, int live) throws Exception {
+        // the index of the directory entries that a copy is charged for
+        int entries = constant(budget.getClass().getEnclosingClass(), "ENTRIES");
         String rv = "clean";
         synchronized (budget) {
             if (((java.util.Set<?>) field(budget, "live")).size() != live) {
                 rv = "a retry with no secure directory stream released a copy";
-            } else if (((long[]) field(budget, "used"))[ENTRIES_KIND] == 0) {
+            } else if (((long[]) field(budget, "used"))[entries] == 0) {
                 rv = "a retry with no secure directory stream returned the charges";
             }
         }
@@ -436,9 +438,6 @@ public class ClasspathLookupProbe {
         }
         return rv;
     }
-
-    //! the index of the directory entries that a copy is charged for
-    private static final int ENTRIES_KIND = 2;
 
     //! A file system provider over the default one, whose deletions fail with an I/O error while \a fail is set
     /** So that a failed removal is real for any user, also for root, for whom permissions do not stop a deletion
@@ -1048,7 +1047,8 @@ public class ClasspathLookupProbe {
             return "a POSIX platform with no unix attribute view was allowed";
         }
         provider.failUid = 0;
-        return (boolean) rule.invoke(null, wrapped, Long.valueOf(own)) ? "clean" : "the provider refused a readable UID";
+        return (boolean) rule.invoke(null, wrapped, Long.valueOf(own)) ? "clean"
+            : "the provider refused a readable UID";
     }
 
     //! Returns null if a method raises the refusal of the private parent, or else what it did
@@ -1326,12 +1326,12 @@ public class ClasspathLookupProbe {
     }
 
     //! Blocks the private parent with a root that cannot be removed, and checks how it recovers or keeps refusing
-    /** @param scenario "after-release": the leftover goes after the last release; "parent-removed": the whole parent is
-        removed; "stays": a parent that holds the leftover refuses, in acquire() too, and logs once; "not-intact": an empty
-        parent that does not verify refuses; "in-flight": no recovery while a copy is held; "in-flight-empty" and
-        "in-flight-removed": no recovery while a copy is counted that has no root yet, with the parent empty or removed,
-        and recovery once it is released; "newroot-check": a compile
-        that is past acquire() makes no root; "discard-verifies": a refused root is not removed from an unverified parent
+    /** @param scenario "after-release": the leftover goes after the last release; "parent-removed": the whole parent
+        is removed; "stays": a parent that holds the leftover refuses, in acquire() too, and logs once; "not-intact":
+        an empty parent that does not verify refuses; "in-flight": no recovery while a copy is held; "in-flight-empty"
+        and "in-flight-removed": no recovery while a copy is counted that has no root yet, with the parent empty or
+        removed, and recovery once it is released; "newroot-check": a compile that is past acquire() makes no root;
+        "discard-verifies": a refused root is not removed from an unverified parent
         @return "clean", or what is wrong
     */
     public static String blockedRecovery(QoreURLClassLoader loader, String scenario) throws Exception {
@@ -1980,6 +1980,18 @@ public class ClasspathLookupProbe {
         }
     }
 
+    //! Returns the number of entries named like a private parent in the JVM's temporary directory, also empty ones
+    public static int copyEntries() throws IOException {
+        int rv = 0;
+        try (java.nio.file.DirectoryStream<Path> entries = Files.newDirectoryStream(
+                Path.of(System.getProperty("java.io.tmpdir")), "qore-classpath-*")) {
+            for (Path entry : entries) {
+                ++rv;
+            }
+        }
+        return rv;
+    }
+
     //! Removes the empty private parent directories of the JVM's temporary directory; returns how many it removed
     public static int removeEmptyParents() throws IOException {
         int rv = 0;
@@ -2079,7 +2091,8 @@ public class ClasspathLookupProbe {
         "addParentPathIntern" (the route of the global module commands, on a class
         loader derived from \a loader) or "resolved" (the route of the \c add-classpath module command)
     */
-    public static String addRouteUnder(QoreSandbox.Policy policy, QoreURLClassLoader loader, String route, String path) {
+    public static String addRouteUnder(QoreSandbox.Policy policy, QoreURLClassLoader loader, String route,
+            String path) {
         try {
             policy.call(() -> {
                 switch (route) {

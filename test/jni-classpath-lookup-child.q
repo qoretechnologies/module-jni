@@ -270,7 +270,8 @@ sub tmpdir_reuse_case(string root, string tmp) {
     result("reuse left", 0, ClasspathLookupProbe::copyDirectories());
 }
 
-#! the temporary directory must be owned by the JVM's numeric UID or by root, when a parent is created and when it is reused
+#! the temporary directory must be owned by the JVM's numeric UID or by root, when a parent is created and when it is
+#! reused
 sub tmpdir_owner_case(string root, string tmp) {
     Program p = new_program(get_policy(root, ("ending",)), root + "/ending");
     result("owner JVM user", "copies=1", p.callFunction("copy_outcome"));
@@ -302,7 +303,8 @@ sub tmpdir_owner_case(string root, string tmp) {
             result("owner empty parent removed", 1, ClasspathLookupProbe::removeEmptyParents());
         }
         result("owner unreadable JVM UID", TempRefusal, q.callFunction("copy_outcome"));
-        result("owner unreadable nothing created", 0, ClasspathLookupProbe::copyDirectories());
+        # every entry, also an empty private parent, so a refused parent that stays is found too
+        result("owner unreadable nothing created", 0, ClasspathLookupProbe::copyEntries());
     }
     result("owner by UID", "clean", ClasspathLookupProbe::uidRule(tmp));
     result("owner identity of a parent and a root", "clean", ClasspathLookupProbe::identityChecks(tmp));
@@ -312,8 +314,8 @@ sub tmpdir_owner_case(string root, string tmp) {
 
 #! a private directory that takes no more copies recovers once it is empty or gone, and refuses until then
 sub blocked_case(string root) {
-    foreach string scenario in ("after-release", "parent-removed", "stays", "not-intact", "in-flight", "in-flight-empty",
-            "in-flight-removed", "newroot-check", "discard-verifies") {
+    foreach string scenario in ("after-release", "parent-removed", "stays", "not-intact", "in-flight",
+            "in-flight-empty", "in-flight-removed", "newroot-check", "discard-verifies") {
         Program p = new_program(get_policy(root, ("ending",)), root + "/ending");
         result("blocked " + scenario, "clean", p.callFunction("blocked_recovery", scenario));
     }

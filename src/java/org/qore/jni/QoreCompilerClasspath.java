@@ -493,8 +493,8 @@ public final class QoreCompilerClasspath implements AutoCloseable {
         Where the platform has no POSIX attributes or no secure directory stream, only the first removal of a copy walks
         it by path, and a retry leaves it charged.  Code of the same JVM is not defended against.
 
-        It is removed when its last copy is gone, if it is then empty, under the lock that a new copy takes, so a new copy
-        never uses a directory that is being removed.  Removing it needs a secure directory stream on the temporary
+        It is removed when its last copy is gone, if it is then empty, under the lock that a new copy takes, so a new
+        copy never uses a directory that is being removed.  Removing it needs a secure directory stream on the temporary
         directory, so it stays, empty, where the JVM cannot read that directory (ex: mode 1733 of another owner, or 0300
         owned by the JVM's user) or the JDK has no such stream; the next copy then uses it, also after it was blocked.
     */
@@ -707,10 +707,9 @@ public final class QoreCompilerClasspath implements AutoCloseable {
         }
 
         //! Removes a new private directory that was refused, which is empty, so that refusals do not accumulate
-        /** Through the temporary directory where the JDK has a secure directory stream; elsewhere by its path, as an
-            empty directory only, and only if it is still a directory: the temporary directory has passed its check, so
-            only code of the JVM's user or root can rename what is in it, and code of the same user is not defended
-            against
+        /** Through the temporary directory where the JDK has a secure directory stream and can open it; otherwise by
+            its path.  The removal by path never follows a link and never removes a directory with entries; anything
+            else at that name could only have been put there by a party that could remove it itself.
         */
         private static void discardNew(Path dir) {
             if (removeEmpty(dir)) {
