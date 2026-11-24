@@ -39,6 +39,15 @@ The handler is the last resort: native methods still handle the errors that they
 exception raised while the thread is attached and the Program is current), and the handler covers everything that
 escapes them, including C++ exceptions thrown from their catch handlers.
 
+## Program entries and pending Java exceptions
+
+Leaving a Program's entry runs its exit handler, which can call Java, and no Java call can be made while a Java
+exception is pending.  The module therefore enters a Program with `JniProgramEntryHelper` (`src/Jvm.h`), never with
+`QoreExternalProgramContextHelper` directly: a Java exception that is pending when the entry is left (an error of the
+code that ran in it, of the conversion of a call's arguments or result, or of a save object callback) is set aside
+while the Program is left, and raised again after it.  It stays the error of the code that raised it, so a Java
+exception that the exit handler leaves pending is dropped.  Nested entries each set the exception aside in turn.
+
 ## The lifetime of the Qore exception of a `QoreExceptionWrapper`
 
 A `QoreExceptionWrapper` holds its Qore exception (a heap `ExceptionSink`, `QoreToJava::newExceptionWrapper()`)
@@ -83,7 +92,7 @@ address (qore#7068):
   method of the object; a call that passes the registration check and is then refused has run the Program's entry and
   exit handlers once, and its thread initialization code if it was the thread's first entry, and none of the call's
   code.  Its refusal is raised in Java after the entry has been left, so that the exit handler runs with no Java
-  exception pending.  A class of the same name and
+  exception pending (see "Program entries and pending Java exceptions" below).  A class of the same name and
   signature is otherwise another class.  In these two cases, the Java varargs array of a variadic bound method is
   passed as separate arguments if the object's class, or a parent of it, has any variadic variant of a normal or
   static method of that name, and otherwise as one list; the choice is made by method name before Qore selects the

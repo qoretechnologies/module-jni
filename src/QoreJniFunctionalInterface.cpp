@@ -106,7 +106,7 @@ QoreValue QoreJniFunctionalInterface::execValue(const QoreListNode* args, Except
         // current Program, which must be the caller's
         Env env;
         QoreProgram* pgm = src_pgm;
-        std::optional<QoreExternalProgramContextHelper> epch;
+        std::optional<JniProgramEntryHelper> epch;
         if (pgm && pgm != ::getProgram() && jni_enter_call_program(epch, pgm, xsink)) {
             return QoreValue();
         }

@@ -1138,7 +1138,7 @@ DLLLOCAL JniExternalProgramData* jni_get_create_call_context(QoreProgram*& pgm, 
 
     @note a C++ exception from the entry leaves \a epch empty
 */
-DLLLOCAL int jni_enter_call_program(std::optional<QoreExternalProgramContextHelper>& epch, QoreProgram*& pgm,
+DLLLOCAL int jni_enter_call_program(std::optional<JniProgramEntryHelper>& epch, QoreProgram*& pgm,
         ExceptionSink* xsink);
 
 //! Makes the Program that a Java class is added to current, for its namespaces to be changed under its parse lock
@@ -1164,7 +1164,7 @@ DLLLOCAL int jni_enter_call_program(std::optional<QoreExternalProgramContextHelp
     @throw XsinkException the Program cannot be entered (PROGRAM-ERROR if it is being torn down or parsed), or its
     entry handler or thread initialization code raised an exception; the entry is then left when \a epch is destroyed
 */
-DLLLOCAL void jni_enter_program_for_class_add(std::optional<QoreExternalProgramContextHelper>& epch,
+DLLLOCAL void jni_enter_program_for_class_add(std::optional<JniProgramEntryHelper>& epch,
         QoreProgram* pgm, ExceptionSink& xsink);
 
 //! Returns true if Java code that the calling code called can call into \a pgm (qore#6845, qore#7023)
@@ -1300,7 +1300,7 @@ private:
     //! the Program, dependency-referenced, or nullptr
     QoreProgram* pgm = nullptr;
     //! the entry into the Program; empty if the Program is current (see jni_enter_program_for_class_add())
-    std::optional<QoreExternalProgramContextHelper> epch;
+    std::optional<JniProgramEntryHelper> epch;
 
     //! Validates the pointer and dependency-references its Program (see the constructors)
     DLLLOCAL void acquire(Env& env, jlong ptr, jobject loader, bool callback = false);

@@ -245,6 +245,7 @@ object sub make() {
         addTestCase("a registered shared class of a deleted Program", \sharedClassTeardownTest());
         addTestCase("a call on a registered shared class enters the Program once", \sharedClassEntryTest());
         addTestCase("the handles of classpath policies", \classpathPolicyTest());
+        addTestCase("a conversion failure in a call's Program entry", \conversionFailureEntryTest());
         addTestCase("a shared call refused after the registration check", \sharedClassRefusedEntryTest());
         addTestCase("a shared class that is not registered by both Programs", \sharedClassRefusedTest());
         addTestCase("two classes injected for one class", \twoInjectedClassesTest());
@@ -682,6 +683,56 @@ sub give(Program target) { target.importClass(%y); }
         assertRegex("^ok: [0-9]+$", exit_java ?? "the exit handler made no Java call");
     }
 
+    #! a call whose argument or result cannot be converted leaves the object's Program with no Java exception pending
+    conversionFailureEntryTest() {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse("%modern
+%requires jni
+%module-cmd(jni) import org.qore.jni.QoreURLClassLoader
+public namespace NativeHandleConvert {
+    public class Api {
+        string take(auto x) { return \"took\"; }
+        number nan() { return @nan@n; }
+        string fine() { return \"fine\"; }
+    }
+}
+object sub make() { return new NativeHandleConvert::Api(); }
+binary sub bytes() { return QoreURLClassLoader::getCurrent().generateByteCode(\"qore.NativeHandleConvert.Api\"); }
+", "native-handle-convert");
+        binary bytes = p.callFunction("bytes");
+        object o = p.callFunction("make");
+
+        Counter entries();
+        Counter exits();
+        list<string> exit_java = ();
+        p.setThreadEntryHandler(sub () { entries.inc(); }, sub (auto ignored) {
+            exits.inc();
+            try {
+                exit_java += sprintf("ok: %d", NativeHandleProbe::handleCaseNames().size());
+            } catch (hash<ExceptionInfo> ex) {
+                exit_java += ex.err + ": " + ex.desc;
+            }
+        });
+        on_exit p.setThreadEntryHandler();
+
+        # the argument cannot be converted: the call raises the error of the conversion
+        string r = NativeHandleProbe::callBindingUnreadableArg("take", o,
+            NativeHandleProbe::methodBinding(bytes, "take"));
+        assertRegex("^exception: .*the entries of this map cannot be read", r, "argument");
+        # the result cannot be converted: the call raises the error of the conversion
+        r = NativeHandleProbe::callBinding("nan", o, NativeHandleProbe::methodBinding(bytes, "nan"));
+        assertRegex("^exception: .*NumberFormatException", r, "result");
+        # a call after them works
+        assertEq("ok: fine", NativeHandleProbe::callBinding("fine", o, NativeHandleProbe::methodBinding(bytes, "fine")));
+
+        assertEq(entries.getCount(), exits.getCount(), "each entry was left");
+        assertEq(exits.getCount(), exit_java.size());
+        assertGt(0, exit_java.size(), "the exit handler ran");
+        foreach string s in (exit_java) {
+            assertRegex("^ok: [0-9]+$", s, "the exit handler's Java call");
+        }
+    }
+
     #! the handles of the filesystem policies that are bound to classpath entries are validated
     classpathPolicyTest() {
         SandboxManager mgr();
@@ -696,6 +747,7 @@ sub give(Program target) { target.importClass(%y); }
 %module-cmd(jni) import org.qore.jni.test.NativeHandleProbe
 string sub double_release() { return NativeHandleProbe::classpathDoubleRelease(); }
 string sub wrong_kind() { return NativeHandleProbe::classpathWrongKind(); }
+string sub identity(int other) { return NativeHandleProbe::classpathIdentity(other); }
 ", "native-handle-classpath-policy");
 
         # a handle is released once; afterwards it is unknown
@@ -710,6 +762,21 @@ string sub wrong_kind() { return NativeHandleProbe::classpathWrongKind(); }
             assertTrue(r[i] =~ /^exception: .*invalid or released/, sprintf("%d: %s", i, r[i]));
         }
         assertEq("ok: false", r[2], "the policy denies reading /");
+
+        # two holds of one policy are the same policy, holds of two policies are not; merging keeps each policy once
+        SandboxManager other_mgr();
+        other_mgr.setUncontrolledApiPolicy(True);
+        other_mgr.setFilesystemDefaultPolicy(False);
+        Program other(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        other.loadModule("jni");
+        other.issueModuleCmd("jni", "add-classpath " + get_script_dir() + "/../build/qore-jni-test.jar");
+        other.setSandboxManager(other_mgr);
+        other.parse("%modern
+%requires jni
+%module-cmd(jni) import org.qore.jni.test.NativeHandleProbe
+int sub hold() { return NativeHandleProbe::classpathHold(); }
+", "native-handle-classpath-policy-other");
+        assertEq("ok: true; ok: false; 1; 2; 2", tenant.callFunction("identity", other.callFunction("hold")));
     }
 
     #! a call on the object of a registered Program enters that Program once, as any call of a method of the object

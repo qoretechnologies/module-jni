@@ -411,9 +411,14 @@ public final class QoreSandbox {
             }
             return rv;
         } catch (Throwable e) {
-            // the references that no object has taken
+            // the handles that no object has taken; a failure to release one neither stops the release of the others
+            // nor replaces the original exception
             for (; i < ptrs.length; ++i) {
-                releaseClasspathManager0(ptrs[i]);
+                try {
+                    releaseClasspathManager0(ptrs[i]);
+                } catch (RuntimeException re) {
+                    e.addSuppressed(re);
+                }
             }
             throw e;
         }
@@ -874,10 +879,11 @@ public final class QoreSandbox {
     //! Returns the JNI-SANDBOX-ERROR exception for a closed policy
     private static native RuntimeException closedError0();
 
-    //! Returns new references to the filesystem policies of the captured policy \a ptr, or of the current thread if 0
+    //! Returns new opaque handles of the filesystem policies of the captured policy \a ptr, or of the current thread
+    //! if 0; each handle holds the policy until it is released with releaseClasspathManager0()
     private static native long[] classpathManagers0(long ptr);
 
-    //! Returns true if the policy manager \a ptr alone allows reading \a path
+    //! Returns true if the policy of the classpath policy handle \a ptr alone allows reading \a path
     private static native boolean checkClasspathRead0(long ptr, byte[] path);
 
     //! Releases a handle returned by classpathManagers0()

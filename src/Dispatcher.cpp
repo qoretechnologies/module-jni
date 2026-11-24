@@ -155,7 +155,7 @@ jobject QoreCodeDispatcher::dispatch(Env& env, jobject proxy, jobject method, jo
         // holds the global context Program, if the callback is made in it (qore#6829); declared before the entry,
         // so that the entry is left first
         JniContextProgramHolder ctx_holder;
-        std::optional<QoreExternalProgramContextHelper> pctx;
+        std::optional<JniProgramEntryHelper> pctx;
         JniExternalProgramData* jpc = nullptr;
         // a Program with no jni data, also one that has been deleted, whose jni data has been destroyed: the callback
         // is made in the Program that the context falls back to, and the Program is not entered; the registry is

@@ -861,7 +861,7 @@ JniQoreClass* QoreJniClassMap::findCreateQoreClassInProgram(QoreString& name, co
     // no runtime entry when the Program is current: a module command can add the class to a Program that has code
     // pending (see jni_enter_program_for_class_add()); xsink, declared above, outlives the entry, which uses it when it
     // is left
-    std::optional<QoreExternalProgramContextHelper> epch;
+    std::optional<JniProgramEntryHelper> epch;
     jni_enter_program_for_class_add(epch, pgm, xsink);
 
     // grab current Program's parse lock before manipulating namespaces
@@ -1160,7 +1160,7 @@ void QoreJniClassMap::addClassToProgram(JniQoreClass* qc, const char* jpath, Qor
     // pending (see jni_enter_program_for_class_add()); the sink is declared before the entry, which uses it when it is
     // left
     ExceptionSink xsink;
-    std::optional<QoreExternalProgramContextHelper> epch;
+    std::optional<JniProgramEntryHelper> epch;
     jni_enter_program_for_class_add(epch, pgm, xsink);
 
     // grab current Program's parse lock before manipulating namespaces
@@ -4878,7 +4878,7 @@ static QoreValue exec_java_method(const QoreMethod& meth, BaseMethod* m, QoreObj
         // the current one (see jni_enter_call_program()); its jni data is looked up only then, as the Program's
         // teardown can destroy the data of a Program that the thread is not in; the entry is left when epch is
         // destroyed, also when an exception propagates; a call within the object's Program costs only the comparison
-        std::optional<QoreExternalProgramContextHelper> epch;
+        std::optional<JniProgramEntryHelper> epch;
         if (pgm && pgm != ::getProgram() && jni_enter_call_program(epch, pgm, xsink)) {
             return QoreValue();
         }
@@ -5124,7 +5124,7 @@ bool JniExternalProgramData::hasProgramData(const QoreProgram* pgm) {
     return reg.pgms.find(pgm) != reg.pgms.end();
 }
 
-void jni_enter_program_for_class_add(std::optional<QoreExternalProgramContextHelper>& epch, QoreProgram* pgm,
+void jni_enter_program_for_class_add(std::optional<JniProgramEntryHelper>& epch, QoreProgram* pgm,
         ExceptionSink& xsink) {
     assert(pgm);
     assert(!xsink);
@@ -5512,7 +5512,7 @@ void JniJavaProgramRef::release() noexcept {
     }
 }
 
-int jni_enter_call_program(std::optional<QoreExternalProgramContextHelper>& epch, QoreProgram*& pgm,
+int jni_enter_call_program(std::optional<JniProgramEntryHelper>& epch, QoreProgram*& pgm,
         ExceptionSink* xsink) {
     assert(!*xsink);
     if (!pgm || pgm == ::getProgram()) {

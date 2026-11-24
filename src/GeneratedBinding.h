@@ -77,6 +77,8 @@ private:
 // A weak reference from the registry keeps the Program allocation valid while the
 // context helper atomically enters execution or rejects a Program being torn down.
 // Never hold the registry mutex while acquiring a Program context or executing code.
+// The entries do not set a pending Java exception aside when they are left: a JNI caller declares a
+// JniJavaExceptionAside before the context and its guard after it (see JniProgramEntryHelper in Jvm.h).
 class GeneratedBindingContext {
 public:
     //! Holds the binding and enters its Programs

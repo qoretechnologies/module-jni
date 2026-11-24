@@ -27,6 +27,9 @@
       another %Program runs only if both %Programs registered the class.  A call that passes the registration check
       and is then refused because the object's class differs has run that %Program's entry and exit handlers once, and
       none of the call's code
+    - Fixed: a %Program's exit handler that calls Java now works when the call that left the %Program failed with a
+      Java exception, ex: in the conversion of its arguments or of its result; the exception is raised after the
+      %Program has been left, and remains the error of the call (qore#7068)
     - <b>Security</b> (qore#7068): the filesystem policies that are bound to classpath entries are now held by opaque,
       validated handles in Java, like the other native references, and are released exactly once
     - <b>Behavior change</b> (qore#7340): when the %Qore program ends while a Java thread is still inside a call of

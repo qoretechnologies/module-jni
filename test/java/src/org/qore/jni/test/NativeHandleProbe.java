@@ -280,6 +280,62 @@ public final class NativeHandleProbe {
         }
     }
 
+    //! Returns a new classpath policy handle of the calling code, which the caller passes to classpathIdentity()
+    public static long classpathHold() throws Throwable {
+        long[] h = classpathHandles();
+        for (int i = 1; i < h.length; ++i) {
+            invoke(null, QoreSandbox.class, "releaseClasspathManager0", J, h[i]);
+        }
+        return h[0];
+    }
+
+    //! Compares classpath policy handles, and merges classpath policies as the policies of a classpath entry are merged
+    /** @param other a classpath policy handle of another policy than the calling code's (see classpathHold()), which
+        this call takes
+
+        @return the results of comparing two holds of the policy of the calling code, and one of them with \a other,
+        then the numbers of policies that the merges of: two holds of the policy of the calling code; the two holds and
+        \a other; \a other and the two holds
+    */
+    public static String classpathIdentity(long other) throws Throwable {
+        long own = classpathHold();
+        long own2 = classpathHold();
+        Class<?>[] jj = new Class<?>[] {long.class, long.class};
+        String same = attempt(() -> invoke(null, QoreSandbox.class, "sameClasspathPolicy0", jj, own, own2));
+        String different = attempt(() -> invoke(null, QoreSandbox.class, "sameClasspathPolicy0", jj, own, other));
+        // the policy objects take the handles, which they release when they are collected
+        Class<?> pc = Class.forName("org.qore.jni.QoreSandbox$ClasspathPolicy", true,
+            QoreSandbox.class.getClassLoader());
+        Object a = constructPolicy(pc, own);
+        Object b = constructPolicy(pc, own2);
+        Object o = constructPolicy(pc, other);
+        Class<?> guard = Class.forName("org.qore.jni.QoreClasspathGuard", true, QoreSandbox.class.getClassLoader());
+        Class<?> arr = java.lang.reflect.Array.newInstance(pc, 0).getClass();
+        Method union = method(guard, "union", arr, arr);
+        int n1 = java.lang.reflect.Array.getLength(union.invoke(null, policies(pc, a), policies(pc, b)));
+        int n2 = java.lang.reflect.Array.getLength(union.invoke(null, policies(pc, a), policies(pc, b, o)));
+        int n3 = java.lang.reflect.Array.getLength(union.invoke(null, policies(pc, o), policies(pc, a, b)));
+        return same + "; " + different + "; " + n1 + "; " + n2 + "; " + n3;
+    }
+
+    private static Object constructPolicy(Class<?> pc, long handle) throws Throwable {
+        Constructor<?> c = pc.getDeclaredConstructor(long.class);
+        c.setAccessible(true);
+        try {
+            return c.newInstance(handle);
+        } catch (InvocationTargetException e) {
+            throw e.getCause();
+        }
+    }
+
+    private static Object policies(Class<?> pc, Object... p) {
+        Object rv = java.lang.reflect.Array.newInstance(pc, p.length);
+        for (int i = 0; i < p.length; ++i) {
+            java.lang.reflect.Array.set(rv, i, p[i]);
+        }
+        return rv;
+    }
+
     //! Returns the names of the cases that take a handle
     public static List<String> handleCaseNames() {
         return new ArrayList<>(handleCases(null).keySet());
@@ -851,6 +907,19 @@ public final class NativeHandleProbe {
     //! Calls a method binding on an object through the public entry point that takes the wrapper
     public static String callBinding(String name, Object obj, long binding, Object... args) {
         return attempt(() -> JavaClassBuilder.doNormalCall(name, (QoreObjectBase)obj, binding, 0L, args));
+    }
+
+    //! A Map whose entries cannot be read: its conversion to a Qore hash raises a Java exception
+    private static final class UnreadableMap extends java.util.AbstractMap<Object, Object> {
+        @Override
+        public java.util.Set<Map.Entry<Object, Object>> entrySet() {
+            throw new IllegalStateException("the entries of this map cannot be read");
+        }
+    }
+
+    //! Calls a method binding with an argument whose conversion to Qore raises a Java exception
+    public static String callBindingUnreadableArg(String name, Object obj, long binding) {
+        return callBinding(name, obj, binding, new UnreadableMap());
     }
 
     private static volatile Object keptWrapper;

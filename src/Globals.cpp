@@ -1057,7 +1057,7 @@ static jobject java_api_call_function_internal(JNIEnv* jenv, jobject obj, jlong 
     JniExternalProgramData* jpc = jni_get_context_unconditional(pgm, ctx_holder);
 
     ExceptionSink xsink;
-    QoreExternalProgramContextHelper pch(&xsink, pgm);
+    JniProgramEntryHelper pch(&xsink, pgm);
     if (xsink) {
         QoreToJava::wrapException(env, xsink);
         return nullptr;
@@ -1170,7 +1170,7 @@ static jobject java_api_call_static_method_internal(JNIEnv* jenv, jobject obj, j
     QoreJniStackLocationHelper slh;
 
     ExceptionSink xsink;
-    QoreExternalProgramContextHelper epch(&xsink, pgm);
+    JniProgramEntryHelper epch(&xsink, pgm);
     if (xsink) {
         QoreToJava::wrapException(env, xsink);
         return nullptr;
@@ -1310,7 +1310,7 @@ static jobject JNICALL java_api_new_object_save(JNIEnv* jenv, jobject obj, jlong
     printd(5, "java_api_new_object_save() pgm: %p\n", pgm);
 
     ExceptionSink xsink;
-    QoreExternalProgramContextHelper pch(&xsink, pgm);
+    JniProgramEntryHelper pch(&xsink, pgm);
     if (xsink) {
         QoreToJava::wrapException(env, xsink);
         return nullptr;
@@ -1643,7 +1643,7 @@ static jobject qore_object_closure_call_internal(JNIEnv* jenv, jclass, QoreProgr
     ExceptionSink xsink;
     try {
         // set program context before converting arguments
-        std::optional<QoreExternalProgramContextHelper> pch;
+        std::optional<JniProgramEntryHelper> pch;
         pch.emplace(&xsink, pgm);
         if (xsink) {
             throw XsinkException(xsink);
@@ -1773,7 +1773,7 @@ static jobject qore_object_closure_call_java_ptr(JNIEnv* jenv, jclass jcls, jlon
     // first (see jni_enter_call_program()), so that its jni data cannot be destroyed during the call; a Program with no
     // jni data, or one that has been deleted, leaves the context of the calling code
     ExceptionSink entry_xsink;
-    std::optional<QoreExternalProgramContextHelper> epch;
+    std::optional<JniProgramEntryHelper> epch;
     if (!pgm && ptr) {
         pgm = object_handle ? object_handle->getObject()->getProgram() : closure_handle->getCall()->getProgram();
         if (pgm && pgm != ::getProgram() && jni_enter_call_program(epch, pgm, &entry_xsink)) {
@@ -1829,7 +1829,7 @@ static jobject JNICALL qore_object_get_member_value(JNIEnv* jenv, jobject jobj, 
     ExceptionSink xsink;
     ValueHolder rv(&xsink);
     {
-        QoreExternalProgramContextHelper epch(&xsink, pgm);
+        JniProgramEntryHelper epch(&xsink, pgm);
         if (xsink) {
             QoreToJava::wrapException(env, xsink);
             return nullptr;
@@ -2035,7 +2035,10 @@ static bool jni_method_takes_extra_args(const QoreClass& cls, const char* name) 
 static jobject JNICALL java_class_builder_do_normal_call(JNIEnv* jenv, jclass jcls, jstring mname, jlong qobj,
         jlong method_handle, jlong reserved, jobjectArray args) try {
     return generated_native_call<jobject>(jenv, [&](Env& env, ExceptionSink& xsink) -> jobject {
+        // the binding's entries are left with no Java exception pending (see JniJavaExceptionAside)
+        JniJavaExceptionAside aside;
         GeneratedBindingContext binding(method_handle, GeneratedBindingKind::Method, &xsink);
+        JniJavaExceptionAside::Guard aside_guard(aside);
         if (!qobj || reserved) {
             throw std::runtime_error("Invalid object or variant in generated Qore method call");
         }
@@ -2100,8 +2103,11 @@ static jobject JNICALL java_class_builder_do_static_call(JNIEnv* jenv, jclass jc
         jlong program_id, jlong method_handle, jlong reserved, jobjectArray args) try {
     return generated_native_call<jobject>(jenv, [&](Env& env, ExceptionSink& xsink) -> jobject {
         // a static method is called in the Program of the class (qore#7023)
+        // the binding's entries are left with no Java exception pending (see JniJavaExceptionAside)
+        JniJavaExceptionAside aside;
         GeneratedBindingContext binding(method_handle, GeneratedBindingKind::StaticMethod, &xsink, jni_check_governed_caller_reaches);
         GeneratedBindingContext cls(class_handle, GeneratedBindingKind::Class, &xsink, jni_check_governed_caller_reaches);
+        JniJavaExceptionAside::Guard aside_guard(aside);
         generated_program_context(binding->pgm, program_id);
         if (reserved || cls->cls != binding->cls) {
             throw std::runtime_error("Invalid class or variant in generated Qore static method call");
@@ -2116,7 +2122,10 @@ static jobject JNICALL java_class_builder_do_function_call(JNIEnv* jenv, jclass 
         jlong function_handle, jlong reserved, jobjectArray args) try {
     return generated_native_call<jobject>(jenv, [&](Env& env, ExceptionSink& xsink) -> jobject {
         // a function is called in the Program of the function (qore#7023)
+        // the binding's entries are left with no Java exception pending (see JniJavaExceptionAside)
+        JniJavaExceptionAside aside;
         GeneratedBindingContext binding(function_handle, GeneratedBindingKind::Function, &xsink, jni_check_governed_caller_reaches);
+        JniJavaExceptionAside::Guard aside_guard(aside);
         QoreProgram* pgm = binding->pgm;
         JniExternalProgramData* jpc = generated_program_context(pgm, program_id);
         if (reserved) {
@@ -2143,7 +2152,10 @@ static jobject JNICALL java_class_builder_get_constant_value(JNIEnv* jenv, jclas
     return generated_native_call<jobject>(jenv, [&](Env& env, ExceptionSink& xsink) -> jobject {
         JniExternalProgramData* caller_context = jni_get_context();
         // the value of a constant of the Program of the class or namespace (qore#7023)
+        // the binding's entries are left with no Java exception pending (see JniJavaExceptionAside)
+        JniJavaExceptionAside aside;
         GeneratedBindingContext binding(constant_handle, GeneratedBindingKind::Constant, &xsink, jni_check_governed_caller_reaches);
+        JniJavaExceptionAside::Guard aside_guard(aside);
         JniExternalProgramData* jpc = generated_program_context(binding->pgm, program_id, caller_context);
         ValueHolder val(binding->constant->getReferencedValue(), &xsink);
         return QoreToJava::toAnyObject(env, *val, jpc);
@@ -2787,7 +2799,7 @@ static jobject JNICALL qore_url_classloader_get_classes_in_namespace(JNIEnv* jen
         // its code, so the Program is not entered when it is current already, as it can have code pending, which no
         // runtime entry is allowed into (qore#6785); see jni_enter_program_for_class_add().  xsink, declared above,
         // outlives the entry, which uses it when it is left
-        std::optional<QoreExternalProgramContextHelper> epch;
+        std::optional<JniProgramEntryHelper> epch;
         jni_enter_program_for_class_add(epch, pgm, xsink);
         // the parse lock is taken immediately after: when the Program is current and not entered, it is what keeps
         // the Program from being torn down while its namespaces are read
@@ -3400,7 +3412,10 @@ static jlong JNICALL qore_object_create(JNIEnv* jenv, jclass ignore, jlong class
         // an object of a class of another Program, or created in another Program, is not created for code that a
         // sandbox governs (qore#7023)
         jni_check_governed_caller_reaches(pgm);
+        // the binding's entries are left with no Java exception pending (see JniJavaExceptionAside)
+        JniJavaExceptionAside aside;
         GeneratedBindingContext binding(class_handle, GeneratedBindingKind::Class, &xsink, jni_check_governed_caller_reaches);
+        JniJavaExceptionAside::Guard aside_guard(aside);
         if (reserved_method || reserved_variant) {
             throw std::runtime_error("Invalid context or constructor binding; regenerate the class");
         }
@@ -3444,7 +3459,7 @@ static jlong JNICALL qore_object_create(JNIEnv* jenv, jclass ignore, jlong class
         }
 
         // set program context before converting arguments
-        QoreExternalProgramContextHelper pch(&xsink, pgm);
+        JniProgramEntryHelper pch(&xsink, pgm);
         if (xsink) {
             throw XsinkException(xsink);
         }
