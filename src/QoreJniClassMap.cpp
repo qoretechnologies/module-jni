@@ -40,6 +40,7 @@
 #include "defs.h"
 #include "Jvm.h"
 #include "QoreJniClassMap.h"
+#include "QoreJdbcConnection.h"
 #include "GeneratedBinding.h"
 #include "ql_jni_debug.h"
 #include "Class.h"
@@ -5798,6 +5799,9 @@ JniExternalProgramData::~JniExternalProgramData() {
     Globals::dbgContextMarker("jni-dbg: the jni data of a Program is destroyed\n");
 #endif
     jni_pgm_data_unregister(pgm, this);
+    // the state of the Program's jdbc connections is marked deleted, and the uses of other threads are waited for,
+    // before the data is destroyed (qore#7665)
+    QoreJdbcProgramState::programDataDestroyed(pgm);
     // NOTE: the module root namespace cache is NOT purged here.  It is keyed by the Program that
     // owns each class (qc.getProgram()), which for a module class is the module's own Program and
     // need not have a JniExternalProgramData at all, so this destructor cannot see every entry.

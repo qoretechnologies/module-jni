@@ -36,7 +36,10 @@
 #include "QoreJdbcDriver.h"
 #include "defs.h"
 
+#include <condition_variable>
+#include <map>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -86,6 +89,131 @@ private:
 
     //! the URLs that the connection connected with, in UTF-8
     std::vector<std::string> used_urls;
+};
+
+//! Whether a Program that opened jdbc connections has been deleted, and the operations that use it (qore#7665)
+/** One state is shared by the connections of a Program; it is registered by the id of the Program, which is never
+    reused.  An operation of a connection that uses the Program or its jni data, made by a thread that does not run in
+    the Program, holds a use of the state for the operation (acquire()); the module's Program cleanup callback marks
+    the state deleted, and waits for the uses held by other threads, before the teardown of the Program destroys its
+    jni data (see programDeleted()).  The deleted state stays registered until the Program's jni data is destroyed, so
+    that a connection opened by the Program after its cleanup callback (ex: by its own destructors) is refused as
+    well.  The operations do not enter the Program, so they run in the context of their caller (ex: its time zone).
+*/
+class QoreJdbcProgramState {
+public:
+    //! Returns the state of the Program, which is created and registered if it has none
+    /** Called when the Program has jni data, which unregisters the state when it is destroyed (see
+        programDataDestroyed())
+    */
+    DLLLOCAL static std::shared_ptr<QoreJdbcProgramState> get(QoreProgram* pgm);
+
+    //! Marks the state of the Program deleted and waits for the uses held by other threads
+    /** Called by the module's Program cleanup callback, before the Program's jni data is destroyed; a Program with jni
+        data and no state gets a deleted state
+    */
+    DLLLOCAL static void programDeleted(QoreProgram* pgm);
+
+    //! Marks the state of the Program, whose jni data is destroyed, deleted, and then unregisters it
+    /** Waits for the uses held by other threads, as programDeleted() does: a connection that the Program opened after
+        its cleanup callback (by its own destructors) uses a state that the callback did not mark; the state stays
+        registered while the uses are waited for, so that a connection opened meanwhile gets the deleted state
+    */
+    DLLLOCAL static void programDataDestroyed(const QoreProgram* pgm);
+
+    //! Releases \a state, and unregisters it if no other connection holds it and the Program has no jni data
+    /** Called when a connection could not get the Program's jni data, which would unregister the state
+    */
+    DLLLOCAL static void discardUnused(const QoreProgram* pgm, std::shared_ptr<QoreJdbcProgramState>& state);
+
+    //! Takes a use of the state for an operation of the calling thread; returns false if the Program has been deleted
+    /** A use held by the thread that deletes the Program (ex: a Java callback into %Qore during the operation releases
+        the Program's last reference) is not waited for, as that would never end: the operation must not use the
+        Program after it returns to it
+    */
+    DLLLOCAL bool acquire();
+
+    //! Releases a use taken with acquire() by the calling thread
+    DLLLOCAL void release();
+
+private:
+    std::mutex m;
+    std::condition_variable cv;
+    //! true once the Program's cleanup callback has run
+    bool deleted = false;
+    //! the uses held, by thread
+    std::map<int, unsigned> users;
+
+    //! Marks the state deleted and waits for the uses held by other threads
+    DLLLOCAL void markDeleted();
+};
+
+//! A use of the state of a Program for an operation; see QoreJdbcProgramState::acquire()
+class QoreJdbcProgramUse {
+public:
+    DLLLOCAL QoreJdbcProgramUse() = default;
+
+    DLLLOCAL ~QoreJdbcProgramUse() {
+        reset();
+    }
+
+    //! Releases the use, if any
+    DLLLOCAL void reset() {
+        if (state) {
+            state->release();
+            state.reset();
+        }
+    }
+
+    QoreJdbcProgramUse(const QoreJdbcProgramUse&) = delete;
+    QoreJdbcProgramUse& operator=(const QoreJdbcProgramUse&) = delete;
+
+    //! Takes a use of the state; returns false if the Program has been deleted
+    DLLLOCAL bool acquire(const std::shared_ptr<QoreJdbcProgramState>& s) {
+        assert(!state);
+        if (!s->acquire()) {
+            return false;
+        }
+        state = s;
+        return true;
+    }
+
+private:
+    std::shared_ptr<QoreJdbcProgramState> state;
+};
+
+//! A dependency reference to the Program that opens a jdbc connection (qore#7665)
+/** The reference keeps the Program allocated, so that its address cannot name another Program, but it does not keep
+    the Program from being deleted: a datasource that its own Program holds (ex: in a global variable) would otherwise
+    keep that Program alive through its connection.  Whether the Program has been deleted is checked before each
+    operation that uses it; see QoreJdbcConnection::useProgram().
+*/
+class QoreJdbcProgramRef {
+public:
+    //! Takes a dependency reference to the Program of the calling code
+    DLLLOCAL QoreJdbcProgramRef() : pgm(qore_get_call_program_context()) {
+        if (pgm) {
+            pgm->depRef();
+        }
+    }
+
+    //! Releases the dependency reference
+    DLLLOCAL ~QoreJdbcProgramRef() {
+        if (pgm) {
+            pgm->depDeref();
+        }
+    }
+
+    QoreJdbcProgramRef(const QoreJdbcProgramRef&) = delete;
+    QoreJdbcProgramRef& operator=(const QoreJdbcProgramRef&) = delete;
+
+    //! Returns the Program
+    DLLLOCAL QoreProgram* get() const {
+        return pgm;
+    }
+
+private:
+    QoreProgram* pgm;
 };
 
 class QoreJdbcConnection {
@@ -215,9 +343,23 @@ public:
     */
     DLLLOCAL QoreValue execRaw(const QoreString* qstr, ExceptionSink* xsink);
 
+    //! Returns the Program that opened the connection
+    /** Its jni data, and the Program itself, may be used only in an operation for which useProgram() succeeded
+    */
     DLLLOCAL QoreProgram* getProgram() const {
-        return pgm;
+        return pgm.get();
     }
+
+    //! Checks that the Program that opened the connection can be used for an operation (qore#7665)
+    /** If the thread runs in the Program, the Program's teardown waits for it before it destroys the Program's jni
+        data; otherwise a use of the Program's state is taken for the operation, which the teardown waits for (see
+        QoreJdbcProgramState).  The Program is not entered.
+
+        @param use the use, which the caller keeps for the operation
+
+        @return true if the operation can use the Program and its jni data, false if the Program has been deleted
+    */
+    DLLLOCAL bool useProgram(QoreJdbcProgramUse& use) const;
 
     DLLLOCAL Datasource* getDatasource() {
         return ds;
@@ -258,10 +400,14 @@ private:
     //! Qore Program context
     /** The Program context of the code that opens the connection, which is the library's Program when library code
         opens it: the connection belongs to its datasource, which can outlive the code that opened it and serve other
-        code, so it is not placed in the Program of the code that library code serves (qore#7394)
+        code, so it is not placed in the Program of the code that library code serves (qore#7394).  The connection
+        holds a dependency reference to it (qore#7665): an operation that uses it, or its jni data, checks that it can
+        first (see useProgram())
     */
-    QoreProgram* pgm = qore_get_call_program_context();
-    //! JNI program context
+    QoreJdbcProgramRef pgm;
+    //! the state of \a pgm (qore#7665); none in a child process created with fork()
+    std::shared_ptr<QoreJdbcProgramState> pgm_state;
+    //! JNI program context: the jni data of \a pgm, which its teardown destroys
     JniExternalProgramData* jpc = nullptr;
 
     //! Qore datasource.

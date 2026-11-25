@@ -239,6 +239,14 @@
       and their \c global-* forms raise it, as does the \c classpath option of the \c jdbc driver when a connection
       is opened, and the module's initialization fails with it for the \c QORE_JNI_CLASSPATH environment variable;
       an entry that does not exist or cannot be used is still left out (qore#6779, see @ref jniimport)
+    - fixed a use-after-free and a crash in the @ref jnijdbc_driverguide "jdbc driver" when the %Program that opened
+      a connection was deleted while its \c Datasource or \c DatasourcePool lived on in another %Program: the
+      connection kept that %Program and its jni data without a reference, so describing a statement's result read the
+      freed jni data, and converting a Java value (ex: a \c java.util.UUID column) used the deleted %Program, whose
+      jni data was gone (an assertion failure in a debug build).  The connection now keeps the %Program allocated
+      with a dependency reference, which does not keep it from being deleted; an operation of the connection after
+      the %Program has been deleted raises \c JDBC-CONNECTION-ERROR and aborts the connection, and deleting the
+      %Program waits for an operation of another thread that uses it (see @ref jdbc_program_lifetime, qore#7665)
     - fixed a Java exception raised while the \c QORE_JNI_CLASSPATH environment variable was processed when the
       module was loaded, which aborted a debug build in an assertion, as it was converted before the jni data of the
       Program was registered, and which a release build ignored: it is now a module initialization error

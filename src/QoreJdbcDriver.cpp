@@ -55,6 +55,33 @@ static std::shared_ptr<const JavaExceptionTextMasker> jdbc_masker(const QoreJdbc
     return conn ? conn->getMasker() : nullptr;
 }
 
+//! Checks that the Program that opened the connection can be used for an operation (qore#7665)
+/** The connection keeps the Program that opened it (see QoreJdbcConnection::useProgram()): if that Program has been
+    deleted, its jni data is gone and the connection cannot be used for the operation; it is aborted, as a lost
+    connection that cannot be re-established is, which closes its JDBC connection and ends its transaction
+
+    @return 0 if the operation can proceed, -1 if an exception was raised; the datasource's connection, its
+    statements and \a conn are deleted then
+*/
+static int jdbc_use_program(Datasource* ds, QoreJdbcConnection* conn, QoreJdbcProgramUse& use,
+        ExceptionSink* xsink) {
+    if (!conn || conn->useProgram(use)) {
+        return 0;
+    }
+    xsink->raiseException("JDBC-CONNECTION-ERROR", "the Program that opened the jdbc connection has been deleted; "
+        "the connection cannot be used for this operation and has been aborted");
+    // closes the datasource's statements and the connection, which deletes conn: it is not used after this call
+    ds->connectionAborted(xsink);
+    return -1;
+}
+
+//! Checks that the Program that opened the connection of the statement's datasource can be used; see
+//! jdbc_use_program()
+static int jdbc_stmt_use_program(SQLStatement* stmt, QoreJdbcProgramUse& use, ExceptionSink* xsink) {
+    Datasource* ds = stmt->getDatasource();
+    return jdbc_use_program(ds, ds->getPrivateData<QoreJdbcConnection>(), use, xsink);
+}
+
 static int jdbc_open(Datasource* ds, ExceptionSink* xsink) {
     // the secrets of the connection are masked in the text of the Java exceptions of the operation, also of those
     // converted here (qore#7344)
@@ -123,6 +150,11 @@ static int jdbc_begin_transaction(Datasource* ds, ExceptionSink* xsink) {
     // the secrets of the connection are masked in the text of the Java exceptions of the operation (qore#7344)
     JavaExceptionMaskHelper mask_helper(jdbc_masker(conn));
     assert(conn);
+    // the operation can use the Program that opened the connection (qore#7665)
+    QoreJdbcProgramUse use;
+    if (jdbc_use_program(ds, conn, use, xsink)) {
+        return -1;
+    }
     int rc = conn->beginTransaction(xsink);
     if (rc) {
         ds->connectionAborted(xsink);
@@ -135,6 +167,11 @@ static QoreValue jdbc_select(Datasource* ds, const QoreString* qstr, const QoreL
     // the secrets of the connection are masked in the text of the Java exceptions of the operation (qore#7344)
     JavaExceptionMaskHelper mask_helper(jdbc_masker(conn));
     assert(conn);
+    // the operation can use the Program that opened the connection (qore#7665)
+    QoreJdbcProgramUse use;
+    if (jdbc_use_program(ds, conn, use, xsink)) {
+        return QoreValue();
+    }
     return conn->select(qstr, args, xsink);
 }
 
@@ -145,6 +182,11 @@ static QoreColumnarResult* jdbc_select_columnar(Datasource* ds, const QoreString
     // the secrets of the connection are masked in the text of the Java exceptions of the operation (qore#7344)
     JavaExceptionMaskHelper mask_helper(jdbc_masker(conn));
     assert(conn);
+    // the operation can use the Program that opened the connection (qore#7665)
+    QoreJdbcProgramUse use;
+    if (jdbc_use_program(ds, conn, use, xsink)) {
+        return nullptr;
+    }
     return conn->selectColumnar(qstr, args, xsink);
 }
 #endif
@@ -155,6 +197,11 @@ static QoreHashNode* jdbc_select_row(Datasource* ds, const QoreString* qstr, con
     // the secrets of the connection are masked in the text of the Java exceptions of the operation (qore#7344)
     JavaExceptionMaskHelper mask_helper(jdbc_masker(conn));
     assert(conn);
+    // the operation can use the Program that opened the connection (qore#7665)
+    QoreJdbcProgramUse use;
+    if (jdbc_use_program(ds, conn, use, xsink)) {
+        return nullptr;
+    }
     return conn->selectRow(qstr, args, xsink);
 }
 
@@ -164,6 +211,11 @@ static QoreValue jdbc_select_rows(Datasource* ds, const QoreString* qstr, const 
     // the secrets of the connection are masked in the text of the Java exceptions of the operation (qore#7344)
     JavaExceptionMaskHelper mask_helper(jdbc_masker(conn));
     assert(conn);
+    // the operation can use the Program that opened the connection (qore#7665)
+    QoreJdbcProgramUse use;
+    if (jdbc_use_program(ds, conn, use, xsink)) {
+        return QoreValue();
+    }
     return conn->selectRows(qstr, args, xsink);
 }
 
@@ -172,6 +224,11 @@ static QoreValue jdbc_exec(Datasource* ds, const QoreString* qstr, const QoreLis
     // the secrets of the connection are masked in the text of the Java exceptions of the operation (qore#7344)
     JavaExceptionMaskHelper mask_helper(jdbc_masker(conn));
     assert(conn);
+    // the operation can use the Program that opened the connection (qore#7665)
+    QoreJdbcProgramUse use;
+    if (jdbc_use_program(ds, conn, use, xsink)) {
+        return QoreValue();
+    }
     return conn->exec(qstr, args, xsink);
 }
 
@@ -180,6 +237,11 @@ static QoreValue jdbc_exec_raw(Datasource* ds, const QoreString* qstr, Exception
     // the secrets of the connection are masked in the text of the Java exceptions of the operation (qore#7344)
     JavaExceptionMaskHelper mask_helper(jdbc_masker(conn));
     assert(conn);
+    // the operation can use the Program that opened the connection (qore#7665)
+    QoreJdbcProgramUse use;
+    if (jdbc_use_program(ds, conn, use, xsink)) {
+        return QoreValue();
+    }
     return conn->execRaw(qstr, xsink);
 }
 
@@ -216,6 +278,11 @@ static int jdbc_stmt_prepare(SQLStatement* stmt, const QoreString& str, const Qo
         ExceptionSink* xsink) {
     // the secrets of the connection are masked in the text of the Java exceptions of the operation (qore#7344)
     JavaExceptionMaskHelper mask_helper(jdbc_masker(stmt->getDatasource()->getPrivateData<QoreJdbcConnection>()));
+    // the operation can use the Program that opened the connection (qore#7665)
+    QoreJdbcProgramUse use;
+    if (jdbc_stmt_use_program(stmt, use, xsink)) {
+        return -1;
+    }
     assert(!stmt->getPrivateData());
 
     QoreJdbcPreparedStatement* ps = new QoreJdbcPreparedStatement(
@@ -228,6 +295,11 @@ static int jdbc_stmt_prepare(SQLStatement* stmt, const QoreString& str, const Qo
 static int jdbc_stmt_prepare_raw(SQLStatement* stmt, const QoreString& str, ExceptionSink* xsink) {
     // the secrets of the connection are masked in the text of the Java exceptions of the operation (qore#7344)
     JavaExceptionMaskHelper mask_helper(jdbc_masker(stmt->getDatasource()->getPrivateData<QoreJdbcConnection>()));
+    // the operation can use the Program that opened the connection (qore#7665)
+    QoreJdbcProgramUse use;
+    if (jdbc_stmt_use_program(stmt, use, xsink)) {
+        return -1;
+    }
     assert(!stmt->getPrivateData());
 
     QoreJdbcPreparedStatement* ps = new QoreJdbcPreparedStatement(
@@ -240,6 +312,11 @@ static int jdbc_stmt_prepare_raw(SQLStatement* stmt, const QoreString& str, Exce
 static int jdbc_stmt_bind(SQLStatement* stmt, const QoreListNode& args, ExceptionSink* xsink) {
     // the secrets of the connection are masked in the text of the Java exceptions of the operation (qore#7344)
     JavaExceptionMaskHelper mask_helper(jdbc_masker(stmt->getDatasource()->getPrivateData<QoreJdbcConnection>()));
+    // the operation can use the Program that opened the connection (qore#7665)
+    QoreJdbcProgramUse use;
+    if (jdbc_stmt_use_program(stmt, use, xsink)) {
+        return -1;
+    }
     QoreJdbcPreparedStatement* ps = stmt->getPrivateData<QoreJdbcPreparedStatement>();
     assert(ps);
 
@@ -255,6 +332,11 @@ static int jdbc_stmt_bind_placeholders(SQLStatement* stmt, const QoreListNode& a
 static int jdbc_stmt_bind_values(SQLStatement* stmt, const QoreListNode& args, ExceptionSink* xsink) {
     // the secrets of the connection are masked in the text of the Java exceptions of the operation (qore#7344)
     JavaExceptionMaskHelper mask_helper(jdbc_masker(stmt->getDatasource()->getPrivateData<QoreJdbcConnection>()));
+    // the operation can use the Program that opened the connection (qore#7665)
+    QoreJdbcProgramUse use;
+    if (jdbc_stmt_use_program(stmt, use, xsink)) {
+        return -1;
+    }
     QoreJdbcPreparedStatement* ps = stmt->getPrivateData<QoreJdbcPreparedStatement>();
     assert(ps);
 
@@ -264,6 +346,11 @@ static int jdbc_stmt_bind_values(SQLStatement* stmt, const QoreListNode& args, E
 static int jdbc_stmt_exec(SQLStatement* stmt, ExceptionSink* xsink) {
     // the secrets of the connection are masked in the text of the Java exceptions of the operation (qore#7344)
     JavaExceptionMaskHelper mask_helper(jdbc_masker(stmt->getDatasource()->getPrivateData<QoreJdbcConnection>()));
+    // the operation can use the Program that opened the connection (qore#7665)
+    QoreJdbcProgramUse use;
+    if (jdbc_stmt_use_program(stmt, use, xsink)) {
+        return -1;
+    }
     // SQLStatement retains the connection until commit/rollback, but the core does not call
     // the begin callback on this path. Preserve implicit transactions for prepared writes.
     Datasource* ds = stmt->getDatasource();
@@ -291,6 +378,11 @@ static int jdbc_stmt_affected_rows(SQLStatement* stmt, ExceptionSink* xsink) {
 static QoreHashNode* jdbc_stmt_get_output(SQLStatement* stmt, ExceptionSink* xsink) {
     // the secrets of the connection are masked in the text of the Java exceptions of the operation (qore#7344)
     JavaExceptionMaskHelper mask_helper(jdbc_masker(stmt->getDatasource()->getPrivateData<QoreJdbcConnection>()));
+    // the operation can use the Program that opened the connection (qore#7665)
+    QoreJdbcProgramUse use;
+    if (jdbc_stmt_use_program(stmt, use, xsink)) {
+        return nullptr;
+    }
     QoreJdbcPreparedStatement* ps = stmt->getPrivateData<QoreJdbcPreparedStatement>();
     assert(ps);
 
@@ -300,6 +392,11 @@ static QoreHashNode* jdbc_stmt_get_output(SQLStatement* stmt, ExceptionSink* xsi
 static QoreHashNode* jdbc_stmt_get_output_rows(SQLStatement* stmt, ExceptionSink* xsink) {
     // the secrets of the connection are masked in the text of the Java exceptions of the operation (qore#7344)
     JavaExceptionMaskHelper mask_helper(jdbc_masker(stmt->getDatasource()->getPrivateData<QoreJdbcConnection>()));
+    // the operation can use the Program that opened the connection (qore#7665)
+    QoreJdbcProgramUse use;
+    if (jdbc_stmt_use_program(stmt, use, xsink)) {
+        return nullptr;
+    }
     QoreJdbcPreparedStatement* ps = stmt->getPrivateData<QoreJdbcPreparedStatement>();
     assert(ps);
 
@@ -309,6 +406,11 @@ static QoreHashNode* jdbc_stmt_get_output_rows(SQLStatement* stmt, ExceptionSink
 static QoreHashNode* jdbc_stmt_fetch_row(SQLStatement* stmt, ExceptionSink* xsink) {
     // the secrets of the connection are masked in the text of the Java exceptions of the operation (qore#7344)
     JavaExceptionMaskHelper mask_helper(jdbc_masker(stmt->getDatasource()->getPrivateData<QoreJdbcConnection>()));
+    // the operation can use the Program that opened the connection (qore#7665)
+    QoreJdbcProgramUse use;
+    if (jdbc_stmt_use_program(stmt, use, xsink)) {
+        return nullptr;
+    }
     QoreJdbcPreparedStatement* ps = stmt->getPrivateData<QoreJdbcPreparedStatement>();
     assert(ps);
 
@@ -318,6 +420,11 @@ static QoreHashNode* jdbc_stmt_fetch_row(SQLStatement* stmt, ExceptionSink* xsin
 static QoreListNode* jdbc_stmt_fetch_rows(SQLStatement* stmt, int maxRows, ExceptionSink* xsink) {
     // the secrets of the connection are masked in the text of the Java exceptions of the operation (qore#7344)
     JavaExceptionMaskHelper mask_helper(jdbc_masker(stmt->getDatasource()->getPrivateData<QoreJdbcConnection>()));
+    // the operation can use the Program that opened the connection (qore#7665)
+    QoreJdbcProgramUse use;
+    if (jdbc_stmt_use_program(stmt, use, xsink)) {
+        return nullptr;
+    }
     QoreJdbcPreparedStatement* ps = stmt->getPrivateData<QoreJdbcPreparedStatement>();
     assert(ps);
 
@@ -327,6 +434,11 @@ static QoreListNode* jdbc_stmt_fetch_rows(SQLStatement* stmt, int maxRows, Excep
 static QoreHashNode* jdbc_stmt_fetch_columns(SQLStatement* stmt, int maxRows, ExceptionSink* xsink) {
     // the secrets of the connection are masked in the text of the Java exceptions of the operation (qore#7344)
     JavaExceptionMaskHelper mask_helper(jdbc_masker(stmt->getDatasource()->getPrivateData<QoreJdbcConnection>()));
+    // the operation can use the Program that opened the connection (qore#7665)
+    QoreJdbcProgramUse use;
+    if (jdbc_stmt_use_program(stmt, use, xsink)) {
+        return nullptr;
+    }
     QoreJdbcPreparedStatement* ps = stmt->getPrivateData<QoreJdbcPreparedStatement>();
     assert(ps);
 
@@ -337,6 +449,11 @@ static QoreHashNode* jdbc_stmt_fetch_columns(SQLStatement* stmt, int maxRows, Ex
 static QoreColumnarResult* jdbc_stmt_fetch_columnar(SQLStatement* stmt, int maxRows, ExceptionSink* xsink) {
     // the secrets of the connection are masked in the text of the Java exceptions of the operation (qore#7344)
     JavaExceptionMaskHelper mask_helper(jdbc_masker(stmt->getDatasource()->getPrivateData<QoreJdbcConnection>()));
+    // the operation can use the Program that opened the connection (qore#7665)
+    QoreJdbcProgramUse use;
+    if (jdbc_stmt_use_program(stmt, use, xsink)) {
+        return nullptr;
+    }
     QoreJdbcPreparedStatement* ps = stmt->getPrivateData<QoreJdbcPreparedStatement>();
     assert(ps);
 
@@ -347,6 +464,11 @@ static QoreColumnarResult* jdbc_stmt_fetch_columnar(SQLStatement* stmt, int maxR
 static QoreHashNode* jdbc_stmt_describe(SQLStatement* stmt, ExceptionSink* xsink) {
     // the secrets of the connection are masked in the text of the Java exceptions of the operation (qore#7344)
     JavaExceptionMaskHelper mask_helper(jdbc_masker(stmt->getDatasource()->getPrivateData<QoreJdbcConnection>()));
+    // the operation can use the Program that opened the connection (qore#7665)
+    QoreJdbcProgramUse use;
+    if (jdbc_stmt_use_program(stmt, use, xsink)) {
+        return nullptr;
+    }
     QoreJdbcPreparedStatement* ps = stmt->getPrivateData<QoreJdbcPreparedStatement>();
     assert(ps);
 
@@ -356,6 +478,11 @@ static QoreHashNode* jdbc_stmt_describe(SQLStatement* stmt, ExceptionSink* xsink
 static bool jdbc_stmt_next(SQLStatement* stmt, ExceptionSink* xsink) {
     // the secrets of the connection are masked in the text of the Java exceptions of the operation (qore#7344)
     JavaExceptionMaskHelper mask_helper(jdbc_masker(stmt->getDatasource()->getPrivateData<QoreJdbcConnection>()));
+    // the operation can use the Program that opened the connection (qore#7665)
+    QoreJdbcProgramUse use;
+    if (jdbc_stmt_use_program(stmt, use, xsink)) {
+        return false;
+    }
     QoreJdbcPreparedStatement* ps = stmt->getPrivateData<QoreJdbcPreparedStatement>();
     assert(ps);
 
@@ -394,6 +521,11 @@ static int jdbc_opt_set(Datasource* ds, const char* opt, const QoreValue val, Ex
     // the secrets of the connection are masked in the text of the Java exceptions of the operation (qore#7344)
     JavaExceptionMaskHelper mask_helper(jdbc_masker(conn));
     assert(conn);
+    // the classpath option uses the Program that opened the connection (qore#7665)
+    QoreJdbcProgramUse use;
+    if (!strcasecmp(opt, JDBC_OPT_CLASSPATH) && jdbc_use_program(ds, conn, use, xsink)) {
+        return -1;
+    }
     return conn->setOption(opt, val, xsink);
 }
 

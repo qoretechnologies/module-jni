@@ -31,6 +31,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <map>
 #include <utility>
 #include <vector>
 
@@ -326,17 +327,35 @@ bool QoreJdbcSecretMasker::maskText(QoreString& text) const {
 QoreJdbcConnection::QoreJdbcConnection(Datasource* ds, std::shared_ptr<QoreJdbcSecretMasker> masker,
         ExceptionSink* xsink) : ds(ds), masker(std::move(masker)) {
     assert(this->masker);
-    assert(pgm);
+    assert(pgm.get());
     // the secrets of the connection are masked in the text of the Java exceptions raised while it is opened by the
     // helper of the caller, jdbc_open(), which shares the masker (qore#7344)
     // before the options are processed: the classpath option loads jars and instantiates the JDBC drivers in them
     if (checkSandbox(xsink)) {
         return;
     }
+    // the Program is used while the connection is opened, from before its jni data is looked up, so that its teardown
+    // waits for the connection to be opened; a Program whose teardown has marked its state deleted (ex: a connection
+    // opened in the context of a deleted Program) is not used (qore#7665)
+    if (!Jvm::isForkedChild()) {
+        pgm_state = QoreJdbcProgramState::get(pgm.get());
+    }
+    QoreJdbcProgramUse use;
+    if (!useProgram(use)) {
+        xsink->raiseException("JDBC-CONNECTION-ERROR", "the Program that opens the jdbc connection has been deleted; "
+            "the connection cannot be opened");
+        return;
+    }
     try {
-        jpc = JniExternalProgramData::getCreateJniProgramData(pgm);
+        jpc = JniExternalProgramData::getCreateJniProgramData(pgm.get());
     } catch (jni::Exception& e) {
         e.convert(xsink);
+        // the state of a Program that has no jni data, which would unregister it, is not kept; the use is released
+        // first
+        use.reset();
+        if (pgm_state) {
+            QoreJdbcProgramState::discardUnused(pgm.get(), pgm_state);
+        }
         return;
     }
     assert(jpc);
@@ -391,6 +410,147 @@ QoreJdbcConnection::QoreJdbcConnection(Datasource* ds, std::shared_ptr<QoreJdbcS
 
 QoreJdbcConnection::~QoreJdbcConnection() {
     assert(!connection);
+}
+
+bool QoreJdbcConnection::useProgram(QoreJdbcProgramUse& use) const {
+    QoreProgram* p = pgm.get();
+    assert(p);
+    // the dependency reference keeps the Program allocated, so its address names no other Program: a thread that runs
+    // in it keeps its data, as its teardown destroys the data only once no other thread is in it (its own destructors
+    // run in the thread that deletes it, before the data is destroyed)
+    if (p == ::getProgram()) {
+        return true;
+    }
+    // Java cannot be used in a child process created with fork(), and a thread of the parent can have held the
+    // state's lock when the process was created: the operation fails in Java, as it did before; no state is taken in
+    // the child
+    if (Jvm::isForkedChild()) {
+        return true;
+    }
+    assert(pgm_state);
+    // the cleanup callback of the Program's teardown marks the state deleted and waits for the uses held by other
+    // threads before the data is destroyed
+    return use.acquire(pgm_state);
+}
+
+namespace {
+//! the states of the Programs that opened jdbc connections, by Program id; created on first use and never destroyed,
+//! as the cleanup callback of a Program deleted during the process's static destruction can use it
+struct QoreJdbcProgramStateRegistry {
+    std::mutex lock;
+    std::map<qore_program_id_t, std::shared_ptr<QoreJdbcProgramState>> map;
+};
+
+QoreJdbcProgramStateRegistry& jdbc_program_states() {
+    static QoreJdbcProgramStateRegistry& reg = *new QoreJdbcProgramStateRegistry;
+    return reg;
+}
+}  // namespace
+
+std::shared_ptr<QoreJdbcProgramState> QoreJdbcProgramState::get(QoreProgram* pgm) {
+    QoreJdbcProgramStateRegistry& reg = jdbc_program_states();
+    std::lock_guard<std::mutex> guard(reg.lock);
+    std::shared_ptr<QoreJdbcProgramState>& entry = reg.map[pgm->getProgramId()];
+    if (!entry) {
+        entry = std::make_shared<QoreJdbcProgramState>();
+    }
+    return entry;
+}
+
+void QoreJdbcProgramState::programDeleted(QoreProgram* pgm) {
+    // in a child process created with fork(), no thread uses Java, and a thread of the parent can have held a lock
+    if (Jvm::isForkedChild()) {
+        return;
+    }
+    std::shared_ptr<QoreJdbcProgramState> state;
+    {
+        QoreJdbcProgramStateRegistry& reg = jdbc_program_states();
+        std::lock_guard<std::mutex> guard(reg.lock);
+        auto i = reg.map.find(pgm->getProgramId());
+        if (i != reg.map.end()) {
+            state = i->second;
+        } else if (JniExternalProgramData::hasProgramData(pgm)) {
+            // the state stays registered, deleted, until the Program's jni data is destroyed, so that a connection
+            // that the Program opens later is refused to other threads
+            state = std::make_shared<QoreJdbcProgramState>();
+            reg.map[pgm->getProgramId()] = state;
+        }
+        // a Program without jni data and without a state has no connection; if it gets jni data later (its own
+        // destructors run code in it), the destruction of the data marks the state (see programDataDestroyed())
+    }
+    if (state) {
+        state->markDeleted();
+    }
+}
+
+void QoreJdbcProgramState::programDataDestroyed(const QoreProgram* pgm) {
+    if (Jvm::isForkedChild()) {
+        return;
+    }
+    QoreJdbcProgramStateRegistry& reg = jdbc_program_states();
+    qore_program_id_t id = pgm->getProgramId();
+    std::shared_ptr<QoreJdbcProgramState> state;
+    {
+        std::lock_guard<std::mutex> guard(reg.lock);
+        auto i = reg.map.find(id);
+        if (i == reg.map.end()) {
+            return;
+        }
+        state = i->second;
+    }
+    // the state of a connection opened after the cleanup callback (by the Program's own destructors) is marked here,
+    // before the data is destroyed; a state that the callback marked is already deleted.  The state stays registered
+    // while the uses are waited for, so that a connection opened meanwhile gets the deleted state
+    state->markDeleted();
+    std::lock_guard<std::mutex> guard(reg.lock);
+    reg.map.erase(id);
+}
+
+void QoreJdbcProgramState::discardUnused(const QoreProgram* pgm, std::shared_ptr<QoreJdbcProgramState>& state) {
+    QoreJdbcProgramStateRegistry& reg = jdbc_program_states();
+    std::lock_guard<std::mutex> guard(reg.lock);
+    auto i = reg.map.find(pgm->getProgramId());
+    // released first: the state is discarded only if no other connection holds it and the Program has no jni data
+    state.reset();
+    if (i != reg.map.end() && i->second.use_count() == 1 && !JniExternalProgramData::hasProgramData(pgm)) {
+        reg.map.erase(i);
+    }
+}
+
+bool QoreJdbcProgramState::acquire() {
+    std::lock_guard<std::mutex> guard(m);
+    if (deleted) {
+        return false;
+    }
+    ++users[q_gettid()];
+    return true;
+}
+
+void QoreJdbcProgramState::release() {
+    // a use held by the thread that created a child process with fork() is not released in the child: a thread of
+    // the parent can have held the lock then, and no thread of the child waits for the use
+    if (Jvm::isForkedChild()) {
+        return;
+    }
+    std::lock_guard<std::mutex> guard(m);
+    auto i = users.find(q_gettid());
+    assert(i != users.end());
+    if (!--i->second) {
+        users.erase(i);
+        if (deleted) {
+            cv.notify_all();
+        }
+    }
+}
+
+void QoreJdbcProgramState::markDeleted() {
+    int tid = q_gettid();
+    std::unique_lock<std::mutex> guard(m);
+    deleted = true;
+    // an operation of another thread that uses the Program completes before its data is destroyed; an operation of
+    // this thread that deletes the Program (ex: by releasing its last reference) is not waited for, as that would
+    // never end
+    cv.wait(guard, [this, tid] () { return users.empty() || (users.size() == 1 && users.count(tid)); });
 }
 
 int QoreJdbcConnection::reconnect(Env& env, ExceptionSink* xsink) {
@@ -756,10 +916,10 @@ int QoreJdbcConnection::setOption(const char* opt, const QoreValue val, Exceptio
                 ReferenceHolder<QoreSandboxManager> setter_policy(ds->getOptionPolicyManagerRef(opt), xsink);
                 checked = ::jni_check_classpath_policy(*setter_policy, env, jcp);
             } else {
-                checked = ::jni_check_classpath_sandbox("jdbc classpath option", pgm, env, jcp, false);
+                checked = ::jni_check_classpath_sandbox("jdbc classpath option", pgm.get(), env, jcp, false);
             }
 #else
-            checked = ::jni_check_classpath_sandbox("jdbc classpath option", pgm, env, jcp, false);
+            checked = ::jni_check_classpath_sandbox("jdbc classpath option", pgm.get(), env, jcp, false);
 #endif
             // the classpath of the connection is already this value: nothing to add
             if (classpath == arg.c_str()) {

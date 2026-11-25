@@ -275,6 +275,23 @@ pool.exec("update orders set status = %v where id = %v", "processed", order.id);
     the statement is closed or its transaction ends. Each result set and statement is closed even if
     the other close operation reports an error.
 
+    @subsection jdbc_program_lifetime Connections of a Deleted Program
+
+    A connection belongs to the %Program of the code that opened it: Java values are converted to %Qore values of
+    that %Program, and the classes of a result's columns are loaded with its class loader.  A \c Datasource or
+    \c DatasourcePool can outlive that %Program (ex: a child %Program opens it and returns it to its parent, and is
+    then deleted).  The connection does not keep the %Program from being deleted, so that a datasource that its own
+    %Program holds does not keep that %Program alive; once the %Program has been deleted, an operation of the
+    connection, other than a commit, a rollback, getting the server or client version, setting an option other than
+    \c classpath, or closing it, raises \c JDBC-CONNECTION-ERROR, and the connection is aborted, as a lost connection
+    that cannot be re-established is; any transaction of the connection is lost.  Deleting the %Program waits for an
+    operation that another thread is making on one of its connections.  The operations of the connection do not run in the %Program: dates, for
+    example, are made in the time zone of the code that makes the operation.  A datasource created by the deleted
+    %Program opens its connections in the context of that %Program, so a new connection cannot be opened either
+    (\c JDBC-CONNECTION-ERROR while the %Program is being deleted, \c JNI-ERROR once it has been): keep the %Program
+    that creates a jdbc datasource for as long as the datasource is used, or create the datasource in the %Program
+    that uses it (qore#7665).
+
     @section jdbc_multiple_results Statements with Several Results
 
     A statement can produce several results: a batch of statements (ex: <tt>insert ...; select ...</tt>, where the
