@@ -410,12 +410,14 @@ install(FILES ${EXCEL_JAR} DESTINATION ${QORE_USER_MODULES_DIR}/ExcelDataProvide
 
 # Word data provider jar
 set(WORD_JAR ${CMAKE_CURRENT_BINARY_DIR}/qore-dataprovider-word.jar)
-set(WORD_CLASSPATH ${CMAKE_SOURCE_DIR}/qlib/ExcelDataProvider/jar/poi-ooxml-full-5.5.0.jar:${CMAKE_SOURCE_DIR}/qlib/ExcelDataProvider/jar/poi-5.5.0.jar:${CMAKE_SOURCE_DIR}/qlib/ExcelDataProvider/jar/poi-ooxml-5.5.0.jar)
+set(WORD_CLASSPATH ${CMAKE_SOURCE_DIR}/qlib/ExcelDataProvider/jar/poi-ooxml-full-5.5.0.jar:${CMAKE_SOURCE_DIR}/qlib/ExcelDataProvider/jar/poi-5.5.0.jar:${CMAKE_SOURCE_DIR}/qlib/ExcelDataProvider/jar/poi-ooxml-5.5.0.jar:${CMAKE_SOURCE_DIR}/qlib/ExcelDataProvider/jar/commons-compress-1.28.0.jar:${CMAKE_SOURCE_DIR}/qlib/ExcelDataProvider/jar/commons-io-2.20.0.jar)
 set(WORD_ROOT ${CMAKE_SOURCE_DIR}/src/java)
 set(WORD_SOURCES_DIR ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/word/)
 set(WORD_SOURCES
     ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/word/WordIterator.java
     ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/word/WordWriter.java
+    ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/word/WordTemplate.java
+    ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/word/WordTemplatePackage.java
     ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/word/WordTestHelper.java
 )
 

@@ -50,6 +50,7 @@
 %module-cmd(jni) add-relative-classpath ../ExcelDataProvider/jar/SparseBitSet-1.3.jar
 
 %module-cmd(jni) import org.qore.dataprovider.word.WordIterator
+%module-cmd(jni) import org.qore.dataprovider.word.WordTemplate
 %module-cmd(jni) import org.qore.dataprovider.word.WordWriter
 
 module WordDataProvider {
@@ -175,6 +176,32 @@ module WordDataProvider {
                     "loc": "constructor",
                 }
             ),
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WordDataProvider::AppName,
+            "path": "/",
+            "action": "inspect-template",
+            "display_name": "Inspect Word Template",
+            "short_desc": "Inspect Word Template",
+            "desc": "Discover required scalar fields and repeating row mappings in a DOCX template.",
+            "action_code": DPAT_API,
+            "cls": "WordDataProvider::WordTemplateFieldsDataProvider",
+            "output_type": WordTemplateFieldsDataProvider::ResponseType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(WordTemplateRequestType::SourceFields),
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": WordDataProvider::AppName,
+            "path": "/",
+            "action": "fill-template",
+            "display_name": "Fill Word Template",
+            "short_desc": "Fill Word Template",
+            "desc": "Fill named text controls and repeating table rows. Returns DOCX bytes and optionally writes a location.",
+            "action_code": DPAT_API,
+            "cls": "WordDataProvider::WordFillTemplateDataProvider",
+            "output_type": GeneratedDataOutputDataType,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                WordTemplateRequestType::FillFields{"mappings",}, {"required": True, "preselected": True}
+            ) + DataProviderActionCatalog::getActionOptionFromFields(WordTemplateRequestType::FillFields - "mappings"),
         });
     };
     # PROCESS_CONTROL: its init registers data provider factory (process-wide registrations)
@@ -314,6 +341,38 @@ module WordDataProvider {
     - \c content_type: "paragraphs" (default) or "table"
     - \c headers: List of column headers (for table mode)
     - \c title: Optional document title (added as Heading1)
+
+    @section WordDataProvider_templates Filling an approved DOCX template
+
+    Use the Word actions <tt>inspect-template</tt> and <tt>fill-template</tt> with an existing transitional
+    <tt>.docx</tt> file. In Word, set the Tag property of each control to a letter or underscore followed by
+    letters, digits or underscores. A plain-text control occupies a single run in a paragraph. A repeating section
+    in a table contains one repeating-section item with one prototype row. Tag its plain-text columns as well.
+
+    @code{.py}
+    WordTemplateFieldsDataProvider inspector();
+    auto fields = inspector.doRequest({"template_path": letter_location}).fields;
+    WordFillTemplateDataProvider filler();
+    auto result = filler.doRequest({
+        "template_path": letter_location,
+        "mappings": {"customer": "Hill Stores", "lines": ({"item": "Tea", "quantity": 2},)},
+    });
+    binary letter = result.data;
+    @endcode
+
+    Both actions accept exactly one of <tt>template_path</tt> (a readable FileLocationHandler location) and
+    <tt>template_data</tt> (the template bytes). Discovery returns each tag's <tt>type</tt> and
+    <tt>required</tt> flag, plus <tt>fields</tt> for a row section. All tags require mappings. Supply single-line
+    strings, numbers or booleans for scalar values and a list of records for a section. An empty list removes its
+    prototype row. The fill action returns the DOCX in <tt>data</tt> with <tt>record_count</tt> equal to one.
+    Its optional <tt>path</tt> writes the same bytes through FileLocationHandler after validation.
+
+    The rendered text keeps the run style, and rows retain their cell and paragraph formatting. Other package
+    parts, including static headers, footers, images and styles, retain their original contents. Word lays out
+    the result when it opens it, so longer strings or extra rows can change line breaks and pagination.
+    Legacy DOC, macro-enabled files, signed documents, external relationships, Word fields, data-bound controls,
+    and controls in headers or footers are unsupported. The input package may contain up to 4096 parts and occupy
+    up to 64 MiB, both before and after decompression. Both actions use the Word app's sandbox policy.
 
     @section WordDataProvider_styles Paragraph Styles
 
