@@ -3,6 +3,102 @@
   "locales": {
     "sk": {
       "messages": {
+        "app.V29yZA.action.ZmlsbC10ZW1wbGF0ZQ.desc": {
+          "source": "Fill named text controls and repeating table rows. Returns DOCX bytes and optionally writes a location.",
+          "message": "Vyplní pomenované textové ovládacie prvky a opakované riadky tabuľky. Vráti bajty DOCX a voliteľne ich zapíše do určeného umiestnenia."
+        },
+        "app.V29yZA.action.ZmlsbC10ZW1wbGF0ZQ.display_name": {
+          "source": "Fill Word Template",
+          "message": "Vyplniť šablónu Wordu"
+        },
+        "app.V29yZA.action.ZmlsbC10ZW1wbGF0ZQ.option.bWFwcGluZ3M.desc": {
+          "source": "Map each scalar tag to single-line text, a number or a boolean. Map each repeating section tag to a list of records keyed by its scalar column tags.",
+          "message": "Každej skalárnej značke priraďte jednoriadkový text, číslo alebo logickú hodnotu. Značke opakovanej sekcie priraďte zoznam záznamov s kľúčmi podľa skalárnych značiek stĺpcov."
+        },
+        "app.V29yZA.action.ZmlsbC10ZW1wbGF0ZQ.option.bWFwcGluZ3M.display_name": {
+          "source": "Field Mappings",
+          "message": "Mapovania polí"
+        },
+        "app.V29yZA.action.ZmlsbC10ZW1wbGF0ZQ.option.bWFwcGluZ3M.short_desc": {
+          "source": "Values keyed by Word control tag",
+          "message": "Hodnoty podľa značiek ovládacích prvkov Wordu"
+        },
+        "app.V29yZA.action.ZmlsbC10ZW1wbGF0ZQ.option.cGF0aA.desc": {
+          "source": "Write the completed DOCX to this FileLocationHandler location.",
+          "message": "Zapíše vyplnený dokument DOCX do tohto umiestnenia cez FileLocationHandler."
+        },
+        "app.V29yZA.action.ZmlsbC10ZW1wbGF0ZQ.option.cGF0aA.display_name": {
+          "source": "Output Location",
+          "message": "Výstupné umiestnenie"
+        },
+        "app.V29yZA.action.ZmlsbC10ZW1wbGF0ZQ.option.cGF0aA.short_desc": {
+          "source": "Optional destination for the rendered DOCX",
+          "message": "Voliteľný cieľ pre vyplnený dokument DOCX"
+        },
+        "app.V29yZA.action.ZmlsbC10ZW1wbGF0ZQ.option.dGVtcGxhdGVfZGF0YQ.desc": {
+          "source": "A Word .docx template supplied as bytes. Provide exactly one of template_data and template_path.",
+          "message": "Šablóna Wordu vo formáte .docx zadaná ako bajty. Zadajte práve jeden z parametrov template_data a template_path."
+        },
+        "app.V29yZA.action.ZmlsbC10ZW1wbGF0ZQ.option.dGVtcGxhdGVfZGF0YQ.display_name": {
+          "source": "Template Data",
+          "message": "Údaje šablóny"
+        },
+        "app.V29yZA.action.ZmlsbC10ZW1wbGF0ZQ.option.dGVtcGxhdGVfZGF0YQ.short_desc": {
+          "source": "Original DOCX bytes",
+          "message": "Bajty pôvodného súboru DOCX"
+        },
+        "app.V29yZA.action.ZmlsbC10ZW1wbGF0ZQ.option.dGVtcGxhdGVfcGF0aA.desc": {
+          "source": "A location readable through FileLocationHandler, as an alternative to template_data.",
+          "message": "Umiestnenie čitateľné cez FileLocationHandler ako alternatíva k template_data."
+        },
+        "app.V29yZA.action.ZmlsbC10ZW1wbGF0ZQ.option.dGVtcGxhdGVfcGF0aA.display_name": {
+          "source": "Template Location",
+          "message": "Umiestnenie šablóny"
+        },
+        "app.V29yZA.action.ZmlsbC10ZW1wbGF0ZQ.option.dGVtcGxhdGVfcGF0aA.short_desc": {
+          "source": "Location of the original DOCX",
+          "message": "Umiestnenie pôvodného súboru DOCX"
+        },
+        "app.V29yZA.action.ZmlsbC10ZW1wbGF0ZQ.short_desc": {
+          "source": "Fill Word Template",
+          "message": "Vyplniť šablónu Wordu"
+        },
+        "app.V29yZA.action.aW5zcGVjdC10ZW1wbGF0ZQ.desc": {
+          "source": "Discover required scalar fields and repeating row mappings in a DOCX template.",
+          "message": "Zistí povinné skalárne polia a mapovania opakovaných riadkov v šablóne DOCX."
+        },
+        "app.V29yZA.action.aW5zcGVjdC10ZW1wbGF0ZQ.display_name": {
+          "source": "Inspect Word Template",
+          "message": "Preskúmať šablónu Wordu"
+        },
+        "app.V29yZA.action.aW5zcGVjdC10ZW1wbGF0ZQ.option.dGVtcGxhdGVfZGF0YQ.desc": {
+          "source": "A Word .docx template supplied as bytes. Provide exactly one of template_data and template_path.",
+          "message": "Šablóna Wordu vo formáte .docx zadaná ako bajty. Zadajte práve jeden z parametrov template_data a template_path."
+        },
+        "app.V29yZA.action.aW5zcGVjdC10ZW1wbGF0ZQ.option.dGVtcGxhdGVfZGF0YQ.display_name": {
+          "source": "Template Data",
+          "message": "Údaje šablóny"
+        },
+        "app.V29yZA.action.aW5zcGVjdC10ZW1wbGF0ZQ.option.dGVtcGxhdGVfZGF0YQ.short_desc": {
+          "source": "Original DOCX bytes",
+          "message": "Bajty pôvodného súboru DOCX"
+        },
+        "app.V29yZA.action.aW5zcGVjdC10ZW1wbGF0ZQ.option.dGVtcGxhdGVfcGF0aA.desc": {
+          "source": "A location readable through FileLocationHandler, as an alternative to template_data.",
+          "message": "Umiestnenie čitateľné cez FileLocationHandler ako alternatíva k template_data."
+        },
+        "app.V29yZA.action.aW5zcGVjdC10ZW1wbGF0ZQ.option.dGVtcGxhdGVfcGF0aA.display_name": {
+          "source": "Template Location",
+          "message": "Umiestnenie šablóny"
+        },
+        "app.V29yZA.action.aW5zcGVjdC10ZW1wbGF0ZQ.option.dGVtcGxhdGVfcGF0aA.short_desc": {
+          "source": "Location of the original DOCX",
+          "message": "Umiestnenie pôvodného súboru DOCX"
+        },
+        "app.V29yZA.action.aW5zcGVjdC10ZW1wbGF0ZQ.short_desc": {
+          "source": "Inspect Word Template",
+          "message": "Preskúmať šablónu Wordu"
+        },
         "app.V29yZA.action.cmVhZA.desc": {
           "source": "Read Word document from a specific file location",
           "message": "Čítať dokument Word z konkrétneho umiestnenia súboru"
