@@ -3027,6 +3027,14 @@ public class QoreURLClassLoader extends URLClassLoader {
             }
             // only a file can be checked against the filesystem policy, and only a local file is at no other location
             if (!"file".equals(url.getProtocol())) {
+                // a caller whose policy restricts only network access: the class loader of a verified JDK ignores an
+                // entry that is not a file unless its URL check is disabled, so the entry is skipped, as
+                // checkClasspathLocation() skips it; on an unverified JDK, or with the URL check disabled, it is
+                // still refused (qore#7536)
+                if (!restricted && !guard && unverifiedFeature == 0 && !CLASS_PATH_URL_CHECK_DISABLED
+                    && !isClassPathUrlCheckDisabled()) {
+                    return;
+                }
                 refuse(jar, referrer, "the manifest Class-Path attribute of the classpath jar '" + jar + "' names '"
                     + url + "', which is not a file, so it cannot be checked against the sandbox policy");
                 return;
