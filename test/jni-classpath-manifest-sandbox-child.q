@@ -461,11 +461,15 @@ sub callers_case(string root) {
         result(l + ": a network-only sandbox adds a jar with a local Class-Path", "ok",
             add_classpath(p, dir + "/cp-ref.jar").err);
         result(l + ": the class of the named jar is loaded with it", True, loads(p, "CpTarget"));
+        # a Class-Path entry that is not a file: the class loader of a verified JDK ignores it, so the jar is added, as the
+        # Java routes add it; on an unverified JDK it is refused (qore#7536)
+        bool ignored = !exists jdk.feature && inlist(running_jdk_feature(), VerifiedJdkFeatures);
         p = new_program(get_open_sandbox(True));
         hash<auto> h = add_classpath(p, dir + "/cp-http.jar");
-        result(l + ": a network-only sandbox refuses a Class-Path that names a URL", "JNI-CLASSPATH-ERROR", h.err);
-        result(l + ": the error names the entry", True, h.desc =~ /which is not a file/);
-        result(l + ": the class of the refused jar is not loaded", False, loads(p, "CpHttp"));
+        result(l + ": a network-only sandbox decides a Class-Path that names a URL as the class loader does",
+            ignored ? "ok" : "JNI-CLASSPATH-ERROR", h.err);
+        result(l + ": a refusal names the entry", True, ignored ? !h.desc : h.desc =~ /which is not a file/);
+        result(l + ": the class of the jar is loaded exactly when the jar is added", ignored, loads(p, "CpHttp"));
     }
     set_jdk_feature();
 }

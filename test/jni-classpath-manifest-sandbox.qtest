@@ -302,9 +302,9 @@ class JniClasspathManifestSandboxTest inherits QUnit::Test {
                 "the error names the special file",
                 "a network-only sandbox adds a jar with a local Class-Path",
                 "the class of the named jar is loaded with it",
-                "a network-only sandbox refuses a Class-Path that names a URL",
-                "the error names the entry",
-                "the class of the refused jar is not loaded",
+                "a network-only sandbox decides a Class-Path that names a URL as the class loader does",
+                "a refusal names the entry",
+                "the class of the jar is loaded exactly when the jar is added",
             );
         }
         checkCase("callers", expected);
