@@ -362,6 +362,102 @@
         "app.V29yZA.action.d3JpdGUtZGF0YQ.option.dGl0bGU.desc": {
           "source": "Optional title to add as a heading at the beginning of the document",
           "message": "Optional title to add as a heading at the beginning of the document"
+        },
+        "app.V29yZA.action.aW5zcGVjdC10ZW1wbGF0ZQ.display_name": {
+          "source": "Inspect Word Template",
+          "message": "Inspect Word Template"
+        },
+        "app.V29yZA.action.aW5zcGVjdC10ZW1wbGF0ZQ.short_desc": {
+          "source": "Inspect Word Template",
+          "message": "Inspect Word Template"
+        },
+        "app.V29yZA.action.aW5zcGVjdC10ZW1wbGF0ZQ.desc": {
+          "source": "Discover required scalar fields and repeating row mappings in a DOCX template.",
+          "message": "Discover required scalar fields and repeating row mappings in a DOCX template."
+        },
+        "app.V29yZA.action.aW5zcGVjdC10ZW1wbGF0ZQ.option.dGVtcGxhdGVfZGF0YQ.display_name": {
+          "source": "Template Data",
+          "message": "Template Data"
+        },
+        "app.V29yZA.action.aW5zcGVjdC10ZW1wbGF0ZQ.option.dGVtcGxhdGVfZGF0YQ.short_desc": {
+          "source": "Original DOCX bytes",
+          "message": "Original DOCX bytes"
+        },
+        "app.V29yZA.action.aW5zcGVjdC10ZW1wbGF0ZQ.option.dGVtcGxhdGVfZGF0YQ.desc": {
+          "source": "A Word .docx template supplied as bytes. Provide exactly one of template_data and template_path.",
+          "message": "A Word .docx template supplied as bytes. Provide exactly one of template_data and template_path."
+        },
+        "app.V29yZA.action.aW5zcGVjdC10ZW1wbGF0ZQ.option.dGVtcGxhdGVfcGF0aA.display_name": {
+          "source": "Template Location",
+          "message": "Template Location"
+        },
+        "app.V29yZA.action.aW5zcGVjdC10ZW1wbGF0ZQ.option.dGVtcGxhdGVfcGF0aA.short_desc": {
+          "source": "Location of the original DOCX",
+          "message": "Location of the original DOCX"
+        },
+        "app.V29yZA.action.aW5zcGVjdC10ZW1wbGF0ZQ.option.dGVtcGxhdGVfcGF0aA.desc": {
+          "source": "A location readable through FileLocationHandler, as an alternative to template_data.",
+          "message": "A location readable through FileLocationHandler, as an alternative to template_data."
+        },
+        "app.V29yZA.action.ZmlsbC10ZW1wbGF0ZQ.display_name": {
+          "source": "Fill Word Template",
+          "message": "Fill Word Template"
+        },
+        "app.V29yZA.action.ZmlsbC10ZW1wbGF0ZQ.short_desc": {
+          "source": "Fill Word Template",
+          "message": "Fill Word Template"
+        },
+        "app.V29yZA.action.ZmlsbC10ZW1wbGF0ZQ.desc": {
+          "source": "Fill named text controls and repeating table rows. Returns DOCX bytes and optionally writes a location.",
+          "message": "Fill named text controls and repeating table rows. Returns DOCX bytes and optionally writes a location."
+        },
+        "app.V29yZA.action.ZmlsbC10ZW1wbGF0ZQ.option.dGVtcGxhdGVfZGF0YQ.display_name": {
+          "source": "Template Data",
+          "message": "Template Data"
+        },
+        "app.V29yZA.action.ZmlsbC10ZW1wbGF0ZQ.option.dGVtcGxhdGVfZGF0YQ.short_desc": {
+          "source": "Original DOCX bytes",
+          "message": "Original DOCX bytes"
+        },
+        "app.V29yZA.action.ZmlsbC10ZW1wbGF0ZQ.option.dGVtcGxhdGVfZGF0YQ.desc": {
+          "source": "A Word .docx template supplied as bytes. Provide exactly one of template_data and template_path.",
+          "message": "A Word .docx template supplied as bytes. Provide exactly one of template_data and template_path."
+        },
+        "app.V29yZA.action.ZmlsbC10ZW1wbGF0ZQ.option.dGVtcGxhdGVfcGF0aA.display_name": {
+          "source": "Template Location",
+          "message": "Template Location"
+        },
+        "app.V29yZA.action.ZmlsbC10ZW1wbGF0ZQ.option.dGVtcGxhdGVfcGF0aA.short_desc": {
+          "source": "Location of the original DOCX",
+          "message": "Location of the original DOCX"
+        },
+        "app.V29yZA.action.ZmlsbC10ZW1wbGF0ZQ.option.dGVtcGxhdGVfcGF0aA.desc": {
+          "source": "A location readable through FileLocationHandler, as an alternative to template_data.",
+          "message": "A location readable through FileLocationHandler, as an alternative to template_data."
+        },
+        "app.V29yZA.action.ZmlsbC10ZW1wbGF0ZQ.option.bWFwcGluZ3M.display_name": {
+          "source": "Field Mappings",
+          "message": "Field Mappings"
+        },
+        "app.V29yZA.action.ZmlsbC10ZW1wbGF0ZQ.option.bWFwcGluZ3M.short_desc": {
+          "source": "Values keyed by Word control tag",
+          "message": "Values keyed by Word control tag"
+        },
+        "app.V29yZA.action.ZmlsbC10ZW1wbGF0ZQ.option.bWFwcGluZ3M.desc": {
+          "source": "Map each scalar tag to single-line text, a number or a boolean. Map each repeating section tag to a list of records keyed by its scalar column tags.",
+          "message": "Map each scalar tag to single-line text, a number or a boolean. Map each repeating section tag to a list of records keyed by its scalar column tags."
+        },
+        "app.V29yZA.action.ZmlsbC10ZW1wbGF0ZQ.option.cGF0aA.display_name": {
+          "source": "Output Location",
+          "message": "Output Location"
+        },
+        "app.V29yZA.action.ZmlsbC10ZW1wbGF0ZQ.option.cGF0aA.short_desc": {
+          "source": "Optional destination for the rendered DOCX",
+          "message": "Optional destination for the rendered DOCX"
+        },
+        "app.V29yZA.action.ZmlsbC10ZW1wbGF0ZQ.option.cGF0aA.desc": {
+          "source": "Write the completed DOCX to this FileLocationHandler location.",
+          "message": "Write the completed DOCX to this FileLocationHandler location."
         }
       }
     }

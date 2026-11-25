@@ -3,6 +3,102 @@
   "locales": {
     "ko": {
       "messages": {
+        "app.V29yZA.action.ZmlsbC10ZW1wbGF0ZQ.desc": {
+          "source": "Fill named text controls and repeating table rows. Returns DOCX bytes and optionally writes a location.",
+          "message": "이름이 지정된 텍스트 컨트롤과 반복 표 행을 채웁니다. DOCX 바이트를 반환하며 선택한 위치에도 쓸 수 있습니다."
+        },
+        "app.V29yZA.action.ZmlsbC10ZW1wbGF0ZQ.display_name": {
+          "source": "Fill Word Template",
+          "message": "Word 서식 파일 채우기"
+        },
+        "app.V29yZA.action.ZmlsbC10ZW1wbGF0ZQ.option.bWFwcGluZ3M.desc": {
+          "source": "Map each scalar tag to single-line text, a number or a boolean. Map each repeating section tag to a list of records keyed by its scalar column tags.",
+          "message": "각 스칼라 태그에 한 줄 텍스트, 숫자 또는 부울 값을 매핑하세요. 각 반복 구역 태그에는 열의 스칼라 태그를 키로 하는 레코드 목록을 매핑하세요."
+        },
+        "app.V29yZA.action.ZmlsbC10ZW1wbGF0ZQ.option.bWFwcGluZ3M.display_name": {
+          "source": "Field Mappings",
+          "message": "필드 매핑"
+        },
+        "app.V29yZA.action.ZmlsbC10ZW1wbGF0ZQ.option.bWFwcGluZ3M.short_desc": {
+          "source": "Values keyed by Word control tag",
+          "message": "Word 컨트롤 태그를 키로 사용하는 값"
+        },
+        "app.V29yZA.action.ZmlsbC10ZW1wbGF0ZQ.option.cGF0aA.desc": {
+          "source": "Write the completed DOCX to this FileLocationHandler location.",
+          "message": "완성된 DOCX를 FileLocationHandler로 이 위치에 씁니다."
+        },
+        "app.V29yZA.action.ZmlsbC10ZW1wbGF0ZQ.option.cGF0aA.display_name": {
+          "source": "Output Location",
+          "message": "출력 위치"
+        },
+        "app.V29yZA.action.ZmlsbC10ZW1wbGF0ZQ.option.cGF0aA.short_desc": {
+          "source": "Optional destination for the rendered DOCX",
+          "message": "생성된 DOCX의 선택적 저장 위치"
+        },
+        "app.V29yZA.action.ZmlsbC10ZW1wbGF0ZQ.option.dGVtcGxhdGVfZGF0YQ.desc": {
+          "source": "A Word .docx template supplied as bytes. Provide exactly one of template_data and template_path.",
+          "message": "바이트로 제공하는 Word .docx 서식 파일입니다. template_data와 template_path 중 하나만 지정하세요."
+        },
+        "app.V29yZA.action.ZmlsbC10ZW1wbGF0ZQ.option.dGVtcGxhdGVfZGF0YQ.display_name": {
+          "source": "Template Data",
+          "message": "서식 파일 데이터"
+        },
+        "app.V29yZA.action.ZmlsbC10ZW1wbGF0ZQ.option.dGVtcGxhdGVfZGF0YQ.short_desc": {
+          "source": "Original DOCX bytes",
+          "message": "원본 DOCX 바이트"
+        },
+        "app.V29yZA.action.ZmlsbC10ZW1wbGF0ZQ.option.dGVtcGxhdGVfcGF0aA.desc": {
+          "source": "A location readable through FileLocationHandler, as an alternative to template_data.",
+          "message": "template_data 대신 지정할 수 있는 FileLocationHandler로 읽을 수 있는 위치입니다."
+        },
+        "app.V29yZA.action.ZmlsbC10ZW1wbGF0ZQ.option.dGVtcGxhdGVfcGF0aA.display_name": {
+          "source": "Template Location",
+          "message": "서식 파일 위치"
+        },
+        "app.V29yZA.action.ZmlsbC10ZW1wbGF0ZQ.option.dGVtcGxhdGVfcGF0aA.short_desc": {
+          "source": "Location of the original DOCX",
+          "message": "원본 DOCX 위치"
+        },
+        "app.V29yZA.action.ZmlsbC10ZW1wbGF0ZQ.short_desc": {
+          "source": "Fill Word Template",
+          "message": "Word 서식 파일 채우기"
+        },
+        "app.V29yZA.action.aW5zcGVjdC10ZW1wbGF0ZQ.desc": {
+          "source": "Discover required scalar fields and repeating row mappings in a DOCX template.",
+          "message": "DOCX 서식 파일에서 필수 스칼라 필드와 반복 행 매핑을 찾습니다."
+        },
+        "app.V29yZA.action.aW5zcGVjdC10ZW1wbGF0ZQ.display_name": {
+          "source": "Inspect Word Template",
+          "message": "Word 서식 파일 검사"
+        },
+        "app.V29yZA.action.aW5zcGVjdC10ZW1wbGF0ZQ.option.dGVtcGxhdGVfZGF0YQ.desc": {
+          "source": "A Word .docx template supplied as bytes. Provide exactly one of template_data and template_path.",
+          "message": "바이트로 제공하는 Word .docx 서식 파일입니다. template_data와 template_path 중 하나만 지정하세요."
+        },
+        "app.V29yZA.action.aW5zcGVjdC10ZW1wbGF0ZQ.option.dGVtcGxhdGVfZGF0YQ.display_name": {
+          "source": "Template Data",
+          "message": "서식 파일 데이터"
+        },
+        "app.V29yZA.action.aW5zcGVjdC10ZW1wbGF0ZQ.option.dGVtcGxhdGVfZGF0YQ.short_desc": {
+          "source": "Original DOCX bytes",
+          "message": "원본 DOCX 바이트"
+        },
+        "app.V29yZA.action.aW5zcGVjdC10ZW1wbGF0ZQ.option.dGVtcGxhdGVfcGF0aA.desc": {
+          "source": "A location readable through FileLocationHandler, as an alternative to template_data.",
+          "message": "template_data 대신 지정할 수 있는 FileLocationHandler로 읽을 수 있는 위치입니다."
+        },
+        "app.V29yZA.action.aW5zcGVjdC10ZW1wbGF0ZQ.option.dGVtcGxhdGVfcGF0aA.display_name": {
+          "source": "Template Location",
+          "message": "서식 파일 위치"
+        },
+        "app.V29yZA.action.aW5zcGVjdC10ZW1wbGF0ZQ.option.dGVtcGxhdGVfcGF0aA.short_desc": {
+          "source": "Location of the original DOCX",
+          "message": "원본 DOCX 위치"
+        },
+        "app.V29yZA.action.aW5zcGVjdC10ZW1wbGF0ZQ.short_desc": {
+          "source": "Inspect Word Template",
+          "message": "Word 서식 파일 검사"
+        },
         "app.V29yZA.action.cmVhZA.desc": {
           "source": "Read Word document from a specific file location",
           "message": "특정 파일 위치에서 Word 문서 읽기"

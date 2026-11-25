@@ -3,6 +3,102 @@
   "locales": {
     "pl": {
       "messages": {
+        "app.V29yZA.action.ZmlsbC10ZW1wbGF0ZQ.desc": {
+          "source": "Fill named text controls and repeating table rows. Returns DOCX bytes and optionally writes a location.",
+          "message": "Wypełnia nazwane kontrolki tekstowe i powtarzane wiersze tabeli. Zwraca bajty DOCX i opcjonalnie zapisuje je we wskazanej lokalizacji."
+        },
+        "app.V29yZA.action.ZmlsbC10ZW1wbGF0ZQ.display_name": {
+          "source": "Fill Word Template",
+          "message": "Wypełnij szablon programu Word"
+        },
+        "app.V29yZA.action.ZmlsbC10ZW1wbGF0ZQ.option.bWFwcGluZ3M.desc": {
+          "source": "Map each scalar tag to single-line text, a number or a boolean. Map each repeating section tag to a list of records keyed by its scalar column tags.",
+          "message": "Do każdego tagu skalarnego przypisz tekst jednowierszowy, liczbę lub wartość logiczną. Do tagu sekcji powtarzanej przypisz listę rekordów z tagami skalarnymi kolumn jako kluczami."
+        },
+        "app.V29yZA.action.ZmlsbC10ZW1wbGF0ZQ.option.bWFwcGluZ3M.display_name": {
+          "source": "Field Mappings",
+          "message": "Mapowania pól"
+        },
+        "app.V29yZA.action.ZmlsbC10ZW1wbGF0ZQ.option.bWFwcGluZ3M.short_desc": {
+          "source": "Values keyed by Word control tag",
+          "message": "Wartości indeksowane tagami kontrolek programu Word"
+        },
+        "app.V29yZA.action.ZmlsbC10ZW1wbGF0ZQ.option.cGF0aA.desc": {
+          "source": "Write the completed DOCX to this FileLocationHandler location.",
+          "message": "Zapisuje wypełniony plik DOCX w tej lokalizacji za pomocą FileLocationHandler."
+        },
+        "app.V29yZA.action.ZmlsbC10ZW1wbGF0ZQ.option.cGF0aA.display_name": {
+          "source": "Output Location",
+          "message": "Lokalizacja wyjściowa"
+        },
+        "app.V29yZA.action.ZmlsbC10ZW1wbGF0ZQ.option.cGF0aA.short_desc": {
+          "source": "Optional destination for the rendered DOCX",
+          "message": "Opcjonalne miejsce zapisu wygenerowanego pliku DOCX"
+        },
+        "app.V29yZA.action.ZmlsbC10ZW1wbGF0ZQ.option.dGVtcGxhdGVfZGF0YQ.desc": {
+          "source": "A Word .docx template supplied as bytes. Provide exactly one of template_data and template_path.",
+          "message": "Szablon programu Word w formacie .docx przekazany jako bajty. Podaj dokładnie jeden z parametrów template_data i template_path."
+        },
+        "app.V29yZA.action.ZmlsbC10ZW1wbGF0ZQ.option.dGVtcGxhdGVfZGF0YQ.display_name": {
+          "source": "Template Data",
+          "message": "Dane szablonu"
+        },
+        "app.V29yZA.action.ZmlsbC10ZW1wbGF0ZQ.option.dGVtcGxhdGVfZGF0YQ.short_desc": {
+          "source": "Original DOCX bytes",
+          "message": "Bajty źródłowego pliku DOCX"
+        },
+        "app.V29yZA.action.ZmlsbC10ZW1wbGF0ZQ.option.dGVtcGxhdGVfcGF0aA.desc": {
+          "source": "A location readable through FileLocationHandler, as an alternative to template_data.",
+          "message": "Lokalizacja odczytywana przez FileLocationHandler jako alternatywa dla template_data."
+        },
+        "app.V29yZA.action.ZmlsbC10ZW1wbGF0ZQ.option.dGVtcGxhdGVfcGF0aA.display_name": {
+          "source": "Template Location",
+          "message": "Lokalizacja szablonu"
+        },
+        "app.V29yZA.action.ZmlsbC10ZW1wbGF0ZQ.option.dGVtcGxhdGVfcGF0aA.short_desc": {
+          "source": "Location of the original DOCX",
+          "message": "Lokalizacja źródłowego pliku DOCX"
+        },
+        "app.V29yZA.action.ZmlsbC10ZW1wbGF0ZQ.short_desc": {
+          "source": "Fill Word Template",
+          "message": "Wypełnij szablon programu Word"
+        },
+        "app.V29yZA.action.aW5zcGVjdC10ZW1wbGF0ZQ.desc": {
+          "source": "Discover required scalar fields and repeating row mappings in a DOCX template.",
+          "message": "Wykrywa wymagane pola skalarne i mapowania powtarzanych wierszy w szablonie DOCX."
+        },
+        "app.V29yZA.action.aW5zcGVjdC10ZW1wbGF0ZQ.display_name": {
+          "source": "Inspect Word Template",
+          "message": "Sprawdź szablon programu Word"
+        },
+        "app.V29yZA.action.aW5zcGVjdC10ZW1wbGF0ZQ.option.dGVtcGxhdGVfZGF0YQ.desc": {
+          "source": "A Word .docx template supplied as bytes. Provide exactly one of template_data and template_path.",
+          "message": "Szablon programu Word w formacie .docx przekazany jako bajty. Podaj dokładnie jeden z parametrów template_data i template_path."
+        },
+        "app.V29yZA.action.aW5zcGVjdC10ZW1wbGF0ZQ.option.dGVtcGxhdGVfZGF0YQ.display_name": {
+          "source": "Template Data",
+          "message": "Dane szablonu"
+        },
+        "app.V29yZA.action.aW5zcGVjdC10ZW1wbGF0ZQ.option.dGVtcGxhdGVfZGF0YQ.short_desc": {
+          "source": "Original DOCX bytes",
+          "message": "Bajty źródłowego pliku DOCX"
+        },
+        "app.V29yZA.action.aW5zcGVjdC10ZW1wbGF0ZQ.option.dGVtcGxhdGVfcGF0aA.desc": {
+          "source": "A location readable through FileLocationHandler, as an alternative to template_data.",
+          "message": "Lokalizacja odczytywana przez FileLocationHandler jako alternatywa dla template_data."
+        },
+        "app.V29yZA.action.aW5zcGVjdC10ZW1wbGF0ZQ.option.dGVtcGxhdGVfcGF0aA.display_name": {
+          "source": "Template Location",
+          "message": "Lokalizacja szablonu"
+        },
+        "app.V29yZA.action.aW5zcGVjdC10ZW1wbGF0ZQ.option.dGVtcGxhdGVfcGF0aA.short_desc": {
+          "source": "Location of the original DOCX",
+          "message": "Lokalizacja źródłowego pliku DOCX"
+        },
+        "app.V29yZA.action.aW5zcGVjdC10ZW1wbGF0ZQ.short_desc": {
+          "source": "Inspect Word Template",
+          "message": "Sprawdź szablon programu Word"
+        },
         "app.V29yZA.action.cmVhZA.desc": {
           "source": "Read Word document from a specific file location",
           "message": "Odczytaj dokument Word z określonej lokalizacji pliku"
