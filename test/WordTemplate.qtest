@@ -1,0 +1,162 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o. MIT license.
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../build"
+%prepend-module-path "${SCRIPT_DIR}/../qlib"
+%requires QUnit
+%requires FsUtil
+%requires process
+%requires WordDataProvider
+%requires FileLocationHandler
+%exec-class WordTemplateTest
+
+class TemplateTestLocation inherits AbstractFileLocationHandler {
+    private {
+        string path;
+        bool writable;
+    }
+    public {
+        int opens;
+    }
+    constructor(string path, bool writable) {
+        self.path = path;
+        self.writable = writable;
+    }
+    private binary getBinaryFileImpl(string scheme, string location, *hash<auto> opts) {
+        return ReadOnlyFile::readBinaryFile(path);
+    }
+    private OutputStreamWrapper getOutputStreamImpl(string scheme, string location, *hash<auto> opts) {
+        ++opens;
+        if (!writable) {
+            throw "READ-ONLY-LOCATION", "template location is read-only";
+        }
+        OutputStreamWrapper os = FileLocationHandler::getOutputStreamForLocation(path);
+        if (location == "fail") {
+            os.setIoError(<ExceptionInfo>{"err": "UPLOAD-FAILED", "desc": "test completion error"});
+        }
+        return os;
+    }
+    private string getTextFileImpl(string scheme, string location, *hash<auto> opts) { throw "UNSUPPORTED", "text"; }
+    private AbstractPollOperation getIoPollerForLocationImpl(string scheme, string location, *hash<auto> opts) {
+        throw "UNSUPPORTED", "poll";
+    }
+    private StreamReader getStreamReaderImpl(string scheme, string location, *hash<auto> opts) {
+        throw "UNSUPPORTED", "text stream";
+    }
+    private InputStream getBinaryStreamImpl(string scheme, string location, *hash<auto> opts) {
+        return new BinaryInputStream(getBinaryFileImpl(scheme, location, opts));
+    }
+    private writeFileImpl(string scheme, string location, data contents, *hash<auto> opts) {
+        throw "UNSUPPORTED", "stream writes only";
+    }
+    private hash<string, hash<FileHandlerOptionInfo>> getReadOptionsImpl() { return {}; }
+    private hash<string, hash<FileHandlerOptionInfo>> getWriteOptionsImpl() { return {}; }
+}
+
+class WordTemplateTest inherits QUnit::Test {
+    private {
+        TmpDir dir("docx-template-");
+        string fixture = get_script_dir() + "/word-template/shipment.docx";
+        binary original = ReadOnlyFile::readBinaryFile(fixture);
+        TemplateTestLocation dest(dir.path + "/out.docx", True);
+        const Mappings = {"customer": " A&B <Ltd> ", "lines": (
+            {"item": "Tea", "quantity": 2}, {"item": "Rice", "quantity": 3})};
+        const Source = "docxtestsource://letter";
+        const Target = "docxtestdest://out";
+    }
+    constructor() : QUnit::Test("DOCX template actions", "1.0", \ARGV) {
+        FileLocationHandler::registerHandler("docxtestsource", new TemplateTestLocation(fixture, False));
+        FileLocationHandler::registerHandler("docxtestdest", dest);
+        addTestCase("discover required mappings", \discover());
+        addTestCase("render and reopen approved letter", \render());
+        addTestCase("validate mappings before opening output", \mappingErrors());
+        addTestCase("reject unsupported document features", \documentErrors());
+        addTestCase("apply the Word sandbox policy to template requests", \sandboxPolicy());
+        addTestCase("propagate destination errors", \outputErrors());
+        set_return_value(main());
+    }
+
+    private hash<auto> runAction(string name, hash<auto> req) {
+        hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppActionEx("Word", name);
+        AbstractDataProvider provider = DataProviderActionCatalog::getDataProviderForAction(action, \req);
+        return provider.doRequest(req);
+    }
+
+    private packageCheck(string mode) {
+        Process p("python3", ("-I", get_script_dir() + "/word-template/package_checks.py", mode, fixture, dir.path));
+        p.wait();
+        assertEq(0, p.exitCode(), p.readStderr(8192));
+    }
+
+    discover() {
+        hash<auto> scalar = {"type": "scalar", "required": True};
+        hash<auto> expected = {"fields": {"customer": scalar, "lines": {"type": "rows", "required": True,
+            "fields": {"item": scalar, "quantity": scalar}}}};
+        assertEq(expected, runAction("inspect-template", {"template_data": original}));
+        assertEq(expected, runAction("inspect-template", {"template_path": Source}));
+    }
+
+    render() {
+        auto inline_doc = runAction("fill-template", {"template_data": original, "mappings": Mappings});
+        assertEq(1, inline_doc.record_count);
+        auto located = runAction("fill-template", {"template_path": Source, "path": Target, "mappings": Mappings});
+        assertEq(inline_doc.data, located.data);
+        WordReadDataProvider reader({"data": inline_doc.data, "content_type": "table", "header_row": True});
+        list<hash<auto>> rows = map $1, reader.searchRecords();
+        assertEq(({"Item": "Tea", "Quantity": "2"}, {"Item": "Rice", "Quantity": "3"}), rows);
+        assertEq(inline_doc.data, ReadOnlyFile::readBinaryFile(dir.path + "/out.docx"));
+        auto empty = runAction("fill-template", {"template_path": Source, "mappings": {"customer": False, "lines": ()}});
+        FileLocationHandler::writeFileToLocation(dir.path + "/zero.docx", empty.data);
+        packageCheck("verify");
+        assertEq(original, ReadOnlyFile::readBinaryFile(fixture));
+    }
+
+    mappingErrors() {
+        int before = dest.opens;
+        foreach auto mapping in ((Mappings - "customer", Mappings + {"extra": 1}, Mappings + {"lines": "a"},
+                Mappings + {"lines": ({"item": "Tea"},)}, Mappings + {"customer": {"name": "a"}})) {
+            assertThrows("WORD-TEMPLATE-ERROR", \runAction(), ("fill-template",
+                {"template_data": original, "mappings": mapping, "path": Target}));
+        }
+        assertEq(before, dest.opens);
+        assertThrows("WORD-TEMPLATE-ERROR", \runAction(), ("inspect-template", {}));
+        assertThrows("WORD-TEMPLATE-ERROR", \runAction(), ("inspect-template",
+            {"template_path": Source, "template_data": original}));
+    }
+
+    documentErrors() {
+        packageCheck("prepare");
+        foreach string name in (("control", "macro", "external", "empty")) {
+            assertThrows("WORD-TEMPLATE-ERROR", \runAction(), ("inspect-template",
+                {"template_path": dir.path + "/" + name + ".docx"}));
+        }
+        assertThrows("WORD-TEMPLATE-ERROR", \runAction(), ("fill-template", {"template_data": binary("not a DOCX"),
+            "mappings": Mappings}));
+    }
+
+    sandboxPolicy() {
+        WordTemplateFieldsDataProvider inspector();
+        WordFillTemplateDataProvider filler();
+        SandboxManager policy();
+        policy.setNetworkDefaultPolicy(True);
+        Program p(PO_NEW_STYLE);
+        p.setSandboxManager(policy);
+        p.parse("auto sub invoke(code callback) { return callback(); }", "word-template-policy");
+        assertThrows("APP-SANDBOX-ACCESS-DENIED", sub () {
+            p.callFunction("invoke", auto sub () { return inspector.doRequest({"template_data": original}); });
+        });
+        assertThrows("APP-SANDBOX-ACCESS-DENIED", sub () {
+            p.callFunction("invoke", auto sub () {
+                return filler.doRequest({"template_data": original, "mappings": Mappings});
+            });
+        });
+    }
+
+    outputErrors() {
+        assertThrows("READ-ONLY-LOCATION", \runAction(), ("fill-template",
+            {"template_data": original, "path": Source, "mappings": Mappings}));
+        assertThrows("UPLOAD-FAILED", \runAction(), ("fill-template",
+            {"template_data": original, "path": "docxtestdest://fail", "mappings": Mappings}));
+    }
+}
