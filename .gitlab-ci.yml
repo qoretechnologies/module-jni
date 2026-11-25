@@ -77,11 +77,6 @@ default:
         HEALTHCHECK_TCP_PORT: "9092"
   before_script:
     - . test/docker_test/tree-tested-skip.sh
-    - |
-        curl "https://api.github.com/repos/qoretechnologies/${REPO_NAME}/statuses/${CI_COMMIT_SHA}" \
-        -X POST --oauth2-bearer ${GITHUB_ACCESS_TOKEN} -H "Content-Type: application/json" \
-        -d "{\"state\": \"pending\", \"context\": \"${REPO_NAME}\", \"description\": \"Gitlab CI\", \"target_url\": \"${CI_JOB_URL}\"}"
-    - set +e
 
 variables:
   REPO_NAME: module-jni
@@ -101,6 +96,9 @@ variables:
 # whole pipeline runs.  The same job runs in qore's pipelines.
 tree-already-tested:
   stage: .pre
+  needs:
+    - job: github-pending
+      artifacts: false
   image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop
   services: []
   before_script: []
@@ -119,34 +117,28 @@ tree-already-tested:
 
 test-ubuntu:
   stage: test
-  needs: [{job: tree-already-tested, optional: true}]
+  needs:
+    - job: github-pending
+      artifacts: false
+    - job: tree-already-tested
+      optional: true
   image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop
   script:
-    - |
-        if test/docker_test/test-ubuntu.sh; then
-          curl "https://api.github.com/repos/qoretechnologies/${REPO_NAME}/statuses/${CI_COMMIT_SHA}" \
-            -X POST --oauth2-bearer ${GITHUB_ACCESS_TOKEN} -H "Content-Type: application/json" \
-            -d "{\"state\": \"success\", \"context\": \"${REPO_NAME}\", \"description\": \"Gitlab CI\", \"target_url\": \"${CI_JOB_URL}\"}"
-          exit 0
-        else
-          curl "https://api.github.com/repos/qoretechnologies/${REPO_NAME}/statuses/${CI_COMMIT_SHA}" \
-            -X POST --oauth2-bearer ${GITHUB_ACCESS_TOKEN} -H "Content-Type: application/json" \
-            -d "{\"state\": \"failure\", \"context\": \"${REPO_NAME}\", \"description\": \"Gitlab CI\", \"target_url\": \"${CI_JOB_URL}\"}"
-          exit 1
-        fi
+    - test/docker_test/test-ubuntu.sh
   artifacts:
     when: always
     paths:
       - qualification/
     expire_in: 7 days
 
-# The JDK of the Debian packages and of the RPMs below Fedora 44; the images have JDK 25.  This job does not report its
-# own result to the module-jni GitHub status, as the jobs share that context and the last one to report wins, so a
-# failure here fails the pipeline only.  The one exception is the reuse of a tree that already passed: like every job,
-# it then sources tree-tested-skip.sh, which posts success to that context and ends the job.
+# The JDK of the Debian packages and of the RPMs below Fedora 44; the images have JDK 25.
 test-ubuntu-jdk21:
   stage: test
-  needs: [{job: tree-already-tested, optional: true}]
+  needs:
+    - job: github-pending
+      artifacts: false
+    - job: tree-already-tested
+      optional: true
   image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop
   before_script:
     - . test/docker_test/tree-tested-skip.sh
@@ -160,23 +152,61 @@ test-ubuntu-jdk21:
 
 test-alpine:
   stage: test
-  needs: [{job: tree-already-tested, optional: true}]
+  needs:
+    - job: github-pending
+      artifacts: false
+    - job: tree-already-tested
+      optional: true
   image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop-alpine
   script:
-    - |
-        if test/docker_test/test-alpine.sh; then
-          curl "https://api.github.com/repos/qoretechnologies/${REPO_NAME}/statuses/${CI_COMMIT_SHA}" \
-            -X POST --oauth2-bearer ${GITHUB_ACCESS_TOKEN} -H "Content-Type: application/json" \
-            -d "{\"state\": \"success\", \"context\": \"${REPO_NAME}\", \"description\": \"Gitlab CI\", \"target_url\": \"${CI_JOB_URL}\"}"
-          exit 0
-        else
-          curl "https://api.github.com/repos/qoretechnologies/${REPO_NAME}/statuses/${CI_COMMIT_SHA}" \
-            -X POST --oauth2-bearer ${GITHUB_ACCESS_TOKEN} -H "Content-Type: application/json" \
-            -d "{\"state\": \"failure\", \"context\": \"${REPO_NAME}\", \"description\": \"Gitlab CI\", \"target_url\": \"${CI_JOB_URL}\"}"
-          exit 1
-        fi
+    - test/docker_test/test-alpine.sh
   artifacts:
     when: always
     paths:
       - qualification/
     expire_in: 7 days
+
+# The required check represents this pipeline, including any platform jobs that reused a tested tree.
+.github-status-job:
+  image: $CI_REGISTRY/infrastructure/qore-test-base/qore-test-base:develop
+  services: []
+  before_script: []
+
+github-pending:
+  extends: .github-status-job
+  stage: .pre
+  script:
+    - sh test/docker_test/ci-github-status.sh pending
+
+pipeline-passed:
+  extends: .github-status-job
+  stage: .post
+  when: on_success
+  needs:
+    - job: github-pending
+      artifacts: false
+    - job: tree-already-tested
+      optional: true
+      artifacts: false
+    - job: test-ubuntu
+      artifacts: false
+    - job: test-ubuntu-jdk21
+      artifacts: false
+    - job: test-alpine
+      artifacts: false
+  script:
+    - sh test/docker_test/ci-github-status.sh passed
+  artifacts:
+    when: always
+    paths: [ci-pipeline-passed]
+    expire_in: 7 days
+
+github-status:
+  extends: .github-status-job
+  stage: .post
+  when: always
+  needs:
+    - job: pipeline-passed
+      artifacts: true
+  script:
+    - sh test/docker_test/ci-github-status.sh final
