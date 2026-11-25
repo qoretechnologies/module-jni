@@ -910,6 +910,13 @@ static QoreValue f_dbg_jni_code_reference_count(const QoreListNode* args, Runtim
     return static_cast<int64>(code->reference_count());
 }
 
+//! Returns the ID of the Program that owns an object, or -1 if it has none (qore#7394)
+static QoreValue f_dbg_jni_object_program_id(const QoreListNode* args, RuntimeConfig& rtcfg,
+        ExceptionSink* xsink) {
+    const QoreProgram* pgm = get_param_value(args, 0).get<const QoreObject>()->getProgram();
+    return pgm ? static_cast<int64>(pgm->getProgramId()) : static_cast<int64>(-1);
+}
+
 //! Ends the hold of dbg_jni_hold_context_lock() or dbg_jni_hold_context_program()
 static QoreValue f_dbg_jni_release_context_hold(const QoreListNode* args, RuntimeConfig& rtcfg,
         ExceptionSink* xsink) {
@@ -944,6 +951,8 @@ void init_jni_debug_functions(QoreNamespace& ns) {
         boolTypeInfo);
     ns.addBuiltinVariant("dbg_jni_code_reference_count", f_dbg_jni_code_reference_count, QCF_NO_FLAGS, QDOM_DEFAULT,
         bigIntTypeInfo, 1, codeTypeInfo, QoreValue(), "code");
+    ns.addBuiltinVariant("dbg_jni_object_program_id", f_dbg_jni_object_program_id, QCF_NO_FLAGS, QDOM_DEFAULT,
+        bigIntTypeInfo, 1, objectTypeInfo, QoreValue(), "obj");
     ns.addBuiltinVariant("dbg_jni_wait_child_status", f_dbg_jni_wait_child_status, QCF_NO_FLAGS, QDOM_DEFAULT,
         stringTypeInfo, 1, bigIntTypeInfo, QoreValue(), "pid");
     ns.addBuiltinVariant("dbg_jni_describe_throwable", f_dbg_jni_describe_throwable, QCF_NO_FLAGS, QDOM_DEFAULT,

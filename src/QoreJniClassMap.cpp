@@ -227,8 +227,10 @@ JniExternalProgramData* jni_get_context(QoreProgram*& pgm) {
         }
     }
 
-    // then try the Program context of the code
-    QoreProgram* pgm1 = qore_get_call_program_context();
+    // then try the Program context of the code; for library code that a sandbox governs, the Program of the code that
+    // it serves, or none if that is not known (qore#7394)
+    bool known;
+    QoreProgram* pgm1 = jni_calling_code_program(qore_get_call_program_context(), known);
     if (pgm1 && pgm1 != pgm0 && pgm1 != pgm) {
         jpc = static_cast<JniExternalProgramData*>(pgm1->getExternalData("jni"));
         if (jpc) {
@@ -294,13 +296,15 @@ JniExternalProgramData* jni_get_create_context(QoreProgram*& pgm, JniContextProg
     if (jpc) {
         return jpc;
     }
-    // no Program in the context has jni data: it is created in the Program of the calling code (qore#6801)
-    pgm = qore_get_call_program_context();
+    // no Program in the context has jni data: it is created in the Program of the calling code (qore#6801), never in
+    // the shared Program of library code that a sandbox governs (qore#7394)
+    pgm = jni_calling_code_program_for_state(qore_get_call_program_context());
     return jni_get_create_program_data(pgm, holder);
 }
 
 JniExternalProgramData* jni_get_create_call_context(QoreProgram*& pgm, JniContextProgramHolder& holder) {
-    pgm = qore_get_call_program_context();
+    // never the shared Program of library code that a sandbox governs (qore#7394)
+    pgm = jni_calling_code_program_for_state(qore_get_call_program_context());
     return jni_get_create_program_data(pgm, holder);
 }
 
@@ -4860,9 +4864,10 @@ static QoreValue exec_java_method(const QoreMethod& meth, BaseMethod* m, QoreObj
     // during the call are governed by the caller, not by the object's owner (qore#7023); the Java code of an object
     // of another Program that has a sandbox of its own (ex: a tenant's object that a host calls) reaches no Program:
     // it is neither the caller's code nor code that the object's sandbox governs as its caller
-    QoreProgram* caller_pgm = JniJavaCallerScope::callSite();
-    bool deny = false;
-    if (pgm && pgm != caller_pgm) {
+    JniJavaCallerRecord site = JniJavaCallerScope::callSite();
+    QoreProgram* caller_pgm = site.pgm;
+    bool deny = site.deny;
+    if (!deny && pgm && pgm != caller_pgm) {
         QoreSandboxManagerHelper own(pgm);
         deny = jni_sandbox_restricts_io(own.get());
     }
@@ -5162,6 +5167,67 @@ bool jni_restricting_sandbox_governs() {
     return jni_sandbox_restricts_io(governing.get());
 }
 
+#ifdef QORE_HAVE_CALLER_PROGRAM
+// returns true if the current thread runs in (has entered) the given Program, which then cannot be deleted while the
+// thread's call uses it
+static bool jni_thread_in_program(const QoreProgram& pgm) {
+    ReferenceHolder<QoreListNode> tids(pgm.getThreadList(), nullptr);
+    if (!tids) {
+        return false;
+    }
+    int64 tid = q_gettid();
+    for (size_t i = 0, e = tids->size(); i < e; ++i) {
+        if (tids->retrieveEntry(i).getAsBigInt() == tid) {
+            return true;
+        }
+    }
+    return false;
+}
+#endif
+
+QoreProgram* jni_calling_code_program(QoreProgram* pgm, bool& known) noexcept {
+    known = true;
+#ifdef QORE_HAVE_CALLER_PROGRAM
+    // only the current Program can be library code that the call chain resolves
+    if (!pgm || pgm != ::getProgram()) {
+        return pgm;
+    }
+    try {
+        // the caller Program is the current Program unless it is a module's (library code), or unless the call chain
+        // does not identify the code that the library code serves
+        QoreProgram* caller = qore_get_caller_program();
+        if (caller == pgm || !jni_restricting_sandbox_governs()) {
+            return pgm;
+        }
+        // only a caller that this thread runs in: a caller that the call chain names for work that was handed to this
+        // thread (a thread or a task that the library code started) is not held by the thread, and can be deleted
+        // while the module uses it
+        if (caller && jni_thread_in_program(*caller)) {
+            return caller;
+        }
+    } catch (...) {
+        // the sandbox could not be resolved: fails closed
+    }
+    known = false;
+    return nullptr;
+#else
+    return pgm;
+#endif
+}
+
+// the error of state that the module would place for library code that a sandbox governs whose caller is not known
+static constexpr const char* JNI_CALLER_NOT_KNOWN = "the Program of library code that a sandbox governs cannot hold "
+    "Java state for its caller, which is not known";
+
+QoreProgram* jni_calling_code_program_for_state(QoreProgram* pgm) {
+    bool known;
+    QoreProgram* rv = jni_calling_code_program(pgm, known);
+    if (!known) {
+        throw BasicException(JNI_CALLER_NOT_KNOWN);
+    }
+    return rv;
+}
+
 namespace {
 //! the record of the %Qore code that made the innermost call from %Qore into Java on the thread (qore#7023)
 thread_local JniJavaCallerRecord jni_java_caller;
@@ -5265,7 +5331,26 @@ public:
 };
 }
 
-QoreProgram* JniJavaCallerScope::callSite() {
+// the record of the calling code whose Program is \a pgm: for library code that a sandbox governs, the code that the
+// library code serves, and a record that reaches no Program if that is not known (qore#7394)
+static JniJavaCallerRecord jni_calling_code_record(QoreProgram* pgm) {
+    bool known;
+    JniJavaCallerRecord rv;
+    rv.set = true;
+    rv.pgm = jni_calling_code_program(pgm, known);
+    rv.deny = !known;
+    return rv;
+}
+
+JniJavaCallerRecord JniJavaCallerScope::callSite() {
+    return jni_calling_code_record(callSiteFrame());
+}
+
+JniJavaCallerRecord JniJavaCallerScope::current() {
+    return jni_calling_code_record(::getProgram());
+}
+
+QoreProgram* JniJavaCallerScope::callSiteFrame() {
 #ifdef _QORE_HAS_BUILTIN_CALL_SITE_PROGRAM
     // the Program of the code at the call site of the innermost builtin call, also when that code was called directly
     // by another Program, which the frame of the call does not name (qore#7028)
@@ -5385,11 +5470,14 @@ bool jni_governed_caller_reaches_intern(const QoreProgram* pgm) {
             return pgm && pgm == jni_java_caller.pgm;
         }
         // no recorded call: the Program context of the call; the current Program can be the Program of the class of
-        // a Java method that the code called
+        // a Java method that the code called; for library code, the Program of the code that it serves, and none if
+        // that is not known (qore#7394)
         QoreProgram* code_pgm = qore_get_call_program_context();
         if (!code_pgm) {
             code_pgm = ::getProgram();
         }
+        bool known;
+        code_pgm = jni_calling_code_program(code_pgm, known);
         return pgm && pgm == code_pgm;
     }
     // a recorded caller that is a sandboxed Program (ex: the owner of a Java closure that runs in a trusted Program, on
@@ -5418,7 +5506,10 @@ void jni_check_governed_caller_reaches(const QoreProgram* pgm) {
 }
 
 QoreProgram* jni_java_api_fallback_program(const QoreProgram* pgm) {
-    QoreProgram* call_pgm = qore_get_call_program_context();
+    // for library code that a sandbox governs, the Program of the code that it serves: no fallback if that is not
+    // known (qore#7394)
+    bool known;
+    QoreProgram* call_pgm = jni_calling_code_program(qore_get_call_program_context(), known);
     if (!call_pgm || call_pgm == pgm || !jni_governed_caller_reaches(call_pgm)) {
         return nullptr;
     }

@@ -1290,7 +1290,10 @@ static jobject JNICALL java_api_new_object_save(JNIEnv* jenv, jobject obj, jlong
     // left last
     ExceptionSink java_pgm_xsink;
     std::optional<JniJavaProgramRef> java_pgm;
-    QoreProgram* pgm = qore_get_call_program_context();
+    // for library code that a sandbox governs, the Program of the code that it serves, never the library's shared
+    // Program (qore#7394)
+    QoreProgram* call_pgm = qore_get_call_program_context();
+    QoreProgram* pgm = jni_calling_code_program_for_state(call_pgm);
     if (pgm) {
         // for code that a sandbox governs, the object is created only in the Program of the calling code: a call of a
         // Java method of an object of another Program has the object's Program as its Program context (qore#7023)
@@ -1314,6 +1317,12 @@ static jobject JNICALL java_api_new_object_save(JNIEnv* jenv, jobject obj, jlong
     if (xsink) {
         QoreToJava::wrapException(env, xsink);
         return nullptr;
+    }
+    // the Program of the code that library code serves is also the Program context of the creation, so that Java's
+    // calls into Qore that it makes (ex: for the Java class of the object) are judged with that Program (qore#7394)
+    std::optional<QoreExternalProgramCallContextHelper> call_ctx;
+    if (call_pgm && pgm != call_pgm) {
+        call_ctx.emplace(pgm);
     }
 
     QoreJniStackLocationHelper slh;

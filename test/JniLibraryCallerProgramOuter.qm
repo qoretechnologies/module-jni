@@ -1,0 +1,26 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#! test module for jni-library-caller-program.qtest: library code that calls other library code
+
+%modern
+%requires JniLibraryCallerProgram
+
+module JniLibraryCallerProgramOuter {
+    version = "1.0";
+    desc = "library code that calls other library code that creates Java state";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+public namespace JniLibraryCallerProgramOuter {
+#! returns a Java byte array that the other library creates
+public object sub jlcp_outer_byte_array(binary b) {
+    return jlcp_byte_array(b);
+}
+
+#! defines a Java class through the other library
+public object sub jlcp_outer_define_class(string name, binary bytecode) {
+    return jlcp_define_class(name, bytecode);
+}
+}
