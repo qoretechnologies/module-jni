@@ -211,6 +211,7 @@ public class PollingDeliveryTest inherits QUnit::Test {
         JmsPollingDataProvider polling = startPolling(provider, new DeliveryObserver(deliveries, refuse));
         on_exit polling.stopEvents();
 
+        assertTrue(polling.getInfo().supports_refusal_redelivery);
         send(provider, dest, ("r1", "r2"));
         list<hash<auto>> seen = map deliveries.get(10s), xrange(3);
         # the refused message is delivered again, before the message that follows it

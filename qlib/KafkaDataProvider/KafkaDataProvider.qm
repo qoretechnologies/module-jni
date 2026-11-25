@@ -36,7 +36,7 @@
 %module-cmd(jni) global-add-relative-classpath ./jar/qore-dataprovider-kafka.jar
 
 # implements a data provider for Kafka functionality
-%requires(reexport) DataProvider >= 3.12
+%requires(reexport) DataProvider >= 3.13
 # implements support for Kafka connections
 %requires(reexport) ConnectionProvider
 %requires AsyncApi >= 1.0

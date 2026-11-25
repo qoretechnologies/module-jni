@@ -379,6 +379,7 @@ public class KafkaDataProviderTest inherits QUnit::Test {
         {
             KafkaConsumerDataProvider consumer = getConsumer(conn, topic, group);
             on_exit consumer.stopEvents();
+            assertTrue(consumer.getInfo().supports_refusal_redelivery);
             Queue deliveries();
             KafkaRefusingObserver obs(deliveries, "v1", 1);
             consumer.registerObserver(obs);
