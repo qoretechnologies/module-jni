@@ -65,6 +65,7 @@ class JniSandboxSuppliedObjectTest inherits QUnit::Test {
         }
         addTestCase("positive: callbacks and the host's own calls with sandboxed Java", \mixedTest());
         addTestCase("corner cases of the origin of an object", \originTest());
+        addTestCase("negative: a class defined in the host's class loader (qore#7738)", \defineClassTest());
         set_return_value(main());
     }
 
@@ -188,6 +189,27 @@ class JniSandboxSuppliedObjectTest inherits QUnit::Test {
             "own-origin": "OK: \"supplier\"|-",
         };
         assertEq(expected, normalize(rv), out);
+    }
+
+    #! sandboxed code cannot define a class in the host's class loader with the module's lookup (qore#7738)
+    defineClassTest() {
+        string dir = tmp.path + DirSep + "define-class";
+        mkdir(dir);
+        string out = runChild(("define-class", dir))[0];
+        hash<string, list<string>> rv;
+        foreach string line in (out.split("\n")) {
+            if (line =~ /^P\|/) {
+                list<string> l = line.split("|");
+                rv{l[1]} = (l[2], l[3]);
+            }
+        }
+        assertEq(("define-class-host", "define-class-sandboxed"), sort(keys rv), out);
+        # the host's function is not reached, whatever the error
+        assertFalse(rv."define-class-host"[0] =~ /host secret/, rv."define-class-host"[0]);
+        assertEq("OK: \"nothing handed over\"", rv."define-class-host"[0], out);
+        # the module's dispatch class has no lookup to hand out
+        assertRegex("^JNI-ERROR: java.lang.NoSuchMethodException: org.qore.jni.QoreJavaDynamicApi.lookup\\(\\)",
+            rv."define-class-sandboxed"[0], out);
     }
 
     #! the refusal that a combination of an object of the shape that sandboxed code made raises

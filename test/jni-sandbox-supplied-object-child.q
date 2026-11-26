@@ -12,6 +12,9 @@
 #   calling a function of the host and once creating a directory under <dir>; prints one line per combination:
 #   "R|<shape>|<handover>|<runner>|<function>|<outcome>|<created|absent>"
 # - case "mixed": the calls that stay allowed once sandboxed code has used Java; prints "P|<name>|<outcome>|<dir>"
+# - case "define-class": sandboxed code tries to define a class in the host's class loader through the lookup of the
+#   host's copy of the module's dispatch class, and the host runs an object of it if it got one (qore#7738); prints
+#   "P|<name>|<outcome>|-"
 # - case "origin": corner cases of the origin of an object (a deleted origin, an object passed on, another sandboxed
 #   Program, class loading); prints "P|<name>|<outcome>|-"
 #
@@ -32,6 +35,39 @@
 %module-cmd(jni) import org.qore.jni.QoreJavaApi
 %module-cmd(jni) import org.qore.jni.test.SuppliedClosureProbe
 %module-cmd(jni) import org.qore.jni.test.HostObjectProbe
+
+#! the code of a sandboxed Program that tries to define a class in the host's class loader (qore#7738)
+const DefineClassSource = "%modern
+%requires jni
+%module-cmd(jni) import org.qore.jni.compiler.QoreJavaCompiler
+%module-cmd(jni) import java.lang.Class
+const Src = 'package org.qore.jni;
+public class SuppliedDefined implements java.util.function.Function<Object, Object> {
+    public Object apply(Object o) {
+        try {
+            return QoreJavaApi.callFunction(\"host_fn\");
+        } catch (Throwable e) {
+            return e.toString();
+        }
+    }
+}';
+# defines the class in the class loader of the host's copy of the module's dispatch class, and hands an object of it
+# to the list given; returns the class's name, or the exception
+string sub define_in(object host_loader, object l) {
+    try {
+        object dyn = host_loader.loadClass('org.qore.jni.QoreJavaDynamicApi');
+        object lk = dyn.getMethod('lookup').invoke(NOTHING);
+        QoreJavaCompiler compiler(get_class_loader(), NOTHING);
+        on_exit compiler.close();
+        object out = compiler.compile('org.qore.jni.SuppliedDefined', Src);
+        object cls = lk.defineClass(out.file.openInputStream().readAllBytes());
+        l.add(cls.getDeclaredConstructor().newInstance());
+        return 'OK: ' + cls.getName();
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err + ': ' + ex.desc;
+    }
+}
+";
 
 #! the code of the Program that makes the Java objects and closures (single quotes only)
 const SupplierSource = "%modern
@@ -387,6 +423,28 @@ nothing sub mixed(string dir) {
     report("host-adapter", auto sub () { return run_value(own.callFunction("make", "adapter", "host_fn"), "jdk"); });
 }
 
+#! a class that sandboxed code tries to define in the host's class loader (qore#7738)
+nothing sub define_class() {
+    code report = nothing sub (string name, code c) {
+        printf("P|%s|%s|-\n", name, outcome(c));
+    };
+    Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+    p.issueModuleCmd("jni", "add-classpath " + get_script_dir() + "/../build/qore-jni-compiler.jar");
+    p.parse(DefineClassSource, "define-class");
+    SandboxManager sm();
+    sm.setUncontrolledApiPolicy(True);
+    sm.setFilesystemDefaultPolicy(False);
+    sm.setNetworkDefaultPolicy(False);
+    p.setSandboxManager(sm);
+    ArrayList l();
+    string rv = p.callFunction("define_in", get_class_loader(), l);
+    printf("P|define-class-sandboxed|%s|-\n", replace(replace(rv, "\n", " "), "|", "/"));
+    # the host runs what it got, if anything, through a method of the JDK
+    report("define-class-host", auto sub () {
+        return l.size() ? Optional::of("x").map(l.get(0)).get() : "nothing handed over";
+    });
+}
+
 #! corner cases of the origin of an object
 nothing sub origin() {
     code report = nothing sub (string name, code c) {
@@ -478,6 +536,9 @@ int sub main() {
             break;
         case "origin":
             origin();
+            break;
+        case "define-class":
+            define_class();
             break;
         default:
             stderr.printf("unknown case %y\n", case_name);

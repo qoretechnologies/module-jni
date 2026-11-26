@@ -682,9 +682,12 @@ module calls them, not the state that Java code moves between objects or the Jav
   (ex: a method of the JDK, or Java code of the host that invokes a method handle that sandboxed code supplied) and the
   module's other conversions that run Java code of the object (ex: iterating a `List`) run with the record of the
   calling code;
-- Java code that a sandboxed Program runs has the JVM's rights (see "The limit of these checks" below): it can change
-  the module's own Java state (ex: by reflection on the classes of unnamed modules), or define classes that the stack
-  walk attributes to trusted code.
+- Java code that a sandboxed Program runs has the JVM's rights (see "The limit of these checks" below).  The module's
+  API offers no way to define a class in another Program's class loader: the per-Program dispatch class
+  (`QoreJavaDynamicApi`) hands out no lookup object for its class loader (qore#7738).  The JDK's own reflection and
+  class definition facilities remain outside the module's control: with them, Java code can change the module's own
+  Java state (ex: by reflection on the classes of unnamed modules), or define classes that the stack walk attributes
+  to another Program or to trusted code.
 
 A host therefore still runs no Java code for sandboxed code with values that sandboxed code chose, and wraps what it
 accepts from sandboxed code in a Qore closure that it controls.
