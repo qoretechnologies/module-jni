@@ -1108,6 +1108,21 @@ int sub hold() { return NativeHandleProbe::classpathHold(); }
 
         # a Java subclass whose Qore class is made while the one of its superclass is in progress
         assertEq("ok: constructed; ok: constructed", NativeHandleProbe::loadOrder("qore.Qore.ListIterator", 1));
+        # B has the ancestors that A got after the Qore class of B was made (qore#7614)
+        {
+            object o = NativeHandleProbe::loadOrderObject("qore.Qore.ListIterator", 1);
+            on_exit delete o;
+            # A had no base class when the Qore class of B was made: M (the Java superclass of A), the class of the
+            # generated Java class and its ancestors, and java.lang.Object came later
+            assertTrue(o instanceof Qore::ListIterator);
+            assertTrue(o instanceof Qore::AbstractQuantifiedBidirectionalIterator);
+            assertTrue(o instanceof Qore::AbstractIterator);
+            assertTrue(o instanceof Jni::java::lang::Object);
+            # the private data of ListIterator, set by its constructor for an object of B
+            assertTrue(o.next());
+            assertEq(1, o.getValue());
+            assertFalse(o.next());
+        }
 
         # Java classes between the subclass and the class with the binding
         int own = NativeHandleProbe::classBinding(p.callFunction("rawbytes", "qore.Qore.ListReverseIterator"));

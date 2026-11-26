@@ -768,11 +768,8 @@ public final class NativeHandleProbe {
     }
 
     //! Defines M extends the generated class, A extends M and B extends A, where a method of M returns B, so that the
-    //! Qore class of B is made while the one of A is still in progress; returns the result of constructing A, then B
-    public static String loadOrder(String generatedName, Object... args) throws Throwable {
-        ClassLoader l = QoreURLClassLoader.getCurrent();
-        Class<?> generated = l.loadClass(generatedName);
-        long own = generated.getField("$qore_cls_handle").getLong(null);
+    //! Qore class of B is made while the one of A is still in progress; returns the classes A and B
+    private static Class<?>[] defineOrder(ClassLoader l, Class<?> generated) throws Throwable {
         int id;
         synchronized (NativeHandleProbe.class) {
             id = ++subclassCount;
@@ -792,8 +789,33 @@ public final class NativeHandleProbe {
         defineIn(l, m, w.toByteArray());
         Class<?> ca = defineIn(l, a, subclassBytes(a, m, false));
         Class<?> cb = defineIn(l, b, subclassBytes(b, a, false));
-        String first = construct(ca, own, args);
-        return first + "; " + construct(cb, own, args);
+        return new Class<?>[] {ca, cb};
+    }
+
+    //! Defines M extends the generated class, A extends M and B extends A, where a method of M returns B, so that the
+    //! Qore class of B is made while the one of A is still in progress; returns the result of constructing A, then B
+    public static String loadOrder(String generatedName, Object... args) throws Throwable {
+        ClassLoader l = QoreURLClassLoader.getCurrent();
+        Class<?> generated = l.loadClass(generatedName);
+        long own = generated.getField("$qore_cls_handle").getLong(null);
+        Class<?>[] c = defineOrder(l, generated);
+        String first = construct(c[0], own, args);
+        return first + "; " + construct(c[1], own, args);
+    }
+
+    //! As loadOrder(): constructs an object of A, which makes the Qore classes of A and B, then returns an object of
+    //! B, whose Qore class was made while the one of A was in progress (qore#7614); the caller destroys it
+    public static QoreObject loadOrderObject(String generatedName, Object... args) throws Throwable {
+        ClassLoader l = QoreURLClassLoader.getCurrent();
+        Class<?> generated = l.loadClass(generatedName);
+        long own = generated.getField("$qore_cls_handle").getLong(null);
+        Class<?>[] c = defineOrder(l, generated);
+        String first = construct(c[0], own, args);
+        if (!first.equals("ok: constructed")) {
+            throw new AssertionError("A: " + first);
+        }
+        return (QoreObject)c[1].getConstructor(long.class, long.class, long.class, Object[].class)
+            .newInstance(own, 0L, 0L, args);
     }
 
     private static String construct(Class<?> cls, long binding, Object[] args) {
