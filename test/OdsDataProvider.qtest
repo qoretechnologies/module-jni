@@ -243,6 +243,7 @@ public class OdsDataProviderTest inherits QUnit::Test {
         addTestCase("write-data action returns the generated data", \testWriteDataAction());
         addTestCase("writer record type", \testWriterRecordType());
         addTestCase("read: empty rows", \testReadEmptyRows());
+        addTestCase("read: merged cells", \testMergedCells());
         addTestCase("read: repeated empty rows", \testReadRepeatedEmptyRows());
         addTestCase("profile: raw spreadsheet grid", \testProfileGrid());
         addTestCase("profile action", \testProfileAction());
@@ -3053,5 +3054,110 @@ printf(\"RESULT:%%s\\n\", make_json(rv));
         # a worksheet provider writes open records, since a condition can use fields that are not written
         dp = new OdsWriteDataProvider({"sheets": RoutedSheets});
         assertNothing(dp.getRecordType());
+    }
+
+    #! the merged_cells option: the value of a merged range in its first cell, its first row, or all of its cells
+    #! (qoretechnologies/qore#7751)
+    testMergedCells() {
+        TmpDir dir("merged-cells-");
+        string path = dir.path + "/merged.ods";
+        OdsTestHelper::createMergedHeaderOds(path);
+        checkMergedCells(path, "ods");
+    }
+
+    private checkMergedCells(string path, string fmt) {
+        list<hash<auto>> first = (
+            {"a": "Artikel", "b": "Menge", "c": NOTHING, "d": "Datum", "e": "Lager"},
+            {"a": NOTHING, "b": "bestätigt", "c": "offen", "d": NOTHING, "e": NOTHING},
+            {"a": "A-1", "b": 5.0, "c": 2.0, "d": "10.10.2026", "e": "L1"},
+            {"a": "A-2", "b": 7.0, "c": 0.0, "d": "12.10.2026", "e": NOTHING},
+        );
+        list<hash<auto>> fill_right = first;
+        fill_right[0].c = "Menge";
+        list<hash<auto>> fill = fill_right;
+        fill[1].a = "Artikel";
+        fill[1].d = "Datum";
+        fill[3].e = "L1";
+        foreach hash<auto> i in ({"first": first, "fill_right": fill_right, "fill": fill, "": first}.pairIterator()) {
+            hash<auto> opts = {
+                "headers": ("a", "b", "c", "d", "e"),
+                "data_cells": "a1:e4",
+                "type_sample_rows": 0,
+            };
+            if (i.key.val()) {
+                opts.merged_cells = i.key;
+            }
+            OdsReadDataProvider dp(path, opts);
+            list<hash<auto>> records = map $1, dp.searchRecords();
+            assertEq(i.value, records, sprintf("%s: %y", fmt, i.key));
+        }
+
+        # a name merged down from the row of the group names into the header row
+        OdsReadDataProvider dp(path, {
+            "header_cells": "a2:d2",
+            "data_cells": "a3",
+            "type_sample_rows": 0,
+            "merged_cells": "fill",
+        });
+        list<hash<auto>> records = map $1, dp.searchRecords();
+        assertEq(("Artikel", "bestätigt", "offen", "Datum"), keys records[0], fmt + ": the header row with fill");
+        assertEq("A-1", records[0].Artikel);
+        assertEq("A-2", records[1].Artikel);
+
+        # a merged cell whose value fills the header row repeats a column name
+        {
+            OdsReadDataProvider bad(path, {"header_cells": "a1:e1", "merged_cells": "fill_right"});
+            assertThrows("ODS-READ-OPTION-ERROR", "more than one column \"Menge\"", \bad.searchRecords());
+            # a read after the error raises it again, not reading with the columns that replace each other
+            assertThrows("ODS-READ-OPTION-ERROR", "more than one column \"Menge\"", \bad.searchRecords());
+        }
+
+        # the formula of a merged cell is the formula of its own cell only
+        OdsReadDataProvider fdp(path, {
+            "headers": ("a", "b", "c", "d", "e"),
+            "data_cells": "a5:e5",
+            "type_sample_rows": 0,
+            "formula_field": "f",
+            "merged_cells": "fill",
+        });
+        records = map $1, fdp.searchRecords();
+        assertEq(1, records.size(), fmt);
+        assertEq(7.0, records[0].b, fmt + ": the formula's value");
+        assertEq(7.0, records[0].c, fmt + ": the formula's value fills the merged range");
+        assertEq(("B5",), keys records[0].f, fmt + ": the formula of the merged cell only");
+
+        # a read without headers ends at the last cell that a merged cell of a row above fills
+        OdsReadDataProvider ndp(path, {
+            "data_cells": "a3",
+            "type_sample_rows": 0,
+            "merged_cells": "fill",
+        });
+        records = map $1, ndp.searchRecords();
+        assertEq(3, records.size(), fmt);
+        assertEq("L1", records[1].E4, fmt + ": the cell that the merged cell above fills: " + records[1].keys().join(","));
+
+        # a merged first cell with whitespace over two rows gives no value; 0 and false fill
+        {
+            hash<auto> eopts = {
+                "worksheet": "Rand",
+                "headers": ("a", "b", "c", "d", "e", "f", "g"),
+                "data_cells": "a1:g2",
+                "type_sample_rows": 0,
+                "preserve_empty_rows": True,
+            };
+            list<hash<auto>> plain = map $1, (new OdsReadDataProvider(path, eopts)).searchRecords();
+            assertEq(NOTHING, plain[0].e, fmt + ": a covered cell without the option");
+            foreach string mode in (("fill_right", "fill")) {
+                list<hash<auto>> filled = map $1, (new OdsReadDataProvider(path, eopts + {"merged_cells": mode}))
+                    .searchRecords();
+                list<hash<auto>> expected = plain;
+                expected[0] += {"e": 0.0, "g": False};
+                assertEq(expected, filled, fmt + ": " + mode);
+            }
+        }
+
+        assertThrows("OPTION-VALUE-ERROR", "merged_cells", sub () {
+            OdsReadDataProvider bad(path, {"header_names": True, "merged_cells": "down"});
+        });
     }
 }
