@@ -18,8 +18,8 @@
 # - case "origin": corner cases of the origin of an object (a deleted origin, an object passed on, another sandboxed
 #   Program, class loading); prints "P|<name>|<outcome>|-"
 #
-# the child prints "latch: <bool>" when the module can tell whether sandboxed code has used Java in the process
-# (a debug build), and "end" when it ran to its end
+# the child prints "jdk: <feature version>", "latch: <bool>" when the module can tell whether sandboxed code has used
+# Java in the process (a debug build), and "end" when it ran to its end
 
 %modern
 %no-child-restrictions
@@ -36,6 +36,7 @@
 %module-cmd(jni) import org.qore.jni.test.SuppliedClosureProbe
 %module-cmd(jni) import org.qore.jni.test.HostObjectProbe
 %module-cmd(jni) import org.qore.jni.test.SuppliedTask
+%module-cmd(jni) import java.lang.Runtime
 
 #! the code of a sandboxed Program that tries to define a class in the host's class loader (qore#7738)
 const DefineClassSource = "%modern
@@ -146,9 +147,10 @@ object sub store_handle(object holder, string handover) {
 # a Java object used as a Qore closure, of JDK classes only, made and stored by Java code: it is never a Qore value
 # in this Program
 nothing sub store_marker(object store, string fn) {
-    object lk = MethodHandles::publicLookup();
-    object asifc = lk.unreflect(Class::forName('java.lang.invoke.MethodHandleProxies').getMethod('asInterfaceInstance',
-        Class::forName('java.lang.Class'), Class::forName('java.lang.invoke.MethodHandle')));
+    # a full lookup: before JDK 22, asInterfaceInstance() is caller-sensitive, which a public lookup cannot unreflect
+    object asifc = MethodHandles::lookup().unreflect(Class::forName('java.lang.invoke.MethodHandleProxies')
+        .getMethod('asInterfaceInstance', Class::forName('java.lang.Class'),
+        Class::forName('java.lang.invoke.MethodHandle')));
     object mk = MethodHandles::insertArguments(asifc, 0, Class::forName('org.qore.jni.QoreClosureMarkerImpl'),
         MethodHandles::insertArguments(call_handle(), 0, fn));
     auto r = MethodHandles::filterReturnValue(mk, store).invokeWithArguments(new ArrayList());
@@ -239,7 +241,8 @@ nothing sub hand_class_loading(object l, object loader, string name) {
     object clscls = Class::forName('java.lang.Class');
     object m = clscls.getMethod('forName', Class::forName('java.lang.String'),
         Class::forName('java.lang.Boolean').getField('TYPE').get(NOTHING), Class::forName('java.lang.ClassLoader'));
-    object mh = MethodHandles::insertArguments(MethodHandles::publicLookup().unreflect(m), 0, name, True, loader);
+    # a full lookup: forName() is caller-sensitive, which a public lookup cannot unreflect before JDK 22
+    object mh = MethodHandles::insertArguments(MethodHandles::lookup().unreflect(m), 0, name, True, loader);
     l.add(MethodHandleProxies::asInterfaceInstance(Class::forName('java.util.function.Supplier'), mh));
 }
 
@@ -343,6 +346,11 @@ Program sub supplier(bool sandboxed) {
         p.setSandboxManager(sm);
     }
     return p;
+}
+
+#! prints the feature version of the JVM
+nothing sub print_jdk() {
+    printf("jdk: %d\n", Runtime::version().feature());
 }
 
 #! prints whether sandboxed code has used Java in the process, if the module can tell
@@ -580,6 +588,7 @@ int sub main() {
             stderr.printf("unknown case %y\n", case_name);
             return 2;
     }
+    print_jdk();
     print_latch();
     print("end\n");
     return 0;

@@ -72,7 +72,8 @@ class JniSandboxSuppliedObjectTest inherits QUnit::Test {
     #! the objects of the shape that sandboxed code makes reach neither the host's function nor its authority
     negativeTest(string shape) {
         *string latch;
-        hash<string, list<string>> rv = runMatrix(shape, "sandboxed", \latch);
+        int jdk;
+        hash<string, list<string>> rv = runMatrix(shape, "sandboxed", \latch, \jdk);
         if (latch) {
             assertEq("True", latch, "sandboxed code has used Java in the process");
         }
@@ -85,8 +86,8 @@ class JniSandboxSuppliedObjectTest inherits QUnit::Test {
         foreach string handover in (Handovers) {
             foreach string runner in (Runners) {
                 foreach string fn in (Functions) {
-                    expected{handover + "|" + runner + "|" + fn} = expectedRefusal(shape, handover, runner)
-                        + "|absent";
+                    expected{handover + "|" + runner + "|" + fn} = expectedRefusal(shape, handover, runner,
+                        jdk) + "|absent";
                 }
             }
         }
@@ -96,7 +97,8 @@ class JniSandboxSuppliedObjectTest inherits QUnit::Test {
     #! the same objects made by a Program with no sandbox, with no sandboxed Java in the process, keep working
     trustedTest(string shape) {
         *string latch;
-        hash<string, list<string>> rv = runMatrix(shape, "trusted", \latch);
+        int jdk;
+        hash<string, list<string>> rv = runMatrix(shape, "trusted", \latch, \jdk);
         if (latch) {
             assertEq("False", latch, "no sandboxed code has used Java in the process");
         }
@@ -161,6 +163,7 @@ class JniSandboxSuppliedObjectTest inherits QUnit::Test {
         string dir = tmp.path + DirSep + "origin";
         mkdir(dir);
         string out = runChild(("origin", dir))[0];
+        int jdk = childJdk(out);
         hash<string, list<string>> rv;
         foreach string line in (out.split("\n")) {
             if (line =~ /^P\|/) {
@@ -172,8 +175,9 @@ class JniSandboxSuppliedObjectTest inherits QUnit::Test {
             # the object's code calls the host's Program, which neither a deleted origin nor the first origin reaches
             "deleted-origin": "NotGoverned|-",
             "passed-on-origin": "NotGoverned|-",
-            # the class is not generated for an adapter of JDK classes only
-            "class-loading-adapter": "UnknownOrigin|-",
+            # the class is not generated for an adapter of JDK classes only: before JDK 22, the adapter is attributed
+            # to the sandboxed Program that made it (see expectedRefusal())
+            "class-loading-adapter": (jdk < 22 ? "NotGoverned" : "UnknownOrigin") + "|-",
             # the JDK's class loading code that the host calls generates the class
             "class-loading-host": "OK: \"qore.SuppliedGenB\"|-",
             # another sandboxed Program that calls an object that the first one made does not get its reach
@@ -222,7 +226,20 @@ class JniSandboxSuppliedObjectTest inherits QUnit::Test {
     }
 
     #! the refusal that a combination of an object of the shape that sandboxed code made raises
-    private:internal static string expectedRefusal(string shape, string handover, string runner) {
+    /** @param jdk the feature version of the JVM of the child: before JDK 22, the adapter that the JDK makes for an
+        interface of the boot class loader is a proxy class of the thread's context class loader, which is the class
+        loader of the Program that made it, so the stack walk attributes it to that sandboxed Program, which cannot
+        reach the host's Program; from JDK 22, it is a hidden class of a dynamic module, whose origin is not known.
+        A Java closure that the sandboxed Program converted itself (a marker that it returns) calls into that Program,
+        to which the proxy is attributed: its origin is still not known
+    */
+    private:internal static string expectedRefusal(string shape, string handover, string runner, int jdk) {
+        if (jdk < 22 && inlist(shape, ("adapter", "jdk-lambda", "and-then"))) {
+            return "NotGoverned";
+        }
+        if (jdk < 22 && shape == "marker") {
+            return handover == "return" ? "UnknownOrigin" : "NotGoverned";
+        }
         switch (shape) {
             # a Java object used as a Qore closure of JDK classes only: its origin cannot be determined
             case "marker":
@@ -259,11 +276,13 @@ class JniSandboxSuppliedObjectTest inherits QUnit::Test {
     }
 
     #! runs the matrix of the shape in a child; returns "<handover>|<runner>|<function>": (<outcome>, <directory>)
-    private:internal hash<string, list<string>> runMatrix(string shape, string mode, *reference<*string> latch) {
+    private:internal hash<string, list<string>> runMatrix(string shape, string mode, *reference<*string> latch,
+            *reference<int> jdk) {
         string dir = tmp.path + DirSep + shape + "-" + mode;
         mkdir(dir);
         (string out, *string l) = runChild(("matrix", dir, shape, mode));
         latch = l;
+        jdk = childJdk(out);
         hash<string, list<string>> rv;
         foreach string line in (out.split("\n")) {
             if (line =~ /^R\|/) {
@@ -292,6 +311,13 @@ class JniSandboxSuppliedObjectTest inherits QUnit::Test {
         assertRegex("(^|\n)end\n", out, sprintf("%y: the child ran to its end", args));
         *string latch = (out =~ x/(^|\n)latch: ([A-Za-z]+)/)[1];
         return (out, latch);
+    }
+
+    #! returns the feature version of the JVM that the child printed
+    private:internal int childJdk(string out) {
+        *string v = (out =~ x/(^|\n)jdk: ([0-9]+)/)[1];
+        assertTrue(exists v, "the child printed the version of its JVM: " + out);
+        return v.toInt();
     }
 
     #! quotes an argument for the shell
