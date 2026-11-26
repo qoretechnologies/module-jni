@@ -35,6 +35,7 @@
 %module-cmd(jni) import org.qore.jni.QoreJavaApi
 %module-cmd(jni) import org.qore.jni.test.SuppliedClosureProbe
 %module-cmd(jni) import org.qore.jni.test.HostObjectProbe
+%module-cmd(jni) import org.qore.jni.test.SuppliedTask
 
 #! the code of a sandboxed Program that tries to define a class in the host's class loader (qore#7738)
 const DefineClassSource = "%modern
@@ -207,6 +208,18 @@ nothing sub hand_own_closure(object l, string fn) {
 
 # calls the Qore closure given
 auto sub call_closure(code c) {
+    return c();
+}
+
+# leaves a Java closure, made here, that calls the function given in the Program that runs it, in Java state that
+# every Program can reach
+nothing sub leave_closure(string fn) {
+    SuppliedTask::shared = new SuppliedClosureProbe(fn);
+}
+
+# obtains the Java closure left in that Java state, and calls it
+auto sub call_left_closure() {
+    code c = SuppliedTask::shared;
     return c();
 }
 
@@ -505,6 +518,17 @@ nothing sub origin() {
         # the host, and the Program that made it, reach its Program
         report("lent-closure-host", auto sub () { return c(); });
         report("lent-closure-own", auto sub () { return a.callFunction("call_closure", c); });
+    }
+    # a Java closure that a sandboxed Program made and left in shared Java state, which another sandboxed Program
+    # obtains itself and calls: it does not run with the second Program's reach
+    {
+        Program a = supplier(True);
+        Program b = supplier(True);
+        a.callFunction("leave_closure", "supplier_fn");
+        report("foreign-closure", auto sub () { return b.callFunction("call_left_closure"); });
+        # the Program that made it obtains and calls it with its own reach
+        report("foreign-closure-own", auto sub () { return a.callFunction("call_left_closure"); });
+        SuppliedTask::shared = NOTHING;
     }
     # an object that a sandboxed Program made and handed over, run by that Program itself: it reaches its own Program
     {

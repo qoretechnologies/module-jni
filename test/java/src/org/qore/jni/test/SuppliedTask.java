@@ -25,6 +25,9 @@ import org.qore.jni.QoreURLClassLoader;
 /** The class is defined by the class loader of the Program that loads the test jar first (qore#7081)
 */
 public class SuppliedTask {
+    //! Java state that every Program can reach: a value that one Program leaves for another to read
+    public static Object shared;
+
     //! the Qore function that the call calls
     private final String function;
 

@@ -243,17 +243,20 @@ class Outer {
     @par Java objects and closures that sandboxed code supplies
     A Java object has no Program of its own, so once code that a sandbox governs has used Java in the process, the
     module governs the Java objects and closures that host code runs as follows (qore#7081):
-    - a Java object that sandboxed code creates with a Java constructor, and a Java object used as a %Qore closure
-      whose %Qore object belongs to a sandboxed Program when it is handed to Java, keep that sandboxed Program as their
-      origin: when the module calls such an object for trusted code (a method of the object, or the closure), its Java
-      code reaches only that Program, and when it calls it for other sandboxed code, it reaches no Program; a call
-      into another Program is refused with \c JNI-ERROR;
+    - a Java object that sandboxed code creates with a %Qore \c new of a Java class, and a Java object used as a %Qore
+      closure whose %Qore object belongs to a sandboxed Program when it is handed to Java, keep that sandboxed Program
+      as their origin: when the module calls such an object for trusted code (a method of the object, or the closure),
+      its Java code reaches only that Program, and when other sandboxed code calls or obtains it, it reaches no
+      Program; a call into another Program is refused with \c JNI-ERROR.  An object that Java code creates, by
+      reflection or with Java's own \c new, has no origin;
     - a call of %Qore code by a Program that Java names (\c org.qore.jni.QoreJavaApi, the constructors, static
-      methods, functions and constants of the Java classes generated for the %Qore definitions of a Program) that a
-      Java object or closure made only of the JDK's classes, of adapters or of proxies makes is refused, as nothing
-      tells which code made the object; so is the generation or listing of the classes of a Program's class loader
-      that an adapter or a proxy makes (the JDK's own class loading code, which loads classes for any code, is not
-      refused).  The refusal raises:
+      methods and functions of the Java classes generated for the %Qore definitions of a Program) that a Java object
+      or closure made only of the JDK's classes, of adapters or of proxies makes is refused, as nothing tells which
+      code made the object; so are an operation on a Program's class loader other than closing it, the creation of a
+      class loader for a Program, and, when an adapter or a proxy makes them, the generation or listing of the classes
+      of a Program's class loader and the reading of the constants of the generated classes (the JDK's own class
+      loading and initialization code, which loads and initializes classes for any code, is not refused).  The
+      refusal raises:
       @code{.py}
 JNI-SANDBOX-ERROR: a Java object or closure whose origin cannot be determined cannot call into Qore once sandboxed code has used Java; use a Qore closure controlled by the calling Program
       @endcode
@@ -261,6 +264,18 @@ JNI-SANDBOX-ERROR: a Java object or closure whose origin cannot be determined ca
       after \c set-java-thread-policy \c strict).  The Java code of a Program's own classes, and %Qore code that calls
       \c QoreJavaApi, are not affected, and neither are closing a class loader and the lookups that only ask whether
       a Program is reachable.
+
+    @par What this changes for trusted code
+    In a process in which sandboxed code has used Java (or after \c set-java-thread-policy \c strict), the following
+    trusted code is refused with \c JNI-SANDBOX-ERROR, as the JDK's code, an adapter or a proxy then makes the call:
+    - Java code of a host that calls \c QoreJavaApi, or the static methods, functions or constructors of the generated
+      classes, through a method handle that it invokes with \c MethodHandle.invokeWithArguments(); it calls them
+      directly instead, or hands Java a %Qore closure;
+    - a framework of the JDK, or reflection that the JDK's code drives (ex: a service loader), that creates objects of
+      the generated \c qore.* classes or calls their static methods; loading such classes and initializing their
+      constants are not affected;
+    - an operation on a Program's class loader other than closing it (ex: adding a classpath or defining a class), and
+      the creation of a class loader for a Program, made by the JDK's code, an adapter or a proxy.
 
     @par
     A host that wants Java or sandboxed code to call it hands over a %Qore closure or object that it controls, or an

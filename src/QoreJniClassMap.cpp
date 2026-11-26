@@ -4833,10 +4833,19 @@ static void exec_java_constructor(const QoreMethod& qmeth, BaseMethod* m, QoreOb
         self->setPrivate(qmeth.getClass()->getID(), jd);
         // an object that sandboxed code creates keeps it as its origin, also when the object belongs to another
         // Program (ex: an object of a class that another Program's class loader defined), so that the module's calls
-        // of its methods for other code are governed by it (qore#7081); only once sandboxed code has used Java
-        if (jni_java_thread_policy_strict() && jni_restricting_sandbox_governs()) {
-            Env env;
-            jni_origin_record(env, jd->getObject(), site);
+        // of its methods for other code are governed by it (qore#7081); only once sandboxed code has used Java.  A
+        // failure to resolve the sandbox counts as governed code: the object then keeps the record of the call site
+        if (jni_java_thread_policy_strict()) {
+            bool governed;
+            try {
+                governed = jni_restricting_sandbox_governs();
+            } catch (...) {
+                governed = true;
+            }
+            if (governed) {
+                Env env;
+                jni_origin_record(env, jd->getObject(), site);
+            }
         }
     } catch (jni::Exception& e) {
         e.convert(xsink);
@@ -5658,7 +5667,9 @@ void jni_origin_get(Env& env, jobject obj, JniJavaOrigin& rv) {
         return;
     }
     // the Program is looked up by its ID among the Programs with jni data, and held: a Program that has been deleted
-    // (or that has no jni data any more) is not found, and reaches no Program
+    // (or that has no jni data any more) is not found, and reaches no Program.  Known cost: the lookup scans the
+    // registry, linearly in the number of Programs with jni data, under its lock; it is made only for an object that
+    // has an origin, which only a process in which sandboxed code has used Java records
     qore_program_id_t id = static_cast<qore_program_id_t>(origin - 1);
     JniProgramDataRegistry& reg = jni_pgm_data();
     std::lock_guard<std::mutex> guard(reg.lock);

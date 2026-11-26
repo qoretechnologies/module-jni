@@ -593,9 +593,10 @@ to the host).  The record names the host then, and two rules keep such an object
 `src/QoreJniClassMap.cpp`): once sandboxed code has used Java in the process, the module records the sandboxed
 Program as the origin of
 
-- a Java object that code that a restricting sandbox governs creates with a constructor of a Java class
+- a Java object that code that a restricting sandbox governs creates with a Qore `new` of a Java class
   (`exec_java_constructor()`), also when the object belongs to another Program (an object of a class that another
-  Program's class loader defined belongs to that Program);
+  Program's class loader defined belongs to that Program); an object that Java code creates, by reflection or with
+  Java's own `new`, has no origin;
 - a Java object used as a Qore closure (`QoreClosureMarker`) whose Qore object belongs to a sandboxed Program, when
   any code hands it to Java (`QoreToJava`, `jni_origin_record_handed_over()`).
 
@@ -603,7 +604,9 @@ The module uses the origin where it makes the call itself.  A call of a Java met
 (`exec_java_method()`) records the origin instead of the calling code when trusted code makes it; for code that a
 restricting sandbox governs, an origin other than its own Program reaches no Program, so that an object never gives one
 sandboxed Program another one's reach.  A Java object used as a Qore closure with an origin gets it as its owner when
-trusted code obtains the closure (`QoreJniFunctionalInterface`); code that a sandbox governs keeps its own record.
+trusted code obtains the closure (`QoreJniFunctionalInterface`); when code that a restricting sandbox governs
+obtains it, the closure keeps that code's record if the origin is that code's Program, and otherwise reaches no
+Program.
 Such a closure, when code that a restricting sandbox governs and that is not the origin's Program calls it, reaches
 no Program (`owner_is_origin`, decided in `execValue()` before any Program is entered); a Java closure that the host
 obtained itself keeps its owner, the host, as a callback of the host.  So
@@ -682,12 +685,16 @@ module calls them, not the state that Java code moves between objects or the Jav
   (ex: a method of the JDK, or Java code of the host that invokes a method handle that sandboxed code supplied) and the
   module's other conversions that run Java code of the object (ex: iterating a `List`) run with the record of the
   calling code;
-- Java code that a sandboxed Program runs has the JVM's rights (see "The limit of these checks" below).  The module's
-  API offers no way to define a class in another Program's class loader: the per-Program dispatch class
-  (`QoreJavaDynamicApi`) hands out no lookup object for its class loader (qore#7738).  The JDK's own reflection and
-  class definition facilities remain outside the module's control: with them, Java code can change the module's own
-  Java state (ex: by reflection on the classes of unnamed modules), or define classes that the stack walk attributes
-  to another Program or to trusted code.
+- Java code that a sandboxed Program runs has the JVM's rights (see "The limit of these checks" below).  The
+  per-Program dispatch class (`QoreJavaDynamicApi`) no longer has a method that returns a lookup object for its class
+  loader (qore#7738).  Its generic dispatch (`invokeMethod()`, which runs the Java calls of Qore code) still invokes
+  whatever method it is given, and a caller-sensitive method of the JDK acts for the copy of the dispatch class that
+  invokes it, so the module does not prevent Java code from obtaining a privileged lookup object for another
+  Program's class loader through it.  Refusing such targets in the dispatch is not done: they can be reached
+  indirectly (ex: through another reflective invoker or a method handle given as the target), so a list of refused
+  targets would not be complete.  The JDK's own reflection and class definition facilities also remain outside the
+  module's control: with them, Java code can change the module's own Java state (ex: by reflection on the classes of
+  unnamed modules), or define classes that the stack walk attributes to another Program or to trusted code.
 
 A host therefore still runs no Java code for sandboxed code with values that sandboxed code chose, and wraps what it
 accepts from sandboxed code in a Qore closure that it controls.

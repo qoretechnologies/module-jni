@@ -44,18 +44,32 @@ QoreJniFunctionalInterface::QoreJniFunctionalInterface(jobject obj)
     // Program (qore#7023)
     owner = jni_java_caller_owner();
     Env env;
-    // a Java object used as a Qore closure that a sandboxed Program made or handed over keeps it as its origin, which
-    // is the owner of the closure when trusted code obtains it (qore#7081); code that a restricting sandbox governs
-    // keeps its own record, which reaches only its Program.  Held until the owner's own reference is taken below.
-    // Only once an origin has been recorded
+    // a Java object used as a Qore closure that a sandboxed Program made or handed over keeps it as its origin
+    // (qore#7081): when trusted code obtains the closure, the origin is its owner; when code that a restricting sandbox
+    // governs obtains it, the closure keeps that code's record if the origin is that code's Program, and otherwise
+    // reaches no Program, so that one sandboxed Program's object never runs with another one's reach.  A failure to
+    // resolve the sandbox counts as governed code.  Held until the owner's own reference is taken below.  Only once an
+    // origin has been recorded
     JniJavaOrigin origin;
-    if (jni_origins_recorded() && !jni_restricting_sandbox_governs()) {
+    if (jni_origins_recorded()) {
         jni_origin_get(env, obj, origin);
         if (origin.found) {
-            owner.set = true;
-            owner.deny = origin.deny;
-            owner.pgm = origin.pgm;
-            owner_is_origin = true;
+            bool governed;
+            try {
+                governed = jni_restricting_sandbox_governs();
+            } catch (...) {
+                governed = true;
+            }
+            if (!governed) {
+                owner.set = true;
+                owner.deny = origin.deny;
+                owner.pgm = origin.pgm;
+                owner_is_origin = true;
+            } else if (origin.deny || owner.deny || origin.pgm != owner.pgm) {
+                owner.set = true;
+                owner.deny = true;
+                owner.pgm = nullptr;
+            }
         }
     }
 
