@@ -93,19 +93,24 @@ static int jdbc_stmt_use_program(SQLStatement* stmt, QoreJdbcProgramUse& use, Ex
 }
 
 static int jdbc_open(Datasource* ds, ExceptionSink* xsink) {
-    // the secrets of the connection are masked in the text of the Java exceptions of the operation, also of those
-    // converted here (qore#7344)
-    std::shared_ptr<QoreJdbcSecretMasker> masker = std::make_shared<QoreJdbcSecretMasker>(ds);
-    JavaExceptionMaskHelper mask_helper(masker);
+    // no C++ exception may reach libqore, which calls the driver (ex: std::bad_alloc)
     try {
-        std::unique_ptr<QoreJdbcConnection> conn(new QoreJdbcConnection(ds, masker, xsink));
-        if (*xsink) {
-            return -1;
+        // the secrets of the connection are masked in the text of the Java exceptions of the operation, also of those
+        // converted here (qore#7344); the helper stays in scope while a Java exception is converted below
+        std::shared_ptr<QoreJdbcSecretMasker> masker = std::make_shared<QoreJdbcSecretMasker>(ds);
+        JavaExceptionMaskHelper mask_helper(masker);
+        try {
+            std::unique_ptr<QoreJdbcConnection> conn(new QoreJdbcConnection(ds, masker, xsink));
+            if (*xsink) {
+                return -1;
+            }
+            ds->setPrivateData(static_cast<void*>(conn.release()));
+            return 0;
+        } catch (jni::Exception& e) {
+            e.convert(xsink);
         }
-        ds->setPrivateData(static_cast<void*>(conn.release()));
-        return 0;
-    } catch (jni::Exception& e) {
-        e.convert(xsink);
+    } catch (std::exception& e) {
+        xsink->raiseException("JDBC-CONNECTION-ERROR", "error opening the jdbc connection: %s", e.what());
     }
     return -1;
 }

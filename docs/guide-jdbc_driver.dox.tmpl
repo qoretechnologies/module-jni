@@ -298,6 +298,13 @@ pool.exec("update orders set status = %v where id = %v", "processed", order.id);
     is being deleted, \c JNI-ERROR once it has been): keep the %Program that creates a jdbc datasource for as long as
     the datasource is used, or create the datasource in the %Program that uses it (qore#7665).
 
+    The exception is a connection that an @ref Qore::SQL::SQLStatement "SQLStatement" opens: a statement is an object
+    of the %Program that created it, so when its execution opens the connection of a pool or of a closed
+    \c Datasource of another %Program, that connection belongs to the statement's %Program.  Once that %Program has
+    been deleted, the connection refuses the next operation with \c JDBC-CONNECTION-ERROR and is aborted, and the
+    datasource opens a new connection for the operation after that.  Create the \c SQLStatement objects in the
+    %Program that owns the datasource, or keep the %Program that creates them for as long as the datasource is used.
+
     @section jdbc_multiple_results Statements with Several Results
 
     A statement can produce several results: a batch of statements (ex: <tt>insert ...; select ...</tt>, where the

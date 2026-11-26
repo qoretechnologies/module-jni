@@ -328,6 +328,7 @@ public class LifetimeDriver implements Driver {
         addTestCase("coverage: more operations after the opening Program is deleted", \moreOpsDeletedTest());
         addTestCase("coverage: a pool grows a connection while another Program's code uses it", \growTest());
         addTestCase("coverage: the teardown waits for an operation of another thread", \waitTest());
+        addTestCase("coverage: an SQLStatement of another Program opens a connection", \stmtOpenTest());
         addTestCase("coverage: a transaction ends after the opening Program is deleted", \transactionDeletedTest());
         addTestCase("coverage: the opening Program is kept", \keptTest());
         addTestCase("coverage: a pool's opening Program is kept", \poolKeptTest());
@@ -423,6 +424,29 @@ public class LifetimeDriver implements Driver {
         checkAfter(out, "grow");
     }
 
+    #! an SQLStatement is an object of the Program that created it: when its execution opens the connection of a
+    #! datasource of another Program, the connection belongs to the statement's Program, so after that Program is
+    #! deleted the connection refuses the next operation and is aborted; the datasource then opens a new connection
+    #! in the context of its own Program
+    stmtOpenTest() {
+        string out = runChild("stmtopen");
+        assertEq("user: {x: 1}", getLine(out, "user: "), out);
+        assertEq("p deleted", getLine(out, "p deleted"), out);
+        assertEq("uuid: " + DeletedError, getLine(out, "uuid: "), out);
+        assertEq(sprintf("again: %y", Uuid), getLine(out, "again: "), out);
+        checkAfter(out, "stmtopen");
+
+        # the same with a pool that grows a connection for the statement, in the statement Program's thread
+        out = runChild("stmtopen-pool");
+        assertEq("user: {x: 1}", getLine(out, "user: "), out);
+        assertEq("p deleted", getLine(out, "p deleted"), out);
+        assertEq(sprintf("main: %y", Uuid), getLine(out, "main: "), out);
+        assertEq("other: " + DeletedError, getLine(out, "other: "), out);
+        assertEq(sprintf("again: %y", Uuid), getLine(out, "again: "), out);
+        assertEq("commit: null", getLine(out, "commit: "), out);
+        checkAfter(out, "stmtopen-pool");
+    }
+
     #! the teardown of the Program waits for an operation of another thread on its connection, which completes; the
     #! next operation fails cleanly
     waitTest() {
@@ -430,8 +454,13 @@ public class LifetimeDriver implements Driver {
         if (out =~ /^wait: skipped/m) {
             testSkip(getLine(out, "wait: skipped"));
         }
+        # the bounded waits of the child ended in time
+        assertEq("entered: True", getLine(out, "entered: "), out);
+        assertEq("marked: True", getLine(out, "marked: "), out);
         assertEq("waiting: 1", getLine(out, "waiting: "), out);
         assertEq("deleted before release: False", getLine(out, "deleted before release: "), out);
+        assertEq("operation done: True", getLine(out, "operation done: "), out);
+        assertEq("deleted: True", getLine(out, "deleted: "), out);
         assertEq("block: {x: 1}", getLine(out, "block: "), out);
         assertEq("next: " + DeletedError, getLine(out, "next: "), out);
         checkAfter(out, "wait");

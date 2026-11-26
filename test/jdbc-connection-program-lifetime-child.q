@@ -23,6 +23,7 @@
 %ifndef NO_JNI
 %requires jni
 %module-cmd(jni) import java.lang.System
+%module-cmd(jni) import java.util.concurrent.TimeUnit
 %endif
 
 #! the source of the child Program that opens the connection: the code that opens it is the code of that Program
@@ -51,6 +52,20 @@ const OpenerSrc = "%modern\n"
     "}\n"
     "sub use_pool(DatasourcePool pool) {\n"
     "    printf(\"user: %y\\n\", pool.selectRow(\"select x\"));\n"
+    "}\n"
+    "sub use_stmt(AbstractDatasource ds) {\n"
+    "    # the statement is an object of this Program: its execution opens the datasource's connection in this\n"
+    "    # Program's context\n"
+    "    SQLStatement stmt(ds);\n"
+    "    on_exit stmt.close();\n"
+    "    stmt.prepare(\"select x\");\n"
+    "    stmt.exec();\n"
+    "    printf(\"user: %y\\n\", stmt.fetchRow());\n"
+    "    stmt.commit();\n"
+    "}\n"
+    "Datasource sub new_ds(string cs) {\n"
+    "    # not opened\n"
+    "    return new Datasource(cs);\n"
     "}\n"
     "hash<auto> sub open_stmt(string cs) {\n"
     "    Datasource ds = open_ds(cs);\n"
@@ -212,10 +227,11 @@ hash<auto> sub describe(AbstractDatasource ds) {
 string case_name = ARGV[0] ?? "";
 list<string> parts = case_name.split("-");
 if (case_name != "own" && case_name != "escape" && case_name != "grow" && case_name != "wait"
+        && case_name != "stmtopen" && case_name != "stmtopen-pool"
         && (parts.size() != 3 || !Openers{parts[0]}
         || !exists Lifetimes{parts[1]} || !Ops{parts[2]})) {
-    stderr.printf("unknown case %y; the case is own, escape, grow, wait or <%s>-<%s>-<%s>\n", case_name,
-        (keys Openers).join("|"), (keys Lifetimes).join("|"), (keys Ops).join("|"));
+    stderr.printf("unknown case %y; the case is own, escape, grow, wait, stmtopen, stmtopen-pool or "
+        "<%s>-<%s>-<%s>\n", case_name, (keys Openers).join("|"), (keys Lifetimes).join("|"), (keys Ops).join("|"));
     exit(2);
 }
 if (!ARGV[1]) {
@@ -225,6 +241,9 @@ if (!ARGV[1]) {
 string cs = sprintf("jdbc:u/p@ignored{url=qore-lifetime7665:db,classpath=%s}", ARGV[1]);
 
 %ifndef NO_JNI
+#! the bound of the waits of wait_case(), in milliseconds: a guard against a test that would never end
+const GuardMs = 60000;
+
 #! the teardown of the Program that opened a connection waits for an operation of another thread on it
 /** The operation is held in the JDBC driver by a latch that this code releases; the teardown is known to wait for it
     with the debug-build-only Jni::org::qore::jni::dbg_jni_jdbc_deleted_wait()
@@ -253,8 +272,10 @@ sub wait_case(string cs) {
         on_exit op_done.dec();
         step("block", auto sub () { return ds.selectRow("select block"); });
     }();
-    # the operation is in the driver, and holds a use of the Program
-    entered.await();
+    # the operation is in the driver, and holds a use of the Program; the bounds of the waits below are guards
+    # against a test that would never end if the behavior regressed, which the printed results show, not a
+    # synchronization
+    printf("entered: %y\n", entered.await(GuardMs, TimeUnit::MILLISECONDS));
     Counter deleted(1);
     background sub () {
         on_exit deleted.dec();
@@ -262,12 +283,13 @@ sub wait_case(string cs) {
     }();
     # the teardown marks the state (its cleanup callback), and waits for the operation: it is held until the latch
     # is released
-    hash<auto> now = call_function("Jni::org::qore::jni::dbg_jni_jdbc_deleted_wait", base.marks + 1);
+    hash<auto> now = call_function("Jni::org::qore::jni::dbg_jni_jdbc_deleted_wait", base.marks + 1, GuardMs);
+    printf("marked: %y\n", !now.timeout);
     printf("waiting: %d\n", now.waits - base.waits);
     printf("deleted before release: %y\n", !deleted.getCount());
     release.countDown();
-    op_done.waitForZero();
-    deleted.waitForZero();
+    printf("operation done: %y\n", !op_done.waitForZero(GuardMs));
+    printf("deleted: %y\n", !deleted.waitForZero(GuardMs));
     # the next operation fails cleanly
     step("next", auto sub () { return ds.selectRow("select uuid").u.toString(); });
 }
@@ -295,6 +317,53 @@ if (case_name == "own") {
 %else
     wait_case(cs);
 %endif
+} else if (case_name == "stmtopen") {
+    # a Datasource created by a kept Program Q, not opened, is opened by an SQLStatement of a short-lived Program P:
+    # the statement's methods run with P as their call context, so the connection belongs to P
+    Program q(PO_NEW_STYLE);
+    q.parse(OpenerSrc, "q");
+    Datasource ds = q.callFunction("new_ds", cs);
+    opener = q;
+    Program p(PO_NEW_STYLE);
+    p.parse(OpenerSrc, "p");
+    p.callFunction("use_stmt", ds);
+    delete p;
+    printf("p deleted\n");
+    # the connection that P's statement opened refuses Q's operation and is aborted
+    step("uuid", auto sub () { return ds.selectRow("select uuid").u.toString(); });
+    # the datasource opens a new connection, in the context of Q, which created it
+    step("again", auto sub () { return ds.selectRow("select uuid").u.toString(); });
+} else if (case_name == "stmtopen-pool") {
+    # a pool created by a kept Program Q grows a connection for an SQLStatement of a short-lived Program P, in P's
+    # thread: the connection belongs to P
+    string pcs = sprintf("jdbc:u/p@ignored{url=qore-lifetime7665:db,classpath=%s,min=1,max=2}", ARGV[1]);
+    Program q(PO_NEW_STYLE);
+    q.parse(OpenerSrc, "q");
+    DatasourcePool pool = q.callFunction("open_pool", pcs).ds;
+    opener = q;
+    # this thread holds the pool's first connection, so the statement of P opens a second one
+    pool.beginTransaction();
+    Program p(PO_NEW_STYLE);
+    p.parse(OpenerSrc, "p");
+    Counter done(1);
+    background sub () {
+        on_exit done.dec();
+        p.callFunction("use_stmt", pool);
+    }();
+    done.waitForZero();
+    delete p;
+    printf("p deleted\n");
+    # this thread uses its own connection; another thread gets the second one, which refuses the operation and is
+    # aborted, and the pool opens a new one for the next operation, in the context of Q
+    step("main", auto sub () { return pool.selectRow("select uuid").u.toString(); });
+    done.inc();
+    background sub () {
+        on_exit done.dec();
+        step("other", auto sub () { return pool.selectRow("select uuid").u.toString(); });
+        step("again", auto sub () { return pool.selectRow("select uuid").u.toString(); });
+    }();
+    done.waitForZero();
+    step("commit", auto sub () { return pool.commit(); });
 } else if (case_name == "grow") {
     # a pool created by a kept Program Q grows a connection while the code of a short-lived Program P uses it, then P
     # is deleted: the pool's connections are then used by this Program's code
