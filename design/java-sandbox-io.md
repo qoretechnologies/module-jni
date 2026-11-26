@@ -606,11 +606,12 @@ restricting sandbox governs, an origin other than its own Program reaches no Pro
 sandboxed Program another one's reach.  A Java object used as a Qore closure with an origin gets it as its owner when
 trusted code obtains the closure (`QoreJniFunctionalInterface`); when code that a restricting sandbox governs
 obtains it, the closure keeps that code's record if the origin is that code's Program, and otherwise reaches no
-Program.
-Such a closure, when code that a restricting sandbox governs and that is not the origin's Program calls it, reaches
-no Program (`owner_is_origin`, decided in `execValue()` before any Program is entered); a Java closure that the host
-obtained itself keeps its owner, the host, as a callback of the host.  So
-the Java code of such an object reaches only its origin's Program, whatever code runs it through the module.  Only
+Program.  In both cases where the owner is the origin's Program (trusted code obtained the closure, or the origin's
+own Program did), the owner is marked as the origin (`owner_is_origin`): when code that a restricting sandbox governs
+and that is not the origin's Program calls the closure, wherever it got the closure from, the call reaches no Program
+(decided in `execValue()` before any Program is entered).  A Java closure with no origin that the host obtained
+itself keeps its owner, the host, as a callback of the host.  So the Java code of such an object reaches only its
+origin's Program, in the module's calls of the object's methods and of the closure.  Only
 these objects are recorded: an object that a host shares with sandboxed code is handed back to the host, and recording
 the objects that sandboxed code merely obtained or handed over would let it make the host's own objects reach only the
 sandboxed Program.
@@ -686,12 +687,13 @@ module calls them, not the state that Java code moves between objects or the Jav
   module's other conversions that run Java code of the object (ex: iterating a `List`) run with the record of the
   calling code;
 - Java code that a sandboxed Program runs has the JVM's rights (see "The limit of these checks" below).  The
-  per-Program dispatch class (`QoreJavaDynamicApi`) no longer has a method that returns a lookup object for its class
-  loader (qore#7738).  Its generic dispatch (`invokeMethod()`, which runs the Java calls of Qore code) still invokes
+  per-Program dispatch class (`QoreJavaDynamicApi`) has no method that returns a lookup object for its class loader
+  (qore#7738).  Its generic dispatch (`invokeMethod()`, which runs the Java calls of Qore code) still invokes
   whatever method it is given, and a caller-sensitive method of the JDK acts for the copy of the dispatch class that
   invokes it, so the module does not prevent Java code from obtaining a privileged lookup object for another
   Program's class loader through it.  Refusing such targets in the dispatch is not done: they can be reached
-  indirectly (ex: through another reflective invoker or a method handle given as the target), so a list of refused
+  indirectly (ex: through another reflective invoker or a method handle given as the target), and the classes of the
+  module and of the Programs are in unnamed modules, which are open to reflection by any code, so a list of refused
   targets would not be complete.  The JDK's own reflection and class definition facilities also remain outside the
   module's control: with them, Java code can change the module's own Java state (ex: by reflection on the classes of
   unnamed modules), or define classes that the stack walk attributes to another Program or to trusted code.

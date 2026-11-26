@@ -266,8 +266,8 @@ JNI-SANDBOX-ERROR: a Java object or closure whose origin cannot be determined ca
       a Program is reachable.
 
     @par What this changes for trusted code
-    In a process in which sandboxed code has used Java (or after \c set-java-thread-policy \c strict), the following
-    trusted code is refused with \c JNI-SANDBOX-ERROR, as the JDK's code, an adapter or a proxy then makes the call:
+    In a process in which sandboxed code has used Java (or after \c set-java-thread-policy \c strict), trusted code
+    whose call the JDK's code, an adapter or a proxy makes is refused with \c JNI-SANDBOX-ERROR, for example:
     - Java code of a host that calls \c QoreJavaApi, or the static methods, functions or constructors of the generated
       classes, through a method handle that it invokes with \c MethodHandle.invokeWithArguments(); it calls them
       directly instead, or hands Java a %Qore closure;

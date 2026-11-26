@@ -223,6 +223,11 @@ auto sub call_left_closure() {
     return c();
 }
 
+# obtains the Java closure left in that Java state, and returns it
+code sub obtain_left_closure() {
+    return SuppliedTask::shared;
+}
+
 # calls the object that hand_task() handed over, in the Program of the class loader that it handed over
 auto sub call_task(object l) {
     object task = l.get(0);
@@ -528,6 +533,13 @@ nothing sub origin() {
         report("foreign-closure", auto sub () { return b.callFunction("call_left_closure"); });
         # the Program that made it obtains and calls it with its own reach
         report("foreign-closure-own", auto sub () { return a.callFunction("call_left_closure"); });
+        # the Program that made it obtains it, and the host lends that closure to the other Program: it does not run
+        # with the first Program's reach for it
+        code own = a.callFunction("obtain_left_closure");
+        report("own-closure-lent", auto sub () { return b.callFunction("call_closure", own); });
+        # the other Program obtains it and hands it to the host: it reaches no Program for the host either
+        code foreign = b.callFunction("obtain_left_closure");
+        report("foreign-closure-host", auto sub () { return foreign(); });
         SuppliedTask::shared = NOTHING;
     }
     # an object that a sandboxed Program made and handed over, run by that Program itself: it reaches its own Program

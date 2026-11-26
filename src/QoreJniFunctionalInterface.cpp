@@ -69,6 +69,10 @@ QoreJniFunctionalInterface::QoreJniFunctionalInterface(jobject obj)
                 owner.set = true;
                 owner.deny = true;
                 owner.pgm = nullptr;
+            } else {
+                // the origin's own Program: its record is the origin, which is not lent to another sandboxed Program
+                // that the closure is passed on to (see execValue())
+                owner_is_origin = true;
             }
         }
     }

@@ -189,6 +189,11 @@ class JniSandboxSuppliedObjectTest inherits QUnit::Test {
             "foreign-closure": "NotGoverned|-",
             # the Program that made it obtains and calls it with its own reach
             "foreign-closure-own": "OK: \"supplier\"|-",
+            # the closure that the Program that made it obtained, lent to another sandboxed Program, reaches no
+            # Program for it
+            "own-closure-lent": "NotGoverned|-",
+            # the closure that another sandboxed Program obtained reaches no Program, also for the host
+            "foreign-closure-host": "NotGoverned|-",
             # the Program that made the object calls it: its code reaches the Program of the closure
             "own-origin": "OK: \"supplier\"|-",
         };
