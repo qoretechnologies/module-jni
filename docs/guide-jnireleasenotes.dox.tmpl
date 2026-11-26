@@ -6,6 +6,9 @@
 
     @section jni_3_0_0 jni Module Version 3.0.0
 
+    - <b>Behavior change</b> (qore#7738): \c org.qore.jni.QoreJavaDynamicApi.lookup(), which returned a lookup
+      object for the class loader of the Program whose copy of the class it was called on, has been removed; nothing
+      in the module used it
     - <b>Security</b>: when code that a restricting sandbox governs calls a library (the code of a module, which every
       Program that calls it shares), the following Java state that the library code creates for it belongs to the
       Program of that code, never to the library's shared Program: a class defined with \c define_class(), the save
@@ -178,21 +181,30 @@
       runs in its own Program, as in %Qore; Java code that a sandboxed Program defined (the classes of its class loader)
       reaches only that Program, also when other code calls it, as a host that calls a method of a tenant's Java object,
       and the class loaders of a Program can no longer be changed or created for it by code that cannot reach that
-      Program.  Java objects have no Program of their own: a host must not run Java objects or closures that sandboxed
-      code supplied or could have built (it wraps them in a %Qore closure that it controls, or does not accept them), as
-      their calls into %Qore are made with the host's authority.  These checks are defense in depth: a sandbox that
-      allows uncontrolled APIs, and so Java, is not an isolation boundary against malicious code (qore#7023)
-    - <b>Behavior change</b> (qore#7023): once code that a sandbox governs has called Java in the process, or after
-      the new \c set-java-thread-policy \c strict module command, which trusted code issues to apply the policy
-      before any sandboxed code runs, a Java thread that no %Qore code calls (ex: a thread of a pool or of a listener)
-      can no longer call into %Qore by a Program pointer (\c QoreJavaApi, the class loader of a Program, the Java
-      classes generated for %Qore definitions): its %Qore caller is not known, and sandboxed code can hand work to any
-      such thread.  Code that runs work on Java threads hands Java a callback instead (a %Qore closure, a %Qore object,
-      or an interface implemented with \c QoreInvocationHandler), which runs in its own Program and is not affected.
-      A process with trusted code only is unchanged.  One case needs a %Qore library that reports the Program of
-      the call site of a builtin call: a call of a method of a Java class of another Program made by code that the
-      other Program called directly, as a closure, is otherwise judged with the Program that called that code
-      (qore#7028)
+      Program.  Java objects have no Program of their own, so a Java object or closure that sandboxed code supplied
+      could call into %Qore with the authority of the host code that ran it; once code that a sandbox governs has used
+      Java in the process, a Java object that sandboxed code creates with a %Qore \c new of a Java class, and a Java
+      object used as a %Qore closure of a sandboxed Program, now keep that Program as their origin, which governs the
+      module's calls of them, and a call into %Qore whose origin cannot be determined is refused with
+      \c JNI-SANDBOX-ERROR (qore#7081).  The origin follows the objects that the module creates or hands over, not
+      state that Java code copies between objects.  These checks are defense in depth: a sandbox that allows
+      uncontrolled APIs, and so Java, is not an isolation boundary against malicious code (qore#7023)
+    - <b>Behavior change</b> (qore#7023, qore#7081): once code that a sandbox governs has called Java in the
+      process, or after the new \c set-java-thread-policy \c strict module command, which trusted code issues to
+      apply the policy before any sandboxed code runs, a Java thread that no %Qore code calls (ex: a thread of a pool
+      or of a listener) can no longer call into %Qore by a Program pointer (\c QoreJavaApi, the class loader of a
+      Program, the Java classes generated for %Qore definitions): its %Qore caller is not known, and sandboxed code
+      can hand work to any such thread.  Code that runs work on Java threads hands Java a callback instead (a %Qore
+      closure, a %Qore object, or an interface implemented with \c QoreInvocationHandler), which runs in its own
+      Program and is not affected.  Such a call into %Qore made by a Java object or closure that is made only of the
+      JDK's classes, of adapters or of proxies is also refused with \c JNI-SANDBOX-ERROR, as are a change to or the
+      creation of a Program's class loader that such an object makes, also when trusted code made the object (ex: a
+      call through \c MethodHandle.invokeWithArguments(), or a JDK service loader that creates objects of the
+      generated classes); trusted code makes such calls from the Java code of its own classes (also their lambdas) or
+      from %Qore code, or hands Java a %Qore closure (qore#7081).  A process with trusted code only is unchanged.
+      One case needs a %Qore library that reports the Program of the call site of a builtin call: a call of a method
+      of a Java class of another Program made by code that the other Program called directly, as a closure, is
+      otherwise judged with the Program that called that code (qore#7028)
     - Clearing a Program's compilation cache, which the Java compiler does when it ends, did not take the Program's
       code generation lock, so a class generated at the same time could be stored in the cache as it was cleared and
       stay there; the clear is now serialized with code generation without waiting for its lock: it is made at once,
