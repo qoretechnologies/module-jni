@@ -1,0 +1,270 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../build"
+%requires QUnit
+%requires FsUtil
+%requires jni
+
+%exec-class JniSandboxSuppliedObjectTest
+
+#! Java objects and closures that sandboxed code supplies keep their origin (qoretechnologies/qore#7081)
+/** A Java object has no Program of its own.  When host code ran a Java object or closure that sandboxed code made or
+    could have made, its calls into Qore were governed by the host, whenever nothing on the Java stack named the
+    sandboxed Program.  Now a Java object used as a Qore closure that a sandboxed Program hands across a Program
+    boundary keeps that Program as its origin, and a call into Qore whose origin cannot be determined is refused once
+    sandboxed code has used Java in the process.
+
+    Each case runs test/jni-sandbox-supplied-object-child.q in a new process, as whether sandboxed code has used Java
+    in the process is process-wide state: the same objects made by a Program with no sandbox, in a process in which
+    no sandboxed code uses Java, are the control.
+*/
+class JniSandboxSuppliedObjectTest inherits QUnit::Test {
+    public {
+        #! the shapes of the Java objects and closures (see the child)
+        const Shapes = ("adapter", "jdk-lambda", "and-then", "host-iface", "marker", "deputy");
+
+        #! the refusal of a call into a Program other than the one of the calling code
+        const NotGoverned = "JNI-ERROR: Java code called by code that a sandbox governs cannot call into a Qore "
+            "Program other than the one of the calling code";
+
+        #! the refusal of a call whose origin cannot be determined
+        const Unowned = "JNI-SANDBOX-ERROR: a Java object or closure whose origin cannot be determined cannot call "
+            "into Qore once sandboxed code has used Java; use a Qore closure controlled by the calling Program";
+
+        #! the result of the host's function
+        const HostResult = "OK: \"host secret\"";
+
+        #! the result of a call of the host's function in a Program that does not have it
+        const NoHostFn = "NO-FUNCTION: function 'host_fn' does not exist";
+
+        #! how the host gets the object (see the child)
+        const Handovers = ("return", "field", "list");
+
+        #! how the host runs it (see the child)
+        const Runners = ("direct", "jdk", "thread");
+
+        #! the functions that it calls
+        const Functions = ("host_fn", "mkdir");
+    }
+
+    private {
+        #! the directories that the children create
+        TmpDir tmp("jni-sandbox-supplied-object-");
+    }
+
+    constructor() : QUnit::Test("jni sandbox supplied object", "1.0") {
+        foreach string shape in (Shapes) {
+            addTestCase("negative: " + shape + " made by sandboxed code, run by the host",
+                \negativeTest(), shape);
+        }
+        foreach string shape in (Shapes) {
+            addTestCase("positive: " + shape + " with no sandboxed Java in the process", \trustedTest(), shape);
+        }
+        addTestCase("positive: callbacks and the host's own calls with sandboxed Java", \mixedTest());
+        addTestCase("corner cases of the origin of an object", \originTest());
+        set_return_value(main());
+    }
+
+    #! the objects of the shape that sandboxed code makes reach neither the host's function nor its authority
+    negativeTest(string shape) {
+        *string latch;
+        hash<string, list<string>> rv = runMatrix(shape, "sandboxed", \latch);
+        if (latch) {
+            assertEq("True", latch, "sandboxed code has used Java in the process");
+        }
+        # no combination reaches the host's function or creates its directory, whatever the error
+        hash<string, string> reached = map {$1.key: $1.value[0] + "|" + $1.value[1]}, rv.pairIterator(),
+            $1.value[0] =~ /host secret/ || $1.value[1] != "absent";
+        assertEq({}, reached, sprintf("%N", rv));
+        # and each raises the refusal of its rule
+        hash<string, string> expected;
+        foreach string handover in (Handovers) {
+            foreach string runner in (Runners) {
+                foreach string fn in (Functions) {
+                    expected{handover + "|" + runner + "|" + fn} = expectedRefusal(shape, handover, runner)
+                        + "|absent";
+                }
+            }
+        }
+        assertEq(expected, normalize(rv));
+    }
+
+    #! the same objects made by a Program with no sandbox, with no sandboxed Java in the process, keep working
+    trustedTest(string shape) {
+        *string latch;
+        hash<string, list<string>> rv = runMatrix(shape, "trusted", \latch);
+        if (latch) {
+            assertEq("False", latch, "no sandboxed code has used Java in the process");
+        }
+        hash<string, string> expected;
+        foreach string handover in (Handovers) {
+            foreach string runner in (Runners) {
+                # an object returned by the Program that made it belongs to that Program, and its Java code calls
+                # into that Program, which does not have the host's function: a Java object called directly, and a
+                # Java closure, which the Program converted
+                bool own = handover == "return" && ((runner == "direct" && shape != "deputy") || shape == "marker");
+                expected{handover + "|" + runner + "|host_fn"} = (own ? NoHostFn : HostResult) + "|absent";
+                expected{handover + "|" + runner + "|mkdir"} = "OK: 0|created";
+            }
+        }
+        assertEq(expected, normalize(rv));
+    }
+
+    #! callbacks that the host hands over, the sandboxed Program's own proxies and the host's own calls
+    mixedTest() {
+        string dir = tmp.path + DirSep + "mixed";
+        mkdir(dir);
+        (string out, *string latch) = runChild(("mixed", dir));
+        if (latch) {
+            assertEq("True", latch, "sandboxed code has used Java in the process");
+        }
+        hash<string, list<string>> rv;
+        foreach string line in (out.split("\n")) {
+            if (line =~ /^P\|/) {
+                list<string> l = line.split("|");
+                rv{l[1]} = (l[2], l[3]);
+            }
+        }
+        hash<string, string> expected;
+        foreach string runner in (Runners) {
+            # a Qore closure that the host hands to sandboxed code, run by the sandboxed code; and an interface that
+            # the host implements with a Qore closure, run by a method of the JDK or on a Java thread
+            expected{"callback-closure-" + runner} = HostResult + "|-";
+            if (runner != "direct") {
+                expected{"callback-proxy-" + runner} = HostResult + "|-";
+            }
+        }
+        foreach string runner in (("jdk", "thread")) {
+            # the sandboxed Program's own proxies stay governed by its sandbox
+            expected{"own-proxy-" + runner + "-host_fn"} = NoHostFn + "|absent";
+            expected{"own-proxy-" + runner + "-mkdir"} = "FILESYSTEM-ACCESS-DENIED|absent";
+        }
+        # the host's own calls into Qore: from Qore code, from Java code of its class loader's classes (also through
+        # an adapter of the JDK that it calls), and through a Java object used as a Qore closure that it made
+        expected."host-direct" = HostResult + "|-";
+        expected."host-class" = "OK: \"ok: host secret\"|-";
+        expected."host-class-adapter" = "OK: \"ok: host secret\"|-";
+        expected."host-closure-object" = HostResult + "|-";
+        # a constant of a generated class read by its static initializer, which reflection runs
+        expected."host-constant-reflection" = "OK: \"constant\"|-";
+        # an adapter of JDK classes only that the host made: its origin cannot be determined
+        expected."host-adapter" = "UnknownOrigin|-";
+        assertEq(expected, normalize(rv), out);
+    }
+
+    #! the origin of an object: a deleted origin, an object passed on, another sandboxed Program, class loading
+    originTest() {
+        string dir = tmp.path + DirSep + "origin";
+        mkdir(dir);
+        string out = runChild(("origin", dir))[0];
+        hash<string, list<string>> rv;
+        foreach string line in (out.split("\n")) {
+            if (line =~ /^P\|/) {
+                list<string> l = line.split("|");
+                rv{l[1]} = (l[2], l[3]);
+            }
+        }
+        hash<string, string> expected = {
+            # the object's code calls the host's Program, which neither a deleted origin nor the first origin reaches
+            "deleted-origin": "NotGoverned|-",
+            "passed-on-origin": "NotGoverned|-",
+            # the class is not generated for an adapter of JDK classes only
+            "class-loading-adapter": "UnknownOrigin|-",
+            # the JDK's class loading code that the host calls generates the class
+            "class-loading-host": "OK: \"qore.SuppliedGenB\"|-",
+            # another sandboxed Program that calls an object that the first one made does not get its reach
+            "cross-origin": "NotGoverned|-",
+            # the Program that made it reaches its own Program
+            "cross-origin-own": "OK: \"supplier\"|-",
+            # a Java closure whose owner is its origin, lent to another sandboxed Program, reaches no Program for it
+            "lent-closure": "NotGoverned|-",
+            # trusted code, and the Program that made it, reach the origin's Program with it
+            "lent-closure-host": "OK: \"supplier\"|-",
+            "lent-closure-own": "OK: \"supplier\"|-",
+            # the Program that made the object calls it: its code reaches the Program of the closure
+            "own-origin": "OK: \"supplier\"|-",
+        };
+        assertEq(expected, normalize(rv), out);
+    }
+
+    #! the refusal that a combination of an object of the shape that sandboxed code made raises
+    private:internal static string expectedRefusal(string shape, string handover, string runner) {
+        switch (shape) {
+            # a Java object used as a Qore closure of JDK classes only: its origin cannot be determined
+            case "marker":
+                return "UnknownOrigin";
+            # an object of a class of the host's class loader that the sandboxed code made: it keeps the sandboxed
+            # Program as its origin, which cannot call into the host's Program
+            case "deputy":
+                return "NotGoverned";
+        }
+        # a Java object of the sandboxed Program called by the host (the Java code of the call reaches no Program),
+        # and a Java thread with no Qore caller
+        if ((handover == "return" && runner == "direct") || runner == "thread") {
+            return "NotGoverned";
+        }
+        # an object of JDK classes only: its origin cannot be determined
+        return "UnknownOrigin";
+    }
+
+    #! returns the outcomes with the refusals by their names: "<outcome>|<directory>"
+    private:internal static hash<string, string> normalize(hash<string, list<string>> rv) {
+        hash<string, string> out;
+        foreach hash<auto> i in (rv.pairIterator()) {
+            string o = i.value[0];
+            if (o.equalPartial(NotGoverned)) {
+                o = "NotGoverned";
+            } else if (o.equalPartial(Unowned)) {
+                o = "UnknownOrigin";
+            } else if (o.equalPartial("FILESYSTEM-ACCESS-DENIED: ")) {
+                o = "FILESYSTEM-ACCESS-DENIED";
+            }
+            out{i.key} = o + "|" + i.value[1];
+        }
+        return out;
+    }
+
+    #! runs the matrix of the shape in a child; returns "<handover>|<runner>|<function>": (<outcome>, <directory>)
+    private:internal hash<string, list<string>> runMatrix(string shape, string mode, *reference<*string> latch) {
+        string dir = tmp.path + DirSep + shape + "-" + mode;
+        mkdir(dir);
+        (string out, *string l) = runChild(("matrix", dir, shape, mode));
+        latch = l;
+        hash<string, list<string>> rv;
+        foreach string line in (out.split("\n")) {
+            if (line =~ /^R\|/) {
+                list<string> f = line.split("|");
+                assertEq(shape, f[1], line);
+                rv{f[2] + "|" + f[3] + "|" + f[4]} = (f[5], f[6]);
+            }
+        }
+        return rv;
+    }
+
+    #! runs the child with the arguments given; returns its output and the latch state it printed, if any
+    private:internal list<auto> runChild(list<string> args) {
+        string child = get_script_dir() + "/jni-sandbox-supplied-object-child.q";
+        # the variables that make the JVM print a notice on startup are removed, as the output of the child is checked
+        string cmd = sprintf("ulimit -c 0; env -u JAVA_TOOL_OPTIONS -u _JAVA_OPTIONS -u JDK_JAVA_OPTIONS %s -b "
+            "--enable-debug %s %s 2>&1", shellQuote(QORE_ARGV[0]), shellQuote(child),
+            (map shellQuote($1), args).join(" "));
+        int rc;
+        string out = backquote(cmd, \rc);
+        if (m_options.verbose > 2) {
+            printf("%y: rc %d\n%s\n", args, rc, out);
+        }
+        assertEq(0, rc, sprintf("%y: exit code: %s", args, out));
+        assertFalse(out =~ /unhandled QORE/, out);
+        assertRegex("(^|\n)end\n", out, sprintf("%y: the child ran to its end", args));
+        *string latch = (out =~ x/(^|\n)latch: ([A-Za-z]+)/)[1];
+        return (out, latch);
+    }
+
+    #! quotes an argument for the shell
+    private:internal static string shellQuote(string arg) {
+        return "'" + replace(arg, "'", "'\\''") + "'";
+    }
+}

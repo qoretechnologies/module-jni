@@ -44,6 +44,20 @@ QoreJniFunctionalInterface::QoreJniFunctionalInterface(jobject obj)
     // Program (qore#7023)
     owner = jni_java_caller_owner();
     Env env;
+    // a Java object used as a Qore closure that a sandboxed Program made or handed over keeps it as its origin, which
+    // is the owner of the closure when trusted code obtains it (qore#7081); code that a restricting sandbox governs
+    // keeps its own record, which reaches only its Program.  Held until the owner's own reference is taken below.
+    // Only once an origin has been recorded
+    JniJavaOrigin origin;
+    if (jni_origins_recorded() && !jni_restricting_sandbox_governs()) {
+        jni_origin_get(env, obj, origin);
+        if (origin.found) {
+            owner.set = true;
+            owner.deny = origin.deny;
+            owner.pgm = origin.pgm;
+            owner_is_origin = true;
+        }
+    }
 
     cls = new Class(env.callObjectMethod(obj, Globals::methodObjectGetClass, nullptr).as<jclass>());
     LocalReference<jobjectArray> methods = cls->getDeclaredMethods();
@@ -101,6 +115,29 @@ QoreValue QoreJniFunctionalInterface::execValue(const QoreListNode* args, Except
         //printd(5, "QoreJniFunctionalInterface::execValue() args: %p (%lld) evaluated_args: %p (%lld)\n", args,
         //    args ? args->size() : 0l, *evaluated_args, evaluated_args ? evaluated_args->size() : 0l);
 
+        // an owner that is the origin of the Java object (qore#7081) is not lent to code that a restricting sandbox
+        // governs and that is not the origin's Program: its calls reach no Program, so that the closure never gives
+        // one sandboxed Program another one's reach; decided before any other Program is entered.  A failure to
+        // resolve the sandbox counts as governed code
+        JniJavaCallerRecord rec = owner;
+        if (owner_is_origin && !rec.deny) {
+            bool governed;
+            try {
+                governed = jni_restricting_sandbox_governs();
+            } catch (...) {
+                governed = true;
+            }
+            if (governed) {
+                // the current Program, which the call has not changed yet; for code that another Program called
+                // directly, it can differ from the Program that callSite() names (qore#7028), which only denies more
+                JniJavaCallerRecord caller = JniJavaCallerScope::current();
+                if (caller.deny || caller.pgm != rec.pgm) {
+                    rec.deny = true;
+                    rec.pgm = nullptr;
+                }
+            }
+        }
+
         // the closure runs in the Program that created it, which is entered first when it is not the current one,
         // as for a Java method of an object of another Program (see jni_enter_call_program()); its jni data is looked
         // up only then
@@ -130,7 +167,7 @@ QoreValue QoreJniFunctionalInterface::execValue(const QoreListNode* args, Except
         // Java's calls into Qore during the call are governed by the code that obtained the callable, as for a Qore
         // closure, which runs in its own Program; recorded after the location helper, which clears the record for
         // Qore code that Java calls: this is a call from Qore into Java (qore#7023)
-        JniJavaCallerScope caller(owner);
+        JniJavaCallerScope caller(rec);
         // make the call
         return method->isStatic()
             ? method->invokeStatic(*evaluated_args, pgm)

@@ -532,8 +532,10 @@ The record names the Qore code that called Java, not the Java code that runs: a 
 sandboxed Program defined (a method of a tenant's object, also through a wrapper of the host for it; a tenant's listener
 that Java code of the host calls; `toString()` of a tenant's object; a static method or the static initializer of a
 tenant's class), and that code then runs with the host's record.  So every check of `jni_governed_caller_reaches()`
-also walks the Java stack (`jni_stack_allows()`, `QoreJavaApi.getStackProgramPtrs()`, a `StackWalker` with class
-references), and refuses the call if a frame's class is attributed to a sandboxed Program other than the target
+also walks the Java stack (`jni_stack_verdict()`, `QoreJavaApi.getStackProgramPtrs()`, a `StackWalker` with class
+references that also shows the frames of hidden classes, ex: lambdas, which are defined by the class loader of the
+class that defines them), and refuses the call if a frame's class is attributed to a sandboxed Program other than the
+target
 (`jni_program_ptr_sandboxed()`: a Program whose own sandbox restricts; with a Qore library that has
 `qore_program_get_creator_sandbox()` (`_QORE_HAS_PROGRAM_CREATOR_SANDBOX`), also a Program one of whose creator's
 managers restricts, by the same rule: the governing one, which walks out to a sandboxed caller through a policy barrier
@@ -581,16 +583,111 @@ no sandbox governs the thread: a tenant's Java closure that it obtained through 
 host's Program.  Once the latch is set, a recorded Program that is sandboxed reaches only itself, also on a thread that
 no sandbox governs.
 
-### What the module cannot attribute: Java objects that sandboxed code supplies
+### Java objects that sandboxed code supplies (qore#7081)
 
-A Java object has no Program: when host code runs a Java object or closure that sandboxed code supplied or could have
-built (a listener or `Runnable` in a host data structure, `toString()`, a closure that host Java code forwards), its
-calls into Qore are governed by the host.  If it is made of classes of a sandboxed Program, the attribution of the
-stack refuses them; if it is made only of classes of the JDK or of trusted class loaders (ex: a `MethodHandleProxies`
-or `Proxy` instance over `QoreJavaApi.callFunction()`), nothing on the stack names the tenant.  So a host must not run
-Java objects or closures that sandboxed code supplied or could have built; it wraps them in a Qore closure that it
-controls, or does not accept them.  A generic Java closure that host Java code passes on to a callback of the
-sandboxed Program gets the host as its owner, as the code that called that Java code; the same rule applies.
+A Java object has no Program of its own, and host code can run a Java object or closure that sandboxed code supplied
+or could have built (a listener in a host data structure, a closure that host Java code forwards, an object returned
+to the host).  The record names the host then, and two rules keep such an object from getting the host's authority.
+
+**The origin of an object** (`QoreJavaApi.setOrigin()`/`getOrigin()`, `jni_origin_record()`, `jni_origin_get()`,
+`src/QoreJniClassMap.cpp`): once sandboxed code has used Java in the process, the module records the sandboxed
+Program as the origin of
+
+- a Java object that code that a restricting sandbox governs creates with a constructor of a Java class
+  (`exec_java_constructor()`), also when the object belongs to another Program (an object of a class that another
+  Program's class loader defined belongs to that Program);
+- a Java object used as a Qore closure (`QoreClosureMarker`) whose Qore object belongs to a sandboxed Program, when
+  any code hands it to Java (`QoreToJava`, `jni_origin_record_handed_over()`).
+
+The module uses the origin where it makes the call itself.  A call of a Java method of an object with an origin
+(`exec_java_method()`) records the origin instead of the calling code when trusted code makes it; for code that a
+restricting sandbox governs, an origin other than its own Program reaches no Program, so that an object never gives one
+sandboxed Program another one's reach.  A Java object used as a Qore closure with an origin gets it as its owner when
+trusted code obtains the closure (`QoreJniFunctionalInterface`); code that a sandbox governs keeps its own record.
+Such a closure, when code that a restricting sandbox governs and that is not the origin's Program calls it, reaches
+no Program (`owner_is_origin`, decided in `execValue()` before any Program is entered); a Java closure that the host
+obtained itself keeps its owner, the host, as a callback of the host.  So
+the Java code of such an object reaches only its origin's Program, whatever code runs it through the module.  Only
+these objects are recorded: an object that a host shares with sandboxed code is handed back to the host, and recording
+the objects that sandboxed code merely obtained or handed over would let it make the host's own objects reach only the
+sandboxed Program.
+
+The origin is the Program's ID (plus one), in a map of `QoreJavaApi` keyed by the identity of the object with weak
+references, which keeps neither the object nor the Program alive; the entries of collected objects are removed as
+the map grows (amortized).  The Program is looked up by its ID among the Programs with jni data when the origin is
+used, and held for the call; a Program that has been deleted is not found, and the origin then reaches no Program.  An
+origin once recorded is kept: an object that another Program supplies too, or whose supplier was not known, reaches
+no Program.  Nothing is recorded or looked up before sandboxed code has used Java (`jni_origins_recorded()`).
+
+**A call whose origin cannot be determined** (`QoreJavaApi.callOrigin()`, `JniReach::UnknownOrigin`): an object made
+only of the JDK's classes, of adapters or of proxies does the same whatever code made it, and nothing on the stack
+names the code that made it.  Once sandboxed code has used Java in the process (the stack is walked only then), the
+stack walk also finds the code that made the call: below the native method of the call from Java into Qore, it passes
+over the frames of the call's entry points (the module's classes, the generated bindings) and of the JDK's reflection,
+method handle and class loading machinery, which run no code of their own choice, and the module's own dispatch of a
+Java call for Qore code.  The first other frame made the call:
+
+- the native method of a call from Qore into Java (the module calling Java for Qore code), or no frame: Qore code,
+  which the record names;
+- a class of a Program's class loader, or a trusted class loader's class other than the JDK's (ex: the module's
+  library classes): known code, judged as before.  A hidden class counts as the code of the class that defines it only
+  as its lambda (in its nest, defined by its class loader in its module);
+- a class of the JDK (a named module of the boot or platform class loader, or a lambda of one): the origin is not
+  known; a named module of another class loader (ex: an application's module) is the code of its class loader;
+- an adapter or a proxy, whatever its class loader: a proxy class, any other hidden class, or a class of a dynamic
+  module, of no layer (the JDK defines adapters in such modules, with the class loader of the interface that they
+  implement, which can be a Program's): the origin is not known.
+
+A call whose origin is not known is refused with `JNI-SANDBOX-ERROR` ("a Java object or closure whose origin cannot be
+determined cannot call into Qore once sandboxed code has used Java; use a Qore closure controlled by the calling
+Program").
+
+`getStackProgramPtrs()` adds `-2` for such a call, and `-3` if the first frame that is not passed over is an adapter
+or a proxy when the frames of the JDK's own code are passed over too (its code is the JDK's, whatever code called
+it).  Each entry point requires an origin (`JniOriginRule`), and `jni_stack_verdict()` returns
+`JniReach::UnknownOrigin` when it is not met, unless Java code of a sandboxed Program other than the target is on the
+stack too (`JniReach::NotGoverned`, `JNI-ERROR`):
+
+- `JniOriginRule::Calls`, for the calls that run Qore code by a name or a binding that Java gives (`QoreJavaApi`
+  calls, the generated constructors, static methods and functions; `JniJavaProgramRef`,
+  `jni_check_governed_caller_reaches()`): refused for `-2`;
+- `JniOriginRule::ClassLoading`, for class generation and listing (`generateByteCode0()`, `getClassesInNamespace0()`,
+  `getInternalClassesForPackage0()`) and the constants of the generated classes, which their static initializers read
+  (`jni_check_governed_caller_reaches_for_class_loading()`): the JDK's class loading and initialization code mediates
+  them for any code (the JVM resolving a class, `Class.forName()`, reflection, a service loader, `javac`), so they are
+  refused for `-3`: an adapter or a proxy that makes the call is refused, and the JDK's code that loads classes for
+  known code is not;
+- `JniOriginRule::None`, for the operations on a class loader that run no Qore code, closing it and asking whether a
+  Program is reachable (`jni_class_loader_reachable()`, `jni_check_class_loader_reach()`): the JDK's code (ex:
+  `javac`) closes the class loaders that it is given.
+
+Callbacks (a Qore closure, a Qore object, an interface implemented with a `QoreInvocationHandler`) run in their own
+Program, so a host hands a callback to Java or to sandboxed code as a Qore closure that it controls; that does not
+change.  A process with trusted code only is unchanged.
+
+The map reads without a lock: each bucket (by identity hash) is an array of entries that is replaced, never changed,
+under the per-key atomicity of a `ConcurrentHashMap`.  Once an origin has been recorded, each call of a Java method of
+an object by the module makes one JNI call to look the object up (`getOrigin()`), and a hit looks the Program up among
+the Programs with jni data, under the registry's lock; a process in which no sandboxed code uses Java makes none.
+
+What cannot be tracked: provenance follows the objects that the module creates or hands over, and is used where the
+module calls them, not the state that Java code moves between objects or the Java code that runs them:
+
+- Java code that sandboxed code runs can copy its choices into an object that other code made (ex: the arguments
+  that a trusted class's object passes to Qore), and Java code of a trusted class that calls into Qore with values
+  that its caller chose acts for whoever runs it;
+- an object that Java code (not a constructor that the module calls) creates for sandboxed code, such as one that a
+  factory method or reflection creates, has no origin, nor does one that sandboxed code merely obtains or hands over;
+- the origin governs the module's calls of the object's methods and of the closure; Java code that runs the object
+  (ex: a method of the JDK, or Java code of the host that invokes a method handle that sandboxed code supplied) and the
+  module's other conversions that run Java code of the object (ex: iterating a `List`) run with the record of the
+  calling code;
+- Java code that a sandboxed Program runs has the JVM's rights (see "The limit of these checks" below): it can change
+  the module's own Java state (ex: by reflection on the classes of unnamed modules), or define classes that the stack
+  walk attributes to trusted code.
+
+A host therefore still runs no Java code for sandboxed code with values that sandboxed code chose, and wraps what it
+accepts from sandboxed code in a Qore closure that it controls.
 
 What changes for trusted code: in a process in which code that a sandbox governs has called Java, or after
 `set-java-thread-policy strict`, a Java thread that no Qore code calls (a pool thread, a listener thread) cannot call

@@ -1285,6 +1285,9 @@ set(JAVA_TEST_JAR_SRC
     test/java/src/org/qore/jni/test/ClasspathUrlProbe.java
     test/java/src/org/qore/jni/test/GovernedProgramProbe.java
     test/java/src/org/qore/jni/test/HostObjectProbe.java
+    test/java/src/org/qore/jni/test/SuppliedClosureProbe.java
+    test/java/src/org/qore/jni/test/SuppliedFunction.java
+    test/java/src/org/qore/jni/test/SuppliedTask.java
     test/java/src/org/qore/jni/test/LibraryFieldHolder.java
     test/java/src/org/qore/jni/test/NativeHandleProbe.java
     test/java/src/org/qore/jni/test/SandboxIo.java

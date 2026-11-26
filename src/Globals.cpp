@@ -185,6 +185,8 @@ jmethodID Globals::methodQoreSandboxResolveClasspath;
 jmethodID Globals::methodQoreSandboxExpandClasspath;
 jmethodID Globals::methodQoreJavaApiGetStackTrace;
 jmethodID Globals::methodQoreJavaApiGetStackProgramPtrs;
+jmethodID Globals::methodQoreJavaApiSetOrigin;
+jmethodID Globals::methodQoreJavaApiGetOrigin;
 GlobalReference<jclass> Globals::classJavaCollectionTypes;
 jmethodID Globals::methodJavaCollectionTypesIsStringKeyMap;
 jmethodID Globals::methodJavaCollectionTypesMayBeListOrMap;
@@ -2151,8 +2153,11 @@ static jobject JNICALL java_class_builder_get_constant_value(JNIEnv* jenv, jclas
         jlong constant_handle) try {
     return generated_native_call<jobject>(jenv, [&](Env& env, ExceptionSink& xsink) -> jobject {
         JniExternalProgramData* caller_context = jni_get_context();
-        // the value of a constant of the Program of the class or namespace (qore#7023)
-        GeneratedBindingContext binding(constant_handle, GeneratedBindingKind::Constant, &xsink, jni_check_governed_caller_reaches);
+        // the value of a constant of the Program of the class or namespace (qore#7023); read by the static initializer
+        // of the generated class, which the JDK's code runs for the code that first uses the class: the rule of class
+        // loading (qore#7081)
+        GeneratedBindingContext binding(constant_handle, GeneratedBindingKind::Constant, &xsink,
+            jni_check_governed_caller_reaches_for_class_loading);
         JniExternalProgramData* jpc = generated_program_context(binding->pgm, program_id, caller_context);
         ValueHolder val(binding->constant->getReferencedValue(), &xsink);
         return QoreToJava::toAnyObject(env, *val, jpc);
@@ -2260,7 +2265,7 @@ static jbyteArray JNICALL qore_url_classloader_generate_byte_code(JNIEnv* jenv, 
         // jni_enter_program_for_class_add().  xsink, declared above, outlives the entry, which uses it when it is left.
         // The Program pointer is the class loader's, which Java passed: the Program can have been deleted, and is
         // validated and held, and entered as above (see JniJavaProgramRef)
-        JniJavaProgramRef java_pgm(env, xsink, ptr, class_loader);
+        JniJavaProgramRef java_pgm(env, xsink, ptr, class_loader, JniOriginRule::ClassLoading);
         QoreProgram* pgm = java_pgm.get();
         // the class pointer was given for this Program: one given for another Program is refused (qore#6854)
         if (class_ptr && !JniIssuedClassHelper::isIssued(reinterpret_cast<const void*>(class_ptr), pgm)) {
@@ -2708,7 +2713,7 @@ static jobject JNICALL qore_url_classloader_get_classes_in_namespace(JNIEnv* jen
     // the Program pointer is the class loader's, which Java passed: the Program can have been deleted, and is
     // validated, held and entered (see JniJavaProgramRef); declared before the other entries, so that it is left last
     ExceptionSink java_pgm_xsink;
-    JniJavaProgramRef java_pgm(env, java_pgm_xsink, ptr, class_loader);
+    JniJavaProgramRef java_pgm(env, java_pgm_xsink, ptr, class_loader, JniOriginRule::ClassLoading);
     QoreProgram* pgm = java_pgm.get();
 
     JniExternalProgramData* jpc = static_cast<JniExternalProgramData*>(pgm->getExternalData("jni"));
@@ -3057,7 +3062,8 @@ static jboolean JNICALL qore_url_classloader_check_unless_shut_down(JNIEnv* jenv
     try {
         QoreThreadAttachHelper attach_helper;
         attach_helper.attach();
-        jni_check_governed_caller_reaches(reinterpret_cast<const QoreProgram*>(ptr));
+        // closing runs no Qore code: the JDK's code closes the class loaders that it is given (qore#7081)
+        jni_check_class_loader_reach(reinterpret_cast<const QoreProgram*>(ptr));
     } catch (...) {
         jni_native_exception(jenv);
         return JNI_FALSE;
@@ -3372,7 +3378,8 @@ static jboolean JNICALL qore_url_classloader_program_reachable(JNIEnv* jenv, jcl
         // methods that it calls report the error
         return JNI_TRUE;
     }
-    if (jni_governed_caller_reaches(reinterpret_cast<const QoreProgram*>(ptr))) {
+    // a lookup that only asks: the class generation or listing that follows is checked with its origin (qore#7081)
+    if (jni_class_loader_reachable(reinterpret_cast<const QoreProgram*>(ptr))) {
         return JNI_TRUE;
     }
     printd(5, "qore_url_classloader_program_reachable() the Program %p cannot be reached by code that a sandbox "
@@ -3761,7 +3768,7 @@ static jobject JNICALL qore_url_classloader_get_internal_classes_for_package(JNI
     // validated, which also checks that it has jni data; the Program is not entered, as the classes listed are the
     // module's own, and a Java compiler can list them on its own threads while the Program is parsed (see
     // JniJavaProgramRef)
-    JniJavaProgramRef java_pgm(env, ptr, class_loader);
+    JniJavaProgramRef java_pgm(env, ptr, class_loader, JniOriginRule::ClassLoading);
 
     try {
         Env::GetStringUtfChars pname(env, pkg);
@@ -4847,6 +4854,8 @@ bool Globals::init() {
     methodQoreJavaApiGetStackTrace = env.getStaticMethod(classQoreJavaApi, "getStackTrace",
         "()[Ljava/lang/StackTraceElement;");
     methodQoreJavaApiGetStackProgramPtrs = env.getStaticMethod(classQoreJavaApi, "getStackProgramPtrs", "()[J");
+    methodQoreJavaApiSetOrigin = env.getStaticMethod(classQoreJavaApi, "setOrigin", "(Ljava/lang/Object;J)V");
+    methodQoreJavaApiGetOrigin = env.getStaticMethod(classQoreJavaApi, "getOrigin", "(Ljava/lang/Object;)J");
 
     // the sandbox policy of Qore code for the I/O of Java code
     classQoreSandbox = findDefineClass(env, "org.qore.jni.QoreSandbox", nullptr, java_org_qore_jni_QoreSandbox_class,
