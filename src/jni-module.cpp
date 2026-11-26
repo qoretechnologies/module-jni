@@ -59,6 +59,7 @@
 #include "Globals.h"
 #include "JavaSandbox.h"
 #include "QoreJdbcDriver.h"
+#include "QoreJdbcConnection.h"
 #include "ql_jni_debug.h"
 
 using namespace jni;
@@ -594,6 +595,12 @@ QoreStringNode* jni_module_init_finalize(bool system) {
 */
 static void jni_program_cleanup(QoreProgram* pgm) noexcept {
     // libqore calls this from the teardown of the Program, where no C++ exception may propagate (qore#6788)
+    // first, before the Program's jni data is destroyed and before the caches below are purged, so that no operation
+    // fills them again: the operations of other threads on the jdbc connections that the Program opened complete, and
+    // no new one uses it (qore#7665)
+    jni::jni_teardown_step("marking the jdbc connections of a Program deleted", [pgm] () {
+        jni::QoreJdbcProgramState::programDeleted(pgm);
+    });
     jni::jni_teardown_step("purging the generated bindings of a Program", [pgm] () {
         jni::purge_generated_bindings(pgm);
     });

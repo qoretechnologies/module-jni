@@ -40,6 +40,7 @@
 #include "defs.h"
 #include "Jvm.h"
 #include "QoreJniClassMap.h"
+#include "QoreJdbcConnection.h"
 #include "GeneratedBinding.h"
 #include "ql_jni_debug.h"
 #include "Class.h"
@@ -5798,6 +5799,14 @@ JniExternalProgramData::~JniExternalProgramData() {
     Globals::dbgContextMarker("jni-dbg: the jni data of a Program is destroyed\n");
 #endif
     jni_pgm_data_unregister(pgm, this);
+    // the state of the Program's jdbc connections is marked deleted, and the uses of other threads are waited for,
+    // before the data is destroyed (qore#7665).  The data is unregistered first: the teardown has released the
+    // Program's sandbox managers already, and a registered Program without them would count as not sandboxed for
+    // the Java code of those operations (see jni_program_ptr_sandboxed()).  A callback of that code into the Program
+    // during the wait cannot enter it, as its teardown refuses other threads now: it fails with
+    // JavaProgramDeletedException when its Java pointer names the unregistered Program (JniJavaProgramRef), or else
+    // it runs in the caller's context (jni_enter_call_program())
+    QoreJdbcProgramState::programDataDestroyed(pgm);
     // NOTE: the module root namespace cache is NOT purged here.  It is keyed by the Program that
     // owns each class (qc.getProgram()), which for a module class is the module's own Program and
     // need not have a JniExternalProgramData at all, so this destructor cannot see every entry.

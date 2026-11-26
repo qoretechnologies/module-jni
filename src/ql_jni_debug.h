@@ -76,6 +76,12 @@ DLLLOCAL void dbg_jni_run_context_gate(DbgJniGatePoint point);
 //! set costs only this load
 DLLLOCAL extern std::atomic<bool> dbg_jni_context_gate_set;
 
+//! Records that the teardown of a Program marked the state of its jdbc connections deleted (qore#7665)
+/** Called by jni::QoreJdbcProgramState::markDeleted() before it waits; \a waits is true if it waits for the jdbc
+    operations of other threads; see Jni::dbg_jni_jdbc_deleted_wait()
+*/
+DLLLOCAL void dbg_jni_jdbc_deleted_wait_entered(bool waits);
+
 //! True while a class name is set with Jni::dbg_jni_fail_find_class(); checked inline in jni::Env::findClass()
 DLLLOCAL extern std::atomic<bool> dbg_jni_find_class_fail_set;
 
