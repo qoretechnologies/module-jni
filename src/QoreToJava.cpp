@@ -146,15 +146,11 @@ jobject QoreToJava::toAnyObject(Env& env, const QoreValue& value_arg, JniExterna
         }
         case NT_OBJECT: {
             QoreObject* o = const_cast<QoreObject*>(value.get<const QoreObject>());
-            if (jpc) {
-                return jpc->getJavaObject(o).release();
-            }
-
-            jobject javaObjectRef = qjcm.getJavaObject(o);
-            if (javaObjectRef) {
-                return javaObjectRef;
-            }
-            return nullptr;
+            LocalReference<jobject> javaObjectRef = jpc ? jpc->getJavaObject(o)
+                : LocalReference<jobject>(qjcm.getJavaObject(o));
+            // a Java closure that sandboxed code hands over keeps its origin (qore#7081)
+            jni_origin_record_handed_over(env, javaObjectRef, o);
+            return javaObjectRef.release();
         }
         case NT_RUNTIME_CLOSURE:
         case NT_FUNCREF: {
@@ -334,6 +330,9 @@ jobject QoreToJava::toObject(Env& env, const QoreValue& value, jclass cls, JniEx
                     throw BasicException(desc.c_str());
                 }
                 javaObjectRef = jo->makeLocal();
+            } else {
+                // a Java closure that sandboxed code hands over keeps its origin (qore#7081)
+                jni_origin_record_handed_over(env, javaObjectRef, o);
             }
             break;
         }

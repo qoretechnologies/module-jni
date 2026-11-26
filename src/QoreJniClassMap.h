@@ -1186,6 +1186,60 @@ DLLLOCAL void jni_enter_program_for_class_add(std::optional<JniProgramEntryHelpe
 */
 DLLLOCAL bool jni_governed_caller_reaches(const QoreProgram* pgm);
 
+//! How the calling code reaches a Program that Java names (see jni_governed_caller_verdict())
+enum class JniReach {
+    //! the call is allowed
+    Reaches,
+    //! the calling code cannot reach the Program (qore#6845, qore#7023): \c JNI-ERROR
+    NotGoverned,
+    //! the call was made by a Java object whose origin cannot be determined (qore#7081): \c JNI-SANDBOX-ERROR
+    UnknownOrigin,
+};
+
+//! The origin that a call from Java into a Program that Java names requires (qore#7081)
+/** Once sandboxed code has used Java in the process, the stack walk finds the code that made the call: the first frame
+    below the entry point of the call that is not passed over (see QoreJavaApi.callOrigin())
+*/
+enum class JniOriginRule {
+    //! a call of Qore code (a function, a static method, a constructor, a constant): refused if that frame is a
+    //! class of the JDK, an adapter or a proxy
+    Calls,
+    //! class generation and listing, which the JDK's class loading code mediates for any code: refused if an adapter
+    //! or a proxy made the call, also passing over the JDK's named classes
+    ClassLoading,
+    //! an operation on a class loader that runs no Qore code (closing it, asking whether a Program is reachable): no
+    //! origin is required
+    None,
+};
+
+//! Returns how the calling code reaches \a pgm: the rules of jni_governed_caller_reaches(), with the reason of a
+//! refusal; \a rule is the origin that the call requires
+DLLLOCAL JniReach jni_governed_caller_verdict(const QoreProgram* pgm, JniOriginRule rule = JniOriginRule::Calls);
+
+//! Throws the refusal for \a verdict, which must not be JniReach::Reaches
+/** @throw BasicException JniReach::NotGoverned (\c JNI-ERROR)
+    @throw QoreJniException JniReach::UnknownOrigin (\c JNI-SANDBOX-ERROR)
+*/
+[[noreturn]] DLLLOCAL void jni_throw_governed_refusal(JniReach verdict);
+
+//! Returns true if the calling code can reach \a pgm for an operation on a class loader that runs no %Qore code
+/** As jni_governed_caller_reaches(), except that a call whose origin cannot be determined is not refused (qore#7081):
+    for the lookups that only ask whether a Program is reachable, and for closing a class loader, which the JDK's
+    code does for the class loaders that it is given (ex: \c javac)
+*/
+DLLLOCAL bool jni_class_loader_reachable(const QoreProgram* pgm);
+
+//! Throws the refusal for a call from Java into \a pgm with the origin rule of class loading
+/** As jni_check_governed_caller_reaches() with JniOriginRule::ClassLoading: for the constants of the generated
+    classes, which their static initializers read when the JDK's code initializes them for any code (qore#7081)
+*/
+DLLLOCAL void jni_check_governed_caller_reaches_for_class_loading(const QoreProgram* pgm);
+
+//! Throws the refusal of jni_class_loader_reachable()
+/** @throw BasicException \c JNI-ERROR: the calling code cannot reach \a pgm
+*/
+DLLLOCAL void jni_check_class_loader_reach(const QoreProgram* pgm);
+
 //! The rules of jni_governed_caller_reaches() without the attribution of the Java code on the stack
 DLLLOCAL bool jni_governed_caller_reaches_intern(const QoreProgram* pgm);
 
@@ -1288,12 +1342,14 @@ public:
         @param ptr the Program pointer, or 0
         @param loader the class loader that Java read the pointer from, or nullptr for the thread's class loader
         context (QoreURLClassLoader.getCurrent()), which QoreURLClassLoader.getProgramPtr() reads
+        @param rule the origin that the call requires (qore#7081)
 
         @throw BasicException the pointer names no Program with jni data, as its Program has been deleted
         @throw JavaException the class loader's pointer could not be read
         @throw XsinkException the Program cannot be entered (ex: it is being torn down)
     */
-    DLLLOCAL JniJavaProgramRef(Env& env, ExceptionSink& xsink, jlong ptr, jobject loader = nullptr);
+    DLLLOCAL JniJavaProgramRef(Env& env, ExceptionSink& xsink, jlong ptr, jobject loader = nullptr,
+            JniOriginRule rule = JniOriginRule::Calls);
 
     //! Validates and holds and enters the Program \a ptr for a call of a method of an existing Qore object or closure
     /** As the constructor above, for a callback (QoreObject.callMethod(), QoreClosure.call()), which runs in its own
@@ -1307,11 +1363,13 @@ public:
         @param ptr the Program pointer, or 0
         @param loader the class loader that Java read the pointer from, or nullptr for the thread's class loader
         context
+        @param rule the origin that the call requires (qore#7081)
 
         @throw BasicException the pointer names no Program with jni data, as its Program has been deleted
         @throw JavaException the class loader's pointer could not be read
     */
-    DLLLOCAL JniJavaProgramRef(Env& env, jlong ptr, jobject loader = nullptr);
+    DLLLOCAL JniJavaProgramRef(Env& env, jlong ptr, jobject loader = nullptr,
+            JniOriginRule rule = JniOriginRule::Calls);
 
     DLLLOCAL ~JniJavaProgramRef() {
         release();
@@ -1332,7 +1390,8 @@ private:
     std::optional<JniProgramEntryHelper> epch;
 
     //! Validates the pointer and dependency-references its Program (see the constructors)
-    DLLLOCAL void acquire(Env& env, jlong ptr, jobject loader, bool callback = false);
+    DLLLOCAL void acquire(Env& env, jlong ptr, jobject loader, bool callback = false,
+            JniOriginRule rule = JniOriginRule::Calls);
 
     //! Leaves the Program, then releases its dependency reference
     DLLLOCAL void release() noexcept;

@@ -918,6 +918,13 @@ static QoreValue f_dbg_jni_object_program_id(const QoreListNode* args, RuntimeCo
     return pgm ? static_cast<int64>(pgm->getProgramId()) : static_cast<int64>(-1);
 }
 
+//! Returns true once code that a sandbox governs has called Java in the process, or with the strict policy of Java
+//! threads (qore#7081)
+static QoreValue f_dbg_jni_java_thread_policy_strict(const QoreListNode* args, RuntimeConfig& rtcfg,
+        ExceptionSink* xsink) {
+    return jni::jni_java_thread_policy_strict();
+}
+
 //! Ends the hold of dbg_jni_hold_context_lock() or dbg_jni_hold_context_program()
 static QoreValue f_dbg_jni_release_context_hold(const QoreListNode* args, RuntimeConfig& rtcfg,
         ExceptionSink* xsink) {
@@ -999,6 +1006,8 @@ void init_jni_debug_functions(QoreNamespace& ns) {
         bigIntTypeInfo, 1, codeTypeInfo, QoreValue(), "code");
     ns.addBuiltinVariant("dbg_jni_object_program_id", f_dbg_jni_object_program_id, QCF_NO_FLAGS, QDOM_DEFAULT,
         bigIntTypeInfo, 1, objectTypeInfo, QoreValue(), "obj");
+    ns.addBuiltinVariant("dbg_jni_java_thread_policy_strict", f_dbg_jni_java_thread_policy_strict, QCF_NO_FLAGS,
+        QDOM_DEFAULT, boolTypeInfo);
     ns.addBuiltinVariant("dbg_jni_wait_child_status", f_dbg_jni_wait_child_status, QCF_NO_FLAGS, QDOM_DEFAULT,
         stringTypeInfo, 1, bigIntTypeInfo, QoreValue(), "pid");
     ns.addBuiltinVariant("dbg_jni_describe_throwable", f_dbg_jni_describe_throwable, QCF_NO_FLAGS, QDOM_DEFAULT,

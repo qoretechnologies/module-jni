@@ -4813,7 +4813,8 @@ jarray QoreJniClassMap::getJavaArrayIntern(Env& env, const QoreListNode* l, jcla
 static void exec_java_constructor(const QoreMethod& qmeth, BaseMethod* m, QoreObject* self, const QoreListNode* args,
         q_rt_flags_t rtflags, ExceptionSink* xsink) {
     // the Program of the calling code, for Java's calls into Qore during the call (qore#7023)
-    JniJavaCallerScope caller(JniJavaCallerScope::callSite());
+    JniJavaCallerRecord site = JniJavaCallerScope::callSite();
+    JniJavaCallerScope caller(site);
     try {
         // issue #3585: set context for external java threads
         //QoreProgram* pgm = qmeth.getClass()->getProgram();
@@ -4828,7 +4829,24 @@ static void exec_java_constructor(const QoreMethod& qmeth, BaseMethod* m, QoreOb
         }
         */
 
-        self->setPrivate(qmeth.getClass()->getID(), new QoreJniPrivateData(m->newQoreInstance(args, jpc)));
+        QoreJniPrivateData* jd = new QoreJniPrivateData(m->newQoreInstance(args, jpc));
+        self->setPrivate(qmeth.getClass()->getID(), jd);
+        // an object that sandboxed code creates keeps it as its origin, also when the object belongs to another
+        // Program (ex: an object of a class that another Program's class loader defined), so that the module's calls
+        // of its methods for other code are governed by it (qore#7081); only once sandboxed code has used Java.  A
+        // failure to resolve the sandbox counts as governed code: the object then keeps the record of the call site
+        if (jni_java_thread_policy_strict()) {
+            bool governed;
+            try {
+                governed = jni_restricting_sandbox_governs();
+            } catch (...) {
+                governed = true;
+            }
+            if (governed) {
+                Env env;
+                jni_origin_record(env, jd->getObject(), site);
+            }
+        }
     } catch (jni::Exception& e) {
         e.convert(xsink);
     }
@@ -4871,6 +4889,38 @@ static QoreValue exec_java_method(const QoreMethod& meth, BaseMethod* m, QoreObj
     if (!deny && pgm && pgm != caller_pgm) {
         QoreSandboxManagerHelper own(pgm);
         deny = jni_sandbox_restricts_io(own.get());
+    }
+    // an object that sandboxed code created keeps it as its origin, which governs the Java code of the call when
+    // trusted code calls it; for code that a restricting sandbox governs, an origin other than its own Program
+    // reaches no Program, so that the object never gives one sandboxed Program another one's reach (qore#7081); held
+    // for the call.  Only once an origin has been recorded
+    JniJavaOrigin origin;
+    if (!deny && jni_origins_recorded()) {
+        try {
+            Env env;
+            jni_origin_get(env, jd->getObject(), origin);
+            if (origin.found) {
+                if (origin.deny) {
+                    deny = true;
+                } else if (origin.pgm != caller_pgm) {
+                    // a failure to resolve the sandbox counts as governed code
+                    bool governed;
+                    try {
+                        governed = jni_restricting_sandbox_governs();
+                    } catch (...) {
+                        governed = true;
+                    }
+                    if (governed) {
+                        deny = true;
+                    } else {
+                        caller_pgm = origin.pgm;
+                    }
+                }
+            }
+        } catch (jni::Exception& e) {
+            e.convert(xsink);
+            return QoreValue();
+        }
     }
     JniJavaCallerScope caller(caller_pgm, deny);
     // holds the global context Program, if it is the Program of the call (qore#6829)
@@ -5152,6 +5202,11 @@ static constexpr const char* JAVA_PROGRAM_DELETED = "the Qore Program of the Jav
 // the calling code is governed by a sandbox (qore#6845)
 static constexpr const char* JAVA_PROGRAM_NOT_GOVERNED = "Java code called by code that a sandbox governs cannot call "
     "into a Qore Program other than the one of the calling code";
+// the error of a call from Java into Qore made by a Java object or closure whose origin cannot be determined, once
+// sandboxed code has used Java in the process (qore#7081)
+static constexpr const char* JNI_UNKNOWN_ORIGIN_ERR = "JNI-SANDBOX-ERROR";
+static constexpr const char* JNI_UNKNOWN_ORIGIN_DESC = "a Java object or closure whose origin cannot be determined "
+    "cannot call into Qore once sandboxed code has used Java; use a Qore closure controlled by the calling Program";
 
 bool jni_sandbox_restricts_io(const QoreSandboxManager* sm) {
     // a sandbox that refuses uncontrolled APIs restricts its code as well: Java code that trusted code put into its
@@ -5410,15 +5465,29 @@ static bool jni_program_ptr_sandboxed(jlong ptr) {
 #endif
 }
 
-//! Returns true if no Java code of a sandboxed Program other than \a pgm is on the thread's stack (qore#7023)
+//! The pointer that QoreJavaApi.getStackProgramPtrs() adds when the code that made the call is not known (qore#7081)
+static constexpr jlong JNI_UNKNOWN_ORIGIN_PTR = -2;
+//! The pointer that QoreJavaApi.getStackProgramPtrs() adds when an adapter or a proxy made the call (qore#7081)
+static constexpr jlong JNI_ADAPTER_ORIGIN_PTR = -3;
+
+//! Returns how the Java code on the thread's stack reaches \a pgm (qore#7023, qore#7081)
 /** Java code that a sandboxed Program defined (its classes, defined by its class loader or one derived from it) runs
     with the authority of the code that called it: a host that calls a method of a tenant's object, Java code of the
     host that calls a tenant's listener, a call reference to a static method of a tenant's class.  Such code reaches
-    only its own Program, whatever the record of the call.  The stack is walked only once code that a sandbox governs
-    has called Java in the process (or with the strict policy of Java threads), as no sandboxed Program has Java code
-    of its own before
+    only its own Program, whatever the record of the call.  A Java object has no Program of its own, and one that is
+    made only of the JDK's classes, of adapters or of proxies does the same whatever code made it: when such an object
+    made the call (see QoreJavaApi.callOrigin()), the origin of the call is not known, and it reaches no Program.  The
+    stack is walked only once code that a sandbox governs has called Java in the process (or with the strict policy
+    of Java threads), as no sandboxed Program has Java code of its own, and no such object can have been made by
+    sandboxed code, before
+
+    @param pgm the Program that Java names
+    @param rule the origin that the call requires (see JniOriginRule)
+
+    @return JniReach::Reaches, JniReach::NotGoverned if Java code of a sandboxed Program other than \a pgm is on the
+    stack, or JniReach::UnknownOrigin if the origin of the call is not known as \a rule requires
 */
-static bool jni_stack_allows(const QoreProgram* pgm) {
+static JniReach jni_stack_verdict(const QoreProgram* pgm, JniOriginRule rule) {
 #ifdef DEBUG
     // a test fail point: the Java call below fails, and leaves its Java exception pending
     if (dbg_jni_fail_at(DbgJniFailPoint::GovernedStack)) {
@@ -5428,7 +5497,7 @@ static bool jni_stack_allows(const QoreProgram* pgm) {
     }
 #endif
     if (!jni_governed_java_used.load(std::memory_order_acquire)) {
-        return true;
+        return JniReach::Reaches;
     }
     // a native method runs on a thread that is attached to the JVM; no Java context is set for it
     Env env(false);
@@ -5436,7 +5505,7 @@ static bool jni_stack_allows(const QoreProgram* pgm) {
         Globals::methodQoreJavaApiGetStackProgramPtrs, nullptr).as<jlongArray>();
     if (!ptrs) {
         // fail closed: the Java stack cannot be attributed
-        return false;
+        return JniReach::NotGoverned;
     }
     jsize len = env.getArrayLength(ptrs);
     std::vector<jlong> v(len);
@@ -5446,16 +5515,50 @@ static bool jni_stack_allows(const QoreProgram* pgm) {
             throw JavaException();
         }
     }
+    bool unknown = false;
     for (jlong ptr : v) {
+        if (ptr == JNI_UNKNOWN_ORIGIN_PTR) {
+            unknown = unknown || rule == JniOriginRule::Calls;
+            continue;
+        }
+        if (ptr == JNI_ADAPTER_ORIGIN_PTR) {
+            unknown = unknown || rule != JniOriginRule::None;
+            continue;
+        }
         if (ptr != reinterpret_cast<jlong>(pgm) && jni_program_ptr_sandboxed(ptr)) {
-            return false;
+            return JniReach::NotGoverned;
         }
     }
-    return true;
+    return unknown ? JniReach::UnknownOrigin : JniReach::Reaches;
+}
+
+JniReach jni_governed_caller_verdict(const QoreProgram* pgm, JniOriginRule rule) {
+    if (!jni_governed_caller_reaches_intern(pgm)) {
+        return JniReach::NotGoverned;
+    }
+    return jni_stack_verdict(pgm, rule);
+}
+
+bool jni_class_loader_reachable(const QoreProgram* pgm) {
+    return jni_governed_caller_verdict(pgm, JniOriginRule::None) == JniReach::Reaches;
+}
+
+void jni_check_class_loader_reach(const QoreProgram* pgm) {
+    if (!jni_class_loader_reachable(pgm)) {
+        throw BasicException(JAVA_PROGRAM_NOT_GOVERNED);
+    }
 }
 
 bool jni_governed_caller_reaches(const QoreProgram* pgm) {
-    return jni_governed_caller_reaches_intern(pgm) && jni_stack_allows(pgm);
+    return jni_governed_caller_verdict(pgm) == JniReach::Reaches;
+}
+
+void jni_throw_governed_refusal(JniReach verdict) {
+    assert(verdict != JniReach::Reaches);
+    if (verdict == JniReach::UnknownOrigin) {
+        throw QoreJniException(JNI_UNKNOWN_ORIGIN_ERR, "%s", JNI_UNKNOWN_ORIGIN_DESC);
+    }
+    throw BasicException(JAVA_PROGRAM_NOT_GOVERNED);
 }
 
 bool jni_governed_caller_reaches_intern(const QoreProgram* pgm) {
@@ -5500,9 +5603,98 @@ bool jni_governed_caller_reaches_intern(const QoreProgram* pgm) {
     return !jni_governed_java_used.load(std::memory_order_acquire);
 }
 
+namespace {
+//! true once an origin of a Java object has been recorded in the process (qore#7081)
+std::atomic<bool> jni_origin_used{false};
+
+//! the value that QoreJavaApi.setOrigin() records for an origin that reaches no Program
+constexpr jlong JNI_ORIGIN_DENY = -1;
+}
+
+JniJavaOrigin::~JniJavaOrigin() {
+    if (pgm) {
+        pgm->depDeref();
+    }
+}
+
+void jni_origin_record(Env& env, jobject obj, const JniJavaCallerRecord& rec) {
+    if (!obj) {
+        return;
+    }
+    // the ID, offset by one so that no origin is 0; a record that reaches no Program, or that names none, is denied
+    jvalue jargs[2];
+    jargs[0].l = obj;
+    jargs[1].j = (rec.deny || !rec.pgm) ? JNI_ORIGIN_DENY : static_cast<jlong>(rec.pgm->getProgramId()) + 1;
+    // set before the record, so that a lookup that races with it looks it up
+    jni_origin_used.store(true, std::memory_order_release);
+    env.callStaticVoidMethod(Globals::classQoreJavaApi, Globals::methodQoreJavaApiSetOrigin, &jargs[0]);
+}
+
+void jni_origin_record_handed_over(Env& env, jobject obj, const QoreObject* o) {
+    if (!obj || !o || !jni_governed_java_used.load(std::memory_order_acquire)
+        || !env.isInstanceOf(obj, Globals::classQoreClosureMarker)) {
+        return;
+    }
+    // a Java closure whose Qore object belongs to a sandboxed Program; the objects of other Programs are not recorded,
+    // as code that a host shares with sandboxed code is handed back to the host
+    QoreProgram* pgm = o->getProgram();
+    if (pgm && jni_program_ptr_sandboxed(reinterpret_cast<jlong>(pgm))) {
+        JniJavaCallerRecord rec;
+        rec.set = true;
+        rec.pgm = pgm;
+        jni_origin_record(env, obj, rec);
+    }
+}
+
+bool jni_origins_recorded() {
+    return jni_origin_used.load(std::memory_order_acquire);
+}
+
+void jni_origin_get(Env& env, jobject obj, JniJavaOrigin& rv) {
+    assert(!rv.found && !rv.pgm);
+    if (!obj || !jni_origin_used.load(std::memory_order_acquire)) {
+        return;
+    }
+    jvalue jarg;
+    jarg.l = obj;
+    jlong origin = env.callStaticLongMethod(Globals::classQoreJavaApi, Globals::methodQoreJavaApiGetOrigin, &jarg);
+    if (!origin) {
+        return;
+    }
+    rv.found = true;
+    if (origin < 0) {
+        rv.deny = true;
+        return;
+    }
+    // the Program is looked up by its ID among the Programs with jni data, and held: a Program that has been deleted
+    // (or that has no jni data any more) is not found, and reaches no Program.  Known cost: the lookup scans the
+    // registry, linearly in the number of Programs with jni data, under its lock; it is made only for an object that
+    // has an origin, which only a process in which sandboxed code has used Java records
+    qore_program_id_t id = static_cast<qore_program_id_t>(origin - 1);
+    JniProgramDataRegistry& reg = jni_pgm_data();
+    std::lock_guard<std::mutex> guard(reg.lock);
+    for (auto& i : reg.pgms) {
+        if (i.first->getProgramId() == id) {
+            QoreProgram* p = const_cast<QoreProgram*>(i.first);
+            p->depRef();
+            rv.pgm = p;
+            return;
+        }
+    }
+    rv.deny = true;
+}
+
 void jni_check_governed_caller_reaches(const QoreProgram* pgm) {
-    if (!jni_governed_caller_reaches(pgm)) {
-        throw BasicException(JAVA_PROGRAM_NOT_GOVERNED);
+    JniReach verdict = jni_governed_caller_verdict(pgm);
+    if (verdict != JniReach::Reaches) {
+        jni_throw_governed_refusal(verdict);
+    }
+}
+
+void jni_check_governed_caller_reaches_for_class_loading(const QoreProgram* pgm) {
+    JniReach verdict = jni_governed_caller_verdict(pgm, JniOriginRule::ClassLoading);
+    if (verdict != JniReach::Reaches) {
+        jni_throw_governed_refusal(verdict);
     }
 }
 
@@ -5517,8 +5709,9 @@ QoreProgram* jni_java_api_fallback_program(const QoreProgram* pgm) {
     return call_pgm;
 }
 
-JniJavaProgramRef::JniJavaProgramRef(Env& env, ExceptionSink& xsink, jlong ptr, jobject loader) {
-    acquire(env, ptr, loader);
+JniJavaProgramRef::JniJavaProgramRef(Env& env, ExceptionSink& xsink, jlong ptr, jobject loader,
+        JniOriginRule rule) {
+    acquire(env, ptr, loader, false, rule);
     if (!pgm) {
         return;
     }
@@ -5543,11 +5736,11 @@ JniJavaProgramRef::JniJavaProgramRef(Env& env, ExceptionSink& xsink, jlong ptr, 
     }
 }
 
-JniJavaProgramRef::JniJavaProgramRef(Env& env, jlong ptr, jobject loader) {
-    acquire(env, ptr, loader);
+JniJavaProgramRef::JniJavaProgramRef(Env& env, jlong ptr, jobject loader, JniOriginRule rule) {
+    acquire(env, ptr, loader, false, rule);
 }
 
-void JniJavaProgramRef::acquire(Env& env, jlong ptr, jobject loader, bool callback) {
+void JniJavaProgramRef::acquire(Env& env, jlong ptr, jobject loader, bool callback, JniOriginRule rule) {
 #ifdef DEBUG
     // a test can hold the thread here, once it has received the Program pointer from Java and before it uses it
     if (dbg_jni_java_program_ptr_hook_set.load(std::memory_order_acquire)) {
@@ -5589,13 +5782,14 @@ void JniJavaProgramRef::acquire(Env& env, jlong ptr, jobject loader, bool callba
         // the calling code, which the sandbox governs; Java code then cannot run Qore code in another Program, such as
         // a Program of another tenant or the global Java context Program (qore#6845; see
         // jni_governed_caller_reaches())
-        if (!jni_governed_caller_reaches(p)) {
+        JniReach verdict = jni_governed_caller_verdict(p, rule);
+        if (verdict != JniReach::Reaches) {
             // a callback runs in its own Program: the Program that Java named is not used (see the constructor)
             if (callback) {
                 release();
                 return;
             }
-            throw BasicException(JAVA_PROGRAM_NOT_GOVERNED);
+            jni_throw_governed_refusal(verdict);
         }
     } catch (...) {
         release();

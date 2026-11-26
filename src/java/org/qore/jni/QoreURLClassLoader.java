@@ -365,6 +365,11 @@ public class QoreURLClassLoader extends URLClassLoader {
     */
     public static QoreURLClassLoader createDerivedForContext() {
         QoreURLClassLoader context = current.get();
+        // programReachable0() does not require a known origin (qore#7081); it returns true when the thread cannot be
+        // attached to Qore, as such a thread runs no Qore code, and throws if the check itself fails (ex: the Java
+        // stack cannot be walked), with that failure's message.  createDerived() then checks the access with
+        // checkAccess(), which fails closed: it refuses with the JNI-ERROR or JNI-SANDBOX-ERROR refusal, and its native
+        // method reports a thread that cannot be attached
         if (context == null || !programReachable0(context.getOriginPtr())) {
             return null;
         }
@@ -2058,6 +2063,10 @@ public class QoreURLClassLoader extends URLClassLoader {
         if (ptr == 0) {
             return true;
         }
+        // programReachable0() does not require a known origin (qore#7081); it returns true when the thread cannot be
+        // attached to Qore, as such a thread runs no Qore code (the class generation that follows then reports the
+        // error), and throws if the check itself fails (ex: the Java stack cannot be walked), with that failure's
+        // message, which the class load raises
         return programReachable0(ptr);
     }
 
