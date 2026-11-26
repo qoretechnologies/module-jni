@@ -332,6 +332,13 @@ module ExcelDataProvider {
     - \c column_types: the type of columns whose type is given rather than inferred
     - \c error_cells: how error cells are read: \c fail (the default), \c null or \c text; see
       @ref ExcelDataProvider_reading_errors
+    - \c merged_cells: how the cells of merged ranges are read: \c first (the default: the range's value is in its
+      first cell only), \c fill_right (each cell of the range's first row has the value, so that a group name merged
+      over several columns names each of them) or \c fill (each cell of the range has the value); it applies to the
+      header row and to the data, and only to the rows that the workbook holds; with \c fill_right or \c fill, an
+      \c .xlsx worksheet is read once more to find its merged ranges, which follow its rows; a header row in which a
+      merged cell gives its value to several header cells raises \c EXCEL-READ-OPTION-ERROR, as the values of the
+      columns would replace each other in the records
     - \c error_field: the name of an extra field of every record holding the errors of the record's cells
 
     @subsection ExcelDataProvider_reading_types Typed Columns
@@ -630,6 +637,9 @@ module ExcelDataProvider {
 /** @page exceldataproviderreleasenotes ExcelDataProvider Release Notes
 
     @section ExcelDataProvider_v1_1 ExcelDataProvider v1.1
+    - the new \c merged_cells read option gives the value of a merged range to its other cells, in its first row
+      (\c fill_right) or in all of its cells (\c fill), for example the group names of a header of two rows
+      (qoretechnologies/qore#7751)
     - the app declares \c external_io (@ref DataProvider::DataProviderAppInfo "DataProviderAppInfo"): its Java
       calls are uncontrolled APIs (\c QDOM_UNCONTROLLED_API), which a governing sandbox refuses, also from library
       code running for a sandboxed caller (qore#5741), so data provider consumers and the constructors of its data

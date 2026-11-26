@@ -22,10 +22,12 @@
 package org.qore.dataprovider.excel;
 
 import org.apache.poi.ss.usermodel.CellType;
+import org.apache.poi.ss.util.CellRangeAddress;
 
 import java.io.Closeable;
 import java.io.IOException;
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * The rows of one worksheet, read in order one pass at a time.
@@ -82,6 +84,21 @@ interface SheetSource extends Closeable {
         /** Returns the cell in the given 0-based column, or null if the row has no cell there */
         Cell getCell(int col);
 
+        /**
+         * Returns the row's own cell in the given 0-based column, also where a merged cell gives it its value
+         * (qore#7751)
+         */
+        default Cell getOwnCell(int col) {
+            return getCell(col);
+        }
+
+        /**
+         * Returns true if a merged cell gives the cell in the given 0-based column its value (qore#7751)
+         */
+        default boolean isFilled(int col) {
+            return false;
+        }
+
         /** Returns the 0-based column after the last cell of the row, or -1 if the row has no cells */
         int getLastCellNum();
     }
@@ -104,6 +121,11 @@ interface SheetSource extends Closeable {
      * source that streams its rows reads formula text only when it is enabled
      */
     void enableFormulas();
+
+    /**
+     * Returns the merged ranges of the sheet; this can read the whole sheet once (qore#7751)
+     */
+    List<CellRangeAddress> readMergedRegions() throws IOException;
 
     /**
      * Returns the name of the sheet

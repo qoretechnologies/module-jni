@@ -378,6 +378,7 @@ set(EXCEL_SOURCES
     ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/excel/ExcelWriter.java
     ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/excel/ExcelTestHelper.java
     ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/excel/SheetSource.java
+    ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/excel/MergedCellSheetSource.java
     ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/excel/WorkbookSheetSource.java
     ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/excel/XlsxSheetSource.java
     ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/excel/ExcelFile.java

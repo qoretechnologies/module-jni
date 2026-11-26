@@ -613,6 +613,86 @@ public class ExcelTestHelper {
     }
 
     /**
+     * Creates a workbook with a header of two rows and merged cells (qore#7751): "Artikel" merged down over A1:A2,
+     * "Menge" merged over B1:C1 above "bestätigt" and "offen", "Datum" merged down over D1:D2; two data rows, whose
+     * "Lager" value "L1" is merged down over E3:E4; then a row "Summe" with the formula B3+C3 merged over B5:C5; a second sheet "Leer" has the header x, an empty
+     * merged range B1:C1 and y, and one data row; a third sheet "Rand" has merged first cells holding " " (B1:C1), the
+     * formula ="" (D1:E1), 0 (F1:G1) and false (H1:I1)
+     *
+     * @param path The path to create the file at
+     * @param xls true for the Excel 97-2003 (.xls) format, false for .xlsx
+     */
+    public static void createMergedHeaderExcel(String path, boolean xls) throws IOException {
+        try (Workbook workbook = xls ? new HSSFWorkbook() : new XSSFWorkbook()) {
+            Sheet sheet = workbook.createSheet("Bestellungen");
+            Row group = sheet.createRow(0);
+            group.createCell(0).setCellValue("Artikel");
+            group.createCell(1).setCellValue("Menge");
+            group.createCell(2);
+            group.createCell(3).setCellValue("Datum");
+            group.createCell(4).setCellValue("Lager");
+            Row names = sheet.createRow(1);
+            names.createCell(0);
+            names.createCell(1).setCellValue("bestätigt");
+            names.createCell(2).setCellValue("offen");
+            names.createCell(3);
+            Row r1 = sheet.createRow(2);
+            r1.createCell(0).setCellValue("A-1");
+            r1.createCell(1).setCellValue(5.0);
+            r1.createCell(2).setCellValue(2.0);
+            r1.createCell(3).setCellValue("10.10.2026");
+            r1.createCell(4).setCellValue("L1");
+            Row r2 = sheet.createRow(3);
+            r2.createCell(0).setCellValue("A-2");
+            r2.createCell(1).setCellValue(7.0);
+            r2.createCell(2).setCellValue(0.0);
+            r2.createCell(3).setCellValue("12.10.2026");
+            r2.createCell(4);
+            sheet.addMergedRegion(new CellRangeAddress(0, 1, 0, 0));
+            sheet.addMergedRegion(new CellRangeAddress(0, 0, 1, 2));
+            sheet.addMergedRegion(new CellRangeAddress(0, 1, 3, 3));
+            sheet.addMergedRegion(new CellRangeAddress(2, 3, 4, 4));
+            // a formula merged over B5:C5
+            Row r3 = sheet.createRow(4);
+            r3.createCell(0).setCellValue("Summe");
+            r3.createCell(1).setCellFormula("B3+C3");
+            r3.createCell(2);
+            sheet.addMergedRegion(new CellRangeAddress(4, 4, 1, 2));
+            // a sheet whose header row has an empty merged range B1:C1
+            Sheet blank = workbook.createSheet("Leer");
+            Row bh = blank.createRow(0);
+            bh.createCell(0).setCellValue("x");
+            bh.createCell(1);
+            bh.createCell(2);
+            bh.createCell(3).setCellValue("y");
+            Row bd = blank.createRow(1);
+            bd.createCell(0).setCellValue("1");
+            bd.createCell(3).setCellValue("2");
+            blank.addMergedRegion(new CellRangeAddress(0, 0, 1, 2));
+            // a sheet whose merged first cells hold whitespace, a formula with a blank result, 0 and false
+            Sheet edge = workbook.createSheet("Rand");
+            Row er = edge.createRow(0);
+            er.createCell(0).setCellValue("id");
+            er.createCell(1).setCellValue(" ");
+            er.createCell(2);
+            er.createCell(3).setCellFormula("\"\"");
+            er.createCell(4);
+            er.createCell(5).setCellValue(0.0);
+            er.createCell(6);
+            er.createCell(7).setCellValue(false);
+            er.createCell(8);
+            edge.addMergedRegion(new CellRangeAddress(0, 0, 1, 2));
+            edge.addMergedRegion(new CellRangeAddress(0, 0, 3, 4));
+            edge.addMergedRegion(new CellRangeAddress(0, 0, 5, 6));
+            edge.addMergedRegion(new CellRangeAddress(0, 0, 7, 8));
+            workbook.getCreationHelper().createFormulaEvaluator().evaluateAll();
+            try (FileOutputStream out = new FileOutputStream(new File(path))) {
+                workbook.write(out);
+            }
+        }
+    }
+
+    /**
      * Creates a large .xlsx workbook, written with SXSSF in bounded memory.
      *
      * The worksheet "Large" has a header row (Id, Name, Amount, When, Flag) and the given number of data rows; data

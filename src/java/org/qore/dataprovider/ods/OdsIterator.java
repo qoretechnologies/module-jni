@@ -70,6 +70,8 @@ public class OdsIterator extends qore.Qore.AbstractIterator implements java.io.C
     private String formula_field = null;
     // how error cells are read: "fail", "null" or "text"
     private String error_cells = "fail";
+    // how merged cells are read: "first", "fill_right" or "fill" (qore#7751)
+    private String merged_cells = "first";
     // the name of the field holding the errors of each record's cells; null if errors are not returned
     private String error_field = null;
     // the type of each column with a type; null if values are returned as read
@@ -178,10 +180,12 @@ public class OdsIterator extends qore.Qore.AbstractIterator implements java.io.C
         Collections.addAll(this.headers, headers);
     }
 
-    public void setHeaderCells(String col_start, int row_start, String col_end, int row_end) {
+    public void setHeaderCells(String col_start, int row_start, String col_end, int row_end) throws QoreException {
         header_row_end = row_end == -1 ? row_start : row_end;
+        // for each header, true if a merged cell gave it its value (qore#7751)
+        ArrayList<Boolean> filled = new ArrayList<Boolean>();
         // the header row is read in a pass of its own
-        try (RowSeeker header_rows = new RowSeeker(getReader().openRows())) {
+        try (RowSeeker header_rows = new RowSeeker(getReader().openRows(), "fill".equals(merged_cells))) {
             OdsSheetReader.RowRun row = header_rows.getRun(row_start - 1);
             if (row == null) {
                 return;
@@ -196,7 +200,9 @@ public class OdsIterator extends qore.Qore.AbstractIterator implements java.io.C
                 end_cell = colStringToIndex(col_end);
             }
             while (cell_no < cachedColCount) {
-                OdsCell cell = row.getCell(cell_no);
+                OdsCell cell = cellAt(header_rows, row, row_start - 1, cell_no);
+                int added = headers.size();
+                boolean from_merge = cell != row.getCell(cell_no);
                 String valueType = cell == null ? null : cell.getValueType();
                 if (valueType == null || valueType.isEmpty()) {
                     // Check if the cell has any text content
@@ -229,6 +235,9 @@ public class OdsIterator extends qore.Qore.AbstractIterator implements java.io.C
                     }
                 }
 
+                if (headers.size() > added) {
+                    filled.add(from_merge);
+                }
                 if (end_cell >= 0 && (cell_no >= end_cell)) {
                     break;
                 }
@@ -236,6 +245,31 @@ public class OdsIterator extends qore.Qore.AbstractIterator implements java.io.C
             }
         } catch (IOException e) {
             throw new UncheckedIOException(e);
+        }
+        checkFilledHeaders(headers, filled);
+    }
+
+    /**
+     * Raises an error if a header name is repeated in a column that a merged cell gave its value, as a group name
+     * that fills the header row: the values of the columns would replace each other in the records (qore#7751)
+     *
+     * @param headers the headers
+     * @param filled for each header, true if a merged cell gave it its value
+     */
+    private static void checkFilledHeaders(java.util.List<String> headers, java.util.List<Boolean> filled)
+            throws QoreException {
+        HashMap<String, Integer> count = new HashMap<String, Integer>();
+        for (String header : headers) {
+            count.merge(header, 1, Integer::sum);
+        }
+        for (int i = 0; i < headers.size() && i < filled.size(); ++i) {
+            if (filled.get(i) && count.get(headers.get(i)) > 1) {
+                throw new QoreException("ODS-READ-OPTION-ERROR", String.format("the header row names more than one "
+                    + "column \"%s\" with the \"merged_cells\" option, as a merged cell gives its value to several "
+                    + "header cells; the values of the columns would replace each other in the records; read the "
+                    + "header row as data, or give the column names with \"headers\"; headers: %s", headers.get(i),
+                    headers));
+            }
         }
     }
 
@@ -248,6 +282,27 @@ public class OdsIterator extends qore.Qore.AbstractIterator implements java.io.C
 
     public long getCount() {
         return count;
+    }
+
+    /**
+     * Sets how merged cells are read (qore#7751)
+     *
+     * Call this before the header row is read and before the first iteration.
+     *
+     * @param mode "first" (the default): a merged cell's value is in its first cell only, as the sheet stores it;
+     * "fill_right": each cell of a merged range in the range's first row has its value, so that a group name merged
+     * over several columns names each of them; "fill": each cell of the range has its value
+     *
+     * @throws QoreException ODS-READ-OPTION-ERROR if the mode is unknown
+     */
+    public void setMergedCells(String mode) throws QoreException {
+        if (!"first".equals(mode) && !"fill_right".equals(mode) && !"fill".equals(mode)) {
+            throw new QoreException("ODS-READ-OPTION-ERROR", String.format("invalid \"merged_cells\" option "
+                + "\"%s\"; expecting \"first\", \"fill_right\", or \"fill\"", mode));
+        }
+        // the next pass reads the cells as set
+        closeRows();
+        merged_cells = mode;
     }
 
     /**
@@ -431,7 +486,7 @@ public class OdsIterator extends qore.Qore.AbstractIterator implements java.io.C
         try {
             if (rows == null || row_idx < rows.getLastIndex()) {
                 closeRows();
-                rows = new RowSeeker(getReader().openRows());
+                rows = new RowSeeker(getReader().openRows(), "fill".equals(merged_cells));
             }
             return rows.getRun(row_idx);
         } catch (IOException e) {
@@ -505,7 +560,7 @@ public class OdsIterator extends qore.Qore.AbstractIterator implements java.io.C
             end_cell = colStringToIndex(end_column);
         } else if (!auto_detect_data && headers.isEmpty()) {
             // a data range without an end column and without headers ends at the last cell with a value in the row
-            end_cell = getLastValueColumn(row, cell_no);
+            end_cell = getLastValueColumn(rows, row, rowIdx, cell_no);
             if (end_cell == -1) {
                 return preserve_empty_rows ? new Hash() : null;
             }
@@ -521,7 +576,7 @@ public class OdsIterator extends qore.Qore.AbstractIterator implements java.io.C
             if (cell_no >= cachedColCount) {
                 break;
             }
-            OdsCell cell = row.getCell(cell_no);
+            OdsCell cell = cellAt(rows, row, rowIdx, cell_no);
             Object val = null;
             // the error text of an error cell
             String error = null;
@@ -583,12 +638,14 @@ public class OdsIterator extends qore.Qore.AbstractIterator implements java.io.C
             row_data.put(key, val);
 
             // a cell with content holding a formula; a repeated cell gives it for its first column and row only
-            if (formula_field != null && cell != null && cell.getFormula() != null && row.start == rowIdx
+            // the formula of the row's own cell, not of the merged cell whose value fills it (qore#7751)
+            OdsCell own = formula_field == null ? null : row.getCell(cell_no);
+            if (own != null && own.getFormula() != null && row.start == rowIdx
                     && row.getCellRunStartOf(cell_no) == cell_no) {
                 if (formulas == null) {
                     formulas = new Hash();
                 }
-                formulas.put(OdsGridReader.formulaReference(rowIdx, cell_no), OdsGridReader.toA1(cell.getFormula()));
+                formulas.put(OdsGridReader.formulaReference(rowIdx, cell_no), OdsGridReader.toA1(own.getFormula()));
             }
 
             if (end_cell >= 0) {
@@ -695,23 +752,85 @@ public class OdsIterator extends qore.Qore.AbstractIterator implements java.io.C
     }
 
     /**
+     * Returns true if a merged cell has a value to give the cells that it covers: not an empty cell, nor blank text
+     */
+    private static boolean hasMergedValue(OdsCell cell) {
+        if (isEmpty(cell)) {
+            return false;
+        }
+        if (cell.isError()) {
+            return true;
+        }
+        String type = cell.getValueType();
+        if (type == null || type.isEmpty() || "string".equals(type)) {
+            String text = cell.getDisplayText();
+            return text != null && !text.trim().isEmpty();
+        }
+        return true;
+    }
+
+    /**
+     * Returns the cell in the given 0-based column of a row, with the value of the merged cell that covers it as set
+     * with setMergedCells() (qore#7751)
+     *
+     * @param seeker the pass that the row was read in, which holds the merged cells of the rows above with "fill"
+     * @param row the row run of the row
+     * @param row_idx the 0-based row
+     * @param col the 0-based column
+     */
+    private OdsCell cellAt(RowSeeker seeker, OdsSheetReader.RowRun row, int row_idx, int col) {
+        if ("first".equals(merged_cells)) {
+            return row.getCell(col);
+        }
+        // a merged cell of the row that spans the column, also when the covered cell keeps content of its own
+        OdsCell anchor = seeker.getRowSpanningCell(row, col);
+        if (anchor != null) {
+            return anchor;
+        }
+        // a merged cell of a row above that spans the cell, also when the covered cell keeps content of its own, as
+        // in Excel
+        OdsCell spanning = seeker.getSpanningCell(row_idx, col);
+        return spanning != null ? spanning : row.getCell(col);
+    }
+
+    /**
      * Returns the last 0-based column from the given column, within the columns of the table, with a cell with a
      * value in the row, or -1 if there is none
      */
-    private int getLastValueColumn(OdsSheetReader.RowRun row, int first_col) {
+    private int getLastValueColumn(RowSeeker seeker, OdsSheetReader.RowRun row, int row_idx, int first_col) {
+        int rv = -1;
         for (int i = row.getCellRunCount() - 1; i >= 0; --i) {
             OdsCell cell = row.getCellRunCell(i);
             int start = row.getCellRunStart(i);
             int last = Math.min(start + row.getCellRunColumns(i), cachedColCount) - 1;
             if (last < first_col) {
-                return -1;
+                break;
             }
             if (last < start || isEmpty(cell) || (!cell.isError() && getCellValue(cell) == null)) {
                 continue;
             }
-            return last;
+            // a merged cell whose value fills its range ends at the range's last column
+            if (!"first".equals(merged_cells) && cell.getColumnsSpanned() > 1) {
+                last = Math.max(last, Math.min(start + cell.getColumnsSpanned(), cachedColCount) - 1);
+            }
+            rv = last;
+            break;
         }
-        return -1;
+        // the cells that a merged cell of the row fills, also past a covered cell that keeps content (qore#7751)
+        if (!"first".equals(merged_cells)) {
+            int last = Math.min(seeker.getLastRowSpannedColumn(row), cachedColCount - 1);
+            if (last >= first_col && last > rv) {
+                rv = last;
+            }
+        }
+        // the cells that a merged cell of a row above fills (qore#7751)
+        if ("fill".equals(merged_cells)) {
+            int last = Math.min(seeker.getLastSpannedColumn(row_idx), cachedColCount - 1);
+            if (last >= first_col && last > rv) {
+                rv = last;
+            }
+        }
+        return rv;
     }
 
     private Object cellToValue(OdsCell cell) {
@@ -843,14 +962,119 @@ public class OdsIterator extends qore.Qore.AbstractIterator implements java.io.C
      */
     private static final class RowSeeker implements java.io.Closeable {
         private final OdsSheetReader.RowPass pass;
+        // true if the merged cells that span several rows are kept for the rows below their first
+        private final boolean keep_spans;
+        // the merged cells over several rows read in this pass: their 0-based first and last row and column
+        private final ArrayList<int[]> spans = new ArrayList<int[]>();
+        private final ArrayList<OdsCell> span_cells = new ArrayList<OdsCell>();
+        // the merged cells over several columns of the last row run asked for: their first and last column
+        private OdsSheetReader.RowRun hspan_run = null;
+        private final ArrayList<Integer> hspan_starts = new ArrayList<Integer>();
+        private final ArrayList<Integer> hspan_ends = new ArrayList<Integer>();
+        private final ArrayList<OdsCell> hspan_cells = new ArrayList<OdsCell>();
         // the current run; null before the first one is read and at the end of the table
         private OdsSheetReader.RowRun run = null;
         private boolean started = false;
         // the last row number requested
         private int last_index = -1;
 
-        RowSeeker(OdsSheetReader.RowPass pass) {
+        RowSeeker(OdsSheetReader.RowPass pass, boolean keep_spans) {
             this.pass = pass;
+            this.keep_spans = keep_spans;
+        }
+
+        /**
+         * Keeps the merged cells of a run read that span several rows
+         */
+        private OdsSheetReader.RowRun keep(OdsSheetReader.RowRun r) {
+            if (r != null && keep_spans) {
+                // the merged cells of the rows above that end above this run
+                for (int i = spans.size() - 1; i >= 0; --i) {
+                    if (spans.get(i)[1] < r.start) {
+                        spans.remove(i);
+                        span_cells.remove(i);
+                    }
+                }
+                for (int i = 0; i < r.getCellRunCount(); ++i) {
+                    OdsCell cell = r.getCellRunCell(i);
+                    if (cell != null && cell.getRowsSpanned() > 1 && hasMergedValue(cell)) {
+                        int start = r.getCellRunStart(i);
+                        spans.add(new int[]{r.start, r.start + cell.getRowsSpanned() - 1, start,
+                            start + Math.max(cell.getColumnsSpanned(), 1) - 1});
+                        span_cells.add(cell);
+                    }
+                }
+            }
+            return r;
+        }
+
+        /**
+         * Returns the merged cell of a row that spans the given column of the row, or null; the merged cells of the
+         * last row run asked for are kept
+         */
+        OdsCell getRowSpanningCell(OdsSheetReader.RowRun r, int col) {
+            if (r != hspan_run) {
+                hspan_run = r;
+                hspan_starts.clear();
+                hspan_ends.clear();
+                hspan_cells.clear();
+                for (int i = 0; i < r.getCellRunCount(); ++i) {
+                    OdsCell cell = r.getCellRunCell(i);
+                    if (cell != null && cell.getColumnsSpanned() > 1 && hasMergedValue(cell)) {
+                        int start = r.getCellRunStart(i);
+                        hspan_starts.add(start);
+                        hspan_ends.add(start + cell.getColumnsSpanned() - 1);
+                        hspan_cells.add(cell);
+                    }
+                }
+            }
+            for (int i = 0; i < hspan_cells.size(); ++i) {
+                if (col >= hspan_starts.get(i) && col <= hspan_ends.get(i)) {
+                    return hspan_cells.get(i);
+                }
+            }
+            return null;
+        }
+
+        /**
+         * Returns the last 0-based column that a merged cell of the given row run spans, or -1
+         */
+        int getLastRowSpannedColumn(OdsSheetReader.RowRun r) {
+            // fills the cache of the run's merged cells
+            getRowSpanningCell(r, -1);
+            int rv = -1;
+            for (int end : hspan_ends) {
+                if (end > rv) {
+                    rv = end;
+                }
+            }
+            return rv;
+        }
+
+        /**
+         * Returns the last 0-based column that a merged cell of a row above fills in the given row, or -1
+         */
+        int getLastSpannedColumn(int row) {
+            int rv = -1;
+            for (int[] s : spans) {
+                if (row > s[0] && row <= s[1] && s[3] > rv) {
+                    rv = s[3];
+                }
+            }
+            return rv;
+        }
+
+        /**
+         * Returns the merged cell of a row above that spans the given cell, or null
+         */
+        OdsCell getSpanningCell(int row, int col) {
+            for (int i = spans.size() - 1; i >= 0; --i) {
+                int[] s = spans.get(i);
+                if (row > s[0] && row <= s[1] && col >= s[2] && col <= s[3]) {
+                    return span_cells.get(i);
+                }
+            }
+            return null;
         }
 
         int getLastIndex() {
@@ -867,11 +1091,11 @@ public class OdsIterator extends qore.Qore.AbstractIterator implements java.io.C
             last_index = idx;
             if (!started) {
                 started = true;
-                run = pass.next();
+                run = keep(pass.next());
             }
             // the runs cover the rows of the table without gaps
             while (run != null && idx >= run.start + run.count) {
-                run = pass.next();
+                run = keep(pass.next());
             }
             return run;
         }
@@ -881,7 +1105,7 @@ public class OdsIterator extends qore.Qore.AbstractIterator implements java.io.C
          */
         OdsSheetReader.RowRun nextRun() throws IOException {
             if (run != null) {
-                run = pass.next();
+                run = keep(pass.next());
                 // the rows before the new run can no longer be located in this pass
                 if (run != null && run.start > last_index) {
                     last_index = run.start;

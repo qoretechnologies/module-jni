@@ -270,6 +270,7 @@ public class ExcelDataProviderTest inherits QUnit::Test {
         addTestCase("roundtrip: write and read", \testRoundtrip());
         addTestCase("read: no header options reads from the first row", \testReadFromFirstRow());
         addTestCase("read: empty rows", \testReadEmptyRows());
+        addTestCase("read: merged cells", \testMergedCells());
         addTestCase("cell ranges: columns past Z", \testColumnsPastZ());
         addTestCase("negative: headers + header_names in every constructor", \testHeaderOptionConflictAllCtors());
         addTestCase("worksheet provider: options constructor", \testWorksheetOptionsCtor());
@@ -2102,6 +2103,11 @@ printf(\"RESULT:%%s\\n\", make_json({\"format\": profile.format, \"row_count\": 
         # a chart sheet has no cells
         dp = new ExcelReadDataProvider(path, {"worksheet": "Chart", "ignore_empty": True});
         assertEq(0, elements (map $1, dp.searchRecords()));
+        # nor merged ranges (qore#7751)
+        foreach string mode in (("fill_right", "fill")) {
+            dp = new ExcelReadDataProvider(path, {"worksheet": "Chart", "ignore_empty": True, "merged_cells": mode});
+            assertEq(0, elements (map $1, dp.searchRecords()), "a chart sheet with merged_cells " + mode);
+        }
 
         # rows and cells without references follow the previous ones
         dp = new ExcelReadDataProvider(path, {"worksheet": "Sparse", "ignore_empty": True});
@@ -3099,5 +3105,130 @@ printf(\"RESULT:%%s\\n\", make_json({\"count\": count, \"mismatches\": mismatche
         # a worksheet provider writes open records, since a condition can use fields that are not written
         dp = new ExcelWriteDataProvider({"sheets": RoutedSheets});
         assertNothing(dp.getRecordType());
+    }
+
+    #! the merged_cells option: the value of a merged range in its first cell, its first row, or all of its cells
+    #! (qoretechnologies/qore#7751)
+    testMergedCells() {
+        TmpDir dir("merged-cells-");
+        foreach bool xls in ((False, True)) {
+            string path = dir.path + (xls ? "/merged.xls" : "/merged.xlsx");
+            ExcelTestHelper::createMergedHeaderExcel(path, xls);
+            checkMergedCells(path, xls ? "xls" : "xlsx");
+        }
+    }
+
+    private checkMergedCells(string path, string fmt) {
+        list<hash<auto>> first = (
+            {"a": "Artikel", "b": "Menge", "c": NOTHING, "d": "Datum", "e": "Lager"},
+            {"a": NOTHING, "b": "bestätigt", "c": "offen", "d": NOTHING, "e": NOTHING},
+            {"a": "A-1", "b": 5.0, "c": 2.0, "d": "10.10.2026", "e": "L1"},
+            {"a": "A-2", "b": 7.0, "c": 0.0, "d": "12.10.2026", "e": NOTHING},
+        );
+        list<hash<auto>> fill_right = first;
+        fill_right[0].c = "Menge";
+        list<hash<auto>> fill = fill_right;
+        fill[1].a = "Artikel";
+        fill[1].d = "Datum";
+        fill[3].e = "L1";
+        foreach hash<auto> i in ({"first": first, "fill_right": fill_right, "fill": fill, "": first}.pairIterator()) {
+            hash<auto> opts = {
+                "headers": ("a", "b", "c", "d", "e"),
+                "data_cells": "a1:e4",
+                "type_sample_rows": 0,
+            };
+            if (i.key.val()) {
+                opts.merged_cells = i.key;
+            }
+            ExcelReadDataProvider dp(path, opts);
+            list<hash<auto>> records = map $1, dp.searchRecords();
+            assertEq(i.value, records, sprintf("%s: %y", fmt, i.key));
+        }
+
+        # a name merged down from the row of the group names into the header row
+        ExcelReadDataProvider dp(path, {
+            "header_cells": "a2:d2",
+            "data_cells": "a3",
+            "type_sample_rows": 0,
+            "merged_cells": "fill",
+        });
+        list<hash<auto>> records = map $1, dp.searchRecords();
+        assertEq(("Artikel", "bestätigt", "offen", "Datum"), keys records[0], fmt + ": the header row with fill");
+        assertEq("A-1", records[0].Artikel);
+        assertEq("A-2", records[1].Artikel);
+
+        # a merged cell whose value fills the header row repeats a column name
+        {
+            ExcelReadDataProvider bad(path, {"header_cells": "a1:e1", "merged_cells": "fill_right"});
+            assertThrows("EXCEL-READ-OPTION-ERROR", "more than one column \"Menge\"", \bad.searchRecords());
+            # a read after the error raises it again, not reading with the columns that replace each other
+            assertThrows("EXCEL-READ-OPTION-ERROR", "more than one column \"Menge\"", \bad.searchRecords());
+        }
+
+        # header names that repeat in cells that no merged cell fills are accepted as without the option
+        ExcelReadDataProvider bdp(path, {
+            "header_cells": "a2:d2",
+            "data_cells": "a3:d3",
+            "type_sample_rows": 0,
+            "merged_cells": "fill_right",
+        });
+        records = map $1, bdp.searchRecords();
+        assertEq(("BLANK", "bestätigt", "offen"), keys records[0], fmt + ": blank header cells");
+
+        # an empty merged range in the header row gives no value: its header names are read as without the option
+        ExcelReadDataProvider edp(path, {
+            "worksheet": "Leer",
+            "header_cells": "a1:d1",
+            "type_sample_rows": 0,
+            "merged_cells": "fill_right",
+        });
+        records = map $1, edp.searchRecords();
+        assertEq(("x", "BLANK", "y"), keys records[0], fmt + ": an empty merged range in the header row");
+
+        # the formula of a merged cell is the formula of its own cell only
+        ExcelReadDataProvider fdp(path, {
+            "headers": ("a", "b", "c", "d", "e"),
+            "data_cells": "a5:e5",
+            "type_sample_rows": 0,
+            "formula_field": "f",
+            "merged_cells": "fill",
+        });
+        records = map $1, fdp.searchRecords();
+        assertEq(1, records.size(), fmt);
+        assertEq(7.0, records[0].b, fmt + ": the formula's value");
+        assertEq(7.0, records[0].c, fmt + ": the formula's value fills the merged range");
+        assertEq(("B5",), keys records[0].f, fmt + ": the formula of the merged cell only");
+
+        # a read without headers ends at the last cell that a merged cell of a row above fills
+        ExcelReadDataProvider ndp(path, {
+            "data_cells": "a3",
+            "type_sample_rows": 0,
+            "merged_cells": "fill",
+        });
+        records = map $1, ndp.searchRecords();
+        assertEq(3, records.size(), fmt);
+        assertEq("L1", records[1].E4, fmt + ": the cell that the merged cell above fills: " + records[1].keys().join(","));
+
+        # a merged first cell with whitespace or a formula with a blank result gives no value; 0 and false fill
+        {
+            hash<auto> eopts = {
+                "worksheet": "Rand",
+                "headers": ("a", "b", "c", "d", "e", "f", "g", "h", "i"),
+                "data_cells": "a1:i1",
+                "type_sample_rows": 0,
+            };
+            list<hash<auto>> plain = map $1, (new ExcelReadDataProvider(path, eopts)).searchRecords();
+            assertEq(NOTHING, plain[0].g, fmt + ": a covered cell without the option");
+            foreach string mode in (("fill_right", "fill")) {
+                list<hash<auto>> filled = map $1, (new ExcelReadDataProvider(path, eopts + {"merged_cells": mode}))
+                    .searchRecords();
+                hash<auto> expected = plain[0] + {"g": 0.0, "i": False};
+                assertEq(expected, filled[0], fmt + ": " + mode);
+            }
+        }
+
+        assertThrows("OPTION-VALUE-ERROR", "merged_cells", sub () {
+            ExcelReadDataProvider bad(path, {"header_names": True, "merged_cells": "down"});
+        });
     }
 }

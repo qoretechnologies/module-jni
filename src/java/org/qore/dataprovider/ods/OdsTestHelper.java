@@ -459,6 +459,69 @@ public class OdsTestHelper {
     }
 
     /**
+     * Creates a spreadsheet with a header of two rows and merged cells (qore#7751): "Artikel" merged down over A1:A2,
+     * "Menge" merged over B1:C1 above "bestätigt" and "offen", "Datum" merged down over D1:D2; two data rows, whose
+     * "Lager" value "L1" is merged down over E3:E4; then a row "Summe" with the formula B3+C3 merged over B5:C5; a second table "Rand" has merged first cells
+     * holding whitespace over B1:C2, 0 (D1:E1) and false (F1:G1)
+     *
+     * @param path The path to create the file at
+     */
+    public static void createMergedHeaderOds(String path) throws Exception {
+        try (OdfSpreadsheetDocument doc = OdfSpreadsheetDocument.newSpreadsheetDocument()) {
+            OdfTable table = doc.getTableList().get(0);
+            table.setTableName("Bestellungen");
+            table.getCellByPosition(0, 0).setStringValue("Artikel");
+            table.getCellByPosition(1, 0).setStringValue("Menge");
+            table.getCellByPosition(3, 0).setStringValue("Datum");
+            table.getCellByPosition(4, 0).setStringValue("Lager");
+            table.getCellByPosition(1, 1).setStringValue("bestätigt");
+            table.getCellByPosition(2, 1).setStringValue("offen");
+            Object[][] data = {
+                {"A-1", 5.0, 2.0, "10.10.2026", "L1"},
+                {"A-2", 7.0, 0.0, "12.10.2026", null},
+            };
+            for (int r = 0; r < data.length; ++r) {
+                for (int c = 0; c < data[r].length; ++c) {
+                    if (data[r][c] == null) {
+                        continue;
+                    }
+                    OdfTableCell cell = table.getCellByPosition(c, 2 + r);
+                    if (data[r][c] instanceof Double) {
+                        cell.setDoubleValue((Double)data[r][c]);
+                    } else {
+                        cell.setStringValue((String)data[r][c]);
+                    }
+                }
+            }
+            table.getCellByPosition(0, 4).setStringValue("Summe");
+            // the cells are merged once every row exists, as LibreOffice writes them: the covered cells are
+            // table:covered-table-cell elements
+            table.getCellRangeByPosition(0, 0, 0, 1).merge();
+            table.getCellRangeByPosition(1, 0, 2, 0).merge();
+            table.getCellRangeByPosition(3, 0, 3, 1).merge();
+            table.getCellRangeByPosition(4, 2, 4, 3).merge();
+            table.getCellRangeByPosition(1, 4, 2, 4).merge();
+            // a table whose merged first cells hold whitespace over two rows and columns (B1:C2), 0 (D1:E1) and
+            // false (F1:G1); the values are set once merged
+            OdfTable edge = OdfTable.newTable(doc, 2, 7);
+            edge.setTableName("Rand");
+            edge.getCellByPosition(0, 0).setStringValue("id");
+            edge.getCellByPosition(0, 1).setStringValue("x");
+            edge.getCellRangeByPosition(1, 0, 2, 1).merge();
+            edge.getCellRangeByPosition(3, 0, 4, 0).merge();
+            edge.getCellRangeByPosition(5, 0, 6, 0).merge();
+            edge.getCellByPosition(1, 0).setStringValue("  ");
+            edge.getCellByPosition(3, 0).setDoubleValue(0.0);
+            edge.getCellByPosition(5, 0).setBooleanValue(false);
+            // a formula merged over B5:C5, set once merged: merging gives the first cell the text of the range
+            OdfTableCell sum = table.getCellByPosition(1, 4);
+            sum.setDoubleValue(7.0);
+            sum.setFormula("of:=[.B3]+[.C3]");
+            doc.save(path);
+        }
+    }
+
+    /**
      * Creates a spreadsheet laid out the way supplier PO confirmations are maintained by hand: a merged title
      * banner, a blank row, the header, identifiers with leading zeros, dates stored as text, a totals row with a SUM
      * formula, a hidden lookup sheet, and a named range on it.
