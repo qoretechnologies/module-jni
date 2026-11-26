@@ -5800,7 +5800,10 @@ JniExternalProgramData::~JniExternalProgramData() {
 #endif
     jni_pgm_data_unregister(pgm, this);
     // the state of the Program's jdbc connections is marked deleted, and the uses of other threads are waited for,
-    // before the data is destroyed (qore#7665)
+    // before the data is destroyed (qore#7665).  The data is unregistered first: the teardown has released the
+    // Program's sandbox managers already, and a registered Program without them would count as not sandboxed for
+    // the Java code of those operations (see jni_program_ptr_sandboxed()); a callback of that code into the Program
+    // could not enter it anyway, as its teardown refuses other threads now, and runs in the caller's context
     QoreJdbcProgramState::programDataDestroyed(pgm);
     // NOTE: the module root namespace cache is NOT purged here.  It is keyed by the Program that
     // owns each class (qc.getProgram()), which for a module class is the module's own Program and

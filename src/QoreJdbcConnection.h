@@ -119,7 +119,7 @@ public:
         its cleanup callback (by its own destructors) uses a state that the callback did not mark; the state stays
         registered while the uses are waited for, so that a connection opened meanwhile gets the deleted state
     */
-    DLLLOCAL static void programDataDestroyed(const QoreProgram* pgm);
+    DLLLOCAL static void programDataDestroyed(const QoreProgram* pgm) noexcept;
 
     //! Releases \a state, and unregisters it if no other connection holds it and the Program has no jni data
     /** Called when a connection could not get the Program's jni data, which would unregister the state
@@ -127,9 +127,12 @@ public:
     DLLLOCAL static void discardUnused(const QoreProgram* pgm, std::shared_ptr<QoreJdbcProgramState>& state);
 
     //! Takes a use of the state for an operation of the calling thread; returns false if the Program has been deleted
-    /** A use held by the thread that deletes the Program (ex: a Java callback into %Qore during the operation releases
-        the Program's last reference) is not waited for, as that would never end: the operation must not use the
-        Program after it returns to it
+    /** Known limitation: a use held by the thread that deletes the Program is not waited for, as that would never end.
+        If an operation's own thread deletes the Program while the operation runs (ex: a Java callback into %Qore
+        releases the Program's last reference), the operation can use the Program's jni data after it has been
+        destroyed; no such case is known in the module's own code
+
+        @throw std::bad_alloc if the use cannot be recorded
     */
     DLLLOCAL bool acquire();
 
@@ -139,13 +142,16 @@ public:
 private:
     std::mutex m;
     std::condition_variable cv;
-    //! true once the Program's cleanup callback has run
+    //! true once the Program's cleanup callback, or the destruction of its jni data, has run
     bool deleted = false;
     //! the uses held, by thread
     std::map<int, unsigned> users;
 
     //! Marks the state deleted and waits for the uses held by other threads
     DLLLOCAL void markDeleted();
+
+    //! The part of programDataDestroyed() that can throw
+    DLLLOCAL static void programDataDestroyedIntern(const QoreProgram* pgm);
 };
 
 //! A use of the state of a Program for an operation; see QoreJdbcProgramState::acquire()

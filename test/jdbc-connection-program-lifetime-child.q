@@ -22,6 +22,7 @@
 # module, and a child Program gets jni data when it opens a connection
 %ifndef NO_JNI
 %requires jni
+%module-cmd(jni) import java.lang.System
 %endif
 
 #! the source of the child Program that opens the connection: the code that opens it is the code of that Program
@@ -47,6 +48,9 @@ const OpenerSrc = "%modern\n"
     "    DatasourcePool pool(cs);\n"
     "    printf(\"opener: %y\\n\", pool.selectRow(\"select x\"));\n"
     "    return {\"ds\": pool};\n"
+    "}\n"
+    "sub use_pool(DatasourcePool pool) {\n"
+    "    printf(\"user: %y\\n\", pool.selectRow(\"select x\"));\n"
     "}\n"
     "hash<auto> sub open_stmt(string cs) {\n"
     "    Datasource ds = open_ds(cs);\n"
@@ -138,6 +142,24 @@ const Ops = {
     "sfetch": auto sub (hash<auto> h) { return h.stmt.fetchRow(); },
     # the rows of the statement that the connection's Program executed are fetched
     "sfetchrows": auto sub (hash<auto> h) { return h.stmt.fetchRows(); },
+    # arguments are bound to the statement that the connection's Program executed
+    "sbind": auto sub (hash<auto> h) { return h.stmt.bind(1); },
+    # a statement is prepared and executed
+    "prepare": auto sub (hash<auto> h) {
+        SQLStatement stmt(h.ds);
+        on_exit stmt.close();
+        stmt.prepare("select x");
+        return stmt.exec();
+    },
+    # the rows of a query
+    "selectrows": auto sub (hash<auto> h) { return h.ds.selectRows("select x"); },
+    # raw SQL executed in a transaction
+    "execraw": auto sub (hash<auto> h) {
+        on_success h.ds.commit();
+        return h.ds.execRaw("update x");
+    },
+    # the classpath option loads jars with the class loader of the connection's Program
+    "classpath": auto sub (hash<auto> h) { return h.ds.setOption("classpath", ARGV[1]); },
 };
 
 #! the child Program that opened the connection, while it is kept
@@ -189,9 +211,10 @@ hash<auto> sub describe(AbstractDatasource ds) {
 
 string case_name = ARGV[0] ?? "";
 list<string> parts = case_name.split("-");
-if (case_name != "own" && case_name != "escape" && (parts.size() != 3 || !Openers{parts[0]}
+if (case_name != "own" && case_name != "escape" && case_name != "grow" && case_name != "wait"
+        && (parts.size() != 3 || !Openers{parts[0]}
         || !exists Lifetimes{parts[1]} || !Ops{parts[2]})) {
-    stderr.printf("unknown case %y; the case is own, escape or <%s>-<%s>-<%s>\n", case_name,
+    stderr.printf("unknown case %y; the case is own, escape, grow, wait or <%s>-<%s>-<%s>\n", case_name,
         (keys Openers).join("|"), (keys Lifetimes).join("|"), (keys Ops).join("|"));
     exit(2);
 }
@@ -200,6 +223,55 @@ if (!ARGV[1]) {
     exit(2);
 }
 string cs = sprintf("jdbc:u/p@ignored{url=qore-lifetime7665:db,classpath=%s}", ARGV[1]);
+
+%ifndef NO_JNI
+#! the teardown of the Program that opened a connection waits for an operation of another thread on it
+/** The operation is held in the JDBC driver by a latch that this code releases; the teardown is known to wait for it
+    with the debug-build-only Jni::org::qore::jni::dbg_jni_jdbc_deleted_wait()
+*/
+sub wait_case(string cs) {
+    hash<auto> base;
+    try {
+        base = call_function("Jni::org::qore::jni::dbg_jni_jdbc_deleted_wait", 0);
+    } catch (hash<ExceptionInfo> ex) {
+        # only a missing function (a release build) skips the case
+        if (ex.err != "NO-FUNCTION") {
+            rethrow;
+        }
+        printf("wait: skipped: the debug functions of a debug build are required\n");
+        return;
+    }
+    Program p(PO_NEW_STYLE);
+    p.parse(OpenerSrc, "opener");
+    Datasource ds = p.callFunction("open_ds_h", cs).ds;
+    # the latches of the driver, which its class created when the connection was opened
+    hash<auto> props = System::getProperties();
+    object entered = props{"qore7665.entered"};
+    object release = props{"qore7665.release"};
+    Counter op_done(1);
+    background sub () {
+        on_exit op_done.dec();
+        step("block", auto sub () { return ds.selectRow("select block"); });
+    }();
+    # the operation is in the driver, and holds a use of the Program
+    entered.await();
+    Counter deleted(1);
+    background sub () {
+        on_exit deleted.dec();
+        delete p;
+    }();
+    # the teardown marks the state (its cleanup callback), and waits for the operation: it is held until the latch
+    # is released
+    hash<auto> now = call_function("Jni::org::qore::jni::dbg_jni_jdbc_deleted_wait", base.marks + 1);
+    printf("waiting: %d\n", now.waits - base.waits);
+    printf("deleted before release: %y\n", !deleted.getCount());
+    release.countDown();
+    op_done.waitForZero();
+    deleted.waitForZero();
+    # the next operation fails cleanly
+    step("next", auto sub () { return ds.selectRow("select uuid").u.toString(); });
+}
+%endif
 
 if (case_name == "own") {
     # the child Program holds its own datasource and is deleted: its teardown runs and destroys its global variables
@@ -217,6 +289,44 @@ if (case_name == "own") {
     delete p;
     printf("deleted\n");
     step("uuid", auto sub () { return escaped.selectRow("select uuid").u.toString(); });
+} else if (case_name == "wait") {
+%ifdef NO_JNI
+    printf("wait: skipped: the case needs jni in this Program\n");
+%else
+    wait_case(cs);
+%endif
+} else if (case_name == "grow") {
+    # a pool created by a kept Program Q grows a connection while the code of a short-lived Program P uses it, then P
+    # is deleted: the pool's connections are then used by this Program's code
+    string pcs = sprintf("jdbc:u/p@ignored{url=qore-lifetime7665:db,classpath=%s,min=1,max=2}", ARGV[1]);
+    Program q(PO_NEW_STYLE);
+    q.parse(OpenerSrc, "q");
+    DatasourcePool pool = q.callFunction("open_pool", pcs).ds;
+    opener = q;
+    # this thread holds the pool's first connection, so the use in P's code opens a second one
+    pool.beginTransaction();
+    Program p(PO_NEW_STYLE);
+    p.parse(OpenerSrc, "p");
+    Counter done(1);
+    background sub () {
+        on_exit done.dec();
+        step("p", auto sub () { return p.callFunction("use_pool", pool); });
+    }();
+    done.waitForZero();
+    delete p;
+    printf("p deleted\n");
+    # this thread uses its own connection, and another thread uses the second one while this thread holds the first
+    step("main", auto sub () { return pool.selectRow("select uuid").u.toString(); });
+    done.inc();
+    background sub () {
+        on_exit done.dec();
+        step("other", auto sub () {
+            on_exit pool.commit();
+            return pool.selectRow("select uuid").u.toString();
+        });
+    }();
+    done.waitForZero();
+    step("commit", auto sub () { return pool.commit(); });
 } else {
     hash<auto> h = open_in_child(Openers{parts[0]}, cs, Lifetimes{parts[1]});
     step(parts[2], auto sub () { return Ops{parts[2]}(h); });

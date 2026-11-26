@@ -337,13 +337,30 @@ QoreJdbcConnection::QoreJdbcConnection(Datasource* ds, std::shared_ptr<QoreJdbcS
     // the Program is used while the connection is opened, from before its jni data is looked up, so that its teardown
     // waits for the connection to be opened; a Program whose teardown has marked its state deleted (ex: a connection
     // opened in the context of a deleted Program) is not used (qore#7665)
-    if (!Jvm::isForkedChild()) {
-        pgm_state = QoreJdbcProgramState::get(pgm.get());
-    }
     QoreJdbcProgramUse use;
-    if (!useProgram(use)) {
-        xsink->raiseException("JDBC-CONNECTION-ERROR", "the Program that opens the jdbc connection has been deleted; "
-            "the connection cannot be opened");
+    try {
+        if (!Jvm::isForkedChild()) {
+            pgm_state = QoreJdbcProgramState::get(pgm.get());
+        }
+        if (!useProgram(use)) {
+            xsink->raiseException("JDBC-CONNECTION-ERROR", "the Program that opens the jdbc connection has been "
+                "deleted; the connection cannot be opened");
+            return;
+        }
+    } catch (std::exception& e) {
+        // no C++ exception may reach libqore, which calls the driver
+        xsink->raiseException("JDBC-CONNECTION-ERROR", "error taking the Program of the jdbc connection: %s",
+            e.what());
+        if (pgm_state) {
+            // best effort: if the state cannot be discarded, its registry entry stays until the process ends
+            try {
+                use.reset();
+                QoreJdbcProgramState::discardUnused(pgm.get(), pgm_state);
+            } catch (std::exception& e) {
+                xsink->raiseException("JDBC-CONNECTION-ERROR", "error releasing the Program of the jdbc connection: "
+                    "%s", e.what());
+            }
+        }
         return;
     }
     try {
@@ -417,7 +434,11 @@ bool QoreJdbcConnection::useProgram(QoreJdbcProgramUse& use) const {
     assert(p);
     // the dependency reference keeps the Program allocated, so its address names no other Program: a thread that runs
     // in it keeps its data, as its teardown destroys the data only once no other thread is in it (its own destructors
-    // run in the thread that deletes it, before the data is destroyed)
+    // run in the thread that deletes it, before the data is destroyed).  A thread can also have the Program as its
+    // current Program without having entered it (counted as one of its threads): while a Program is parsed, for
+    // metadata lookups, and with QoreProgramContextHelper; the teardown does not wait for such a thread.  None of
+    // them makes a jdbc operation, and code that runs in the Program, which a jdbc operation is called from, has
+    // entered it, so such a thread does not reach this shortcut in practice
     if (p == ::getProgram()) {
         return true;
     }
@@ -483,10 +504,17 @@ void QoreJdbcProgramState::programDeleted(QoreProgram* pgm) {
     }
 }
 
-void QoreJdbcProgramState::programDataDestroyed(const QoreProgram* pgm) {
+void QoreJdbcProgramState::programDataDestroyed(const QoreProgram* pgm) noexcept {
     if (Jvm::isForkedChild()) {
         return;
     }
+    // called from a destructor: no exception may leave it (no memory is allocated here; a lock error is reported)
+    jni_teardown_step("marking the jdbc connections of a Program deleted", [pgm] () {
+        programDataDestroyedIntern(pgm);
+    });
+}
+
+void QoreJdbcProgramState::programDataDestroyedIntern(const QoreProgram* pgm) {
     QoreJdbcProgramStateRegistry& reg = jdbc_program_states();
     qore_program_id_t id = pgm->getProgramId();
     std::shared_ptr<QoreJdbcProgramState> state;
@@ -550,7 +578,25 @@ void QoreJdbcProgramState::markDeleted() {
     // an operation of another thread that uses the Program completes before its data is destroyed; an operation of
     // this thread that deletes the Program (ex: by releasing its last reference) is not waited for, as that would
     // never end
-    cv.wait(guard, [this, tid] () { return users.empty() || (users.size() == 1 && users.count(tid)); });
+    auto done = [this, tid] () { return users.empty() || (users.size() == 1 && users.count(tid)); };
+#ifdef DEBUG
+    // a test can wait until the teardown has marked the state, and see whether it blocks for the operations of other
+    // threads (see dbg_jni_jdbc_deleted_wait()): the wait is reported when this thread is about to block in it, with
+    // the state's lock held, so it cannot have ended before an operation that it waits for has released its use
+    bool reported = false;
+    while (!done()) {
+        if (!reported) {
+            reported = true;
+            dbg_jni_jdbc_deleted_wait_entered(true);
+        }
+        cv.wait(guard);
+    }
+    if (!reported) {
+        dbg_jni_jdbc_deleted_wait_entered(false);
+    }
+#else
+    cv.wait(guard, done);
+#endif
 }
 
 int QoreJdbcConnection::reconnect(Env& env, ExceptionSink* xsink) {

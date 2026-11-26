@@ -284,13 +284,19 @@ pool.exec("update orders set status = %v where id = %v", "processed", order.id);
     %Program holds does not keep that %Program alive; once the %Program has been deleted, an operation of the
     connection, other than a commit, a rollback, getting the server or client version, setting an option other than
     \c classpath, or closing it, raises \c JDBC-CONNECTION-ERROR, and the connection is aborted, as a lost connection
-    that cannot be re-established is; any transaction of the connection is lost.  Deleting the %Program waits for an
-    operation that another thread is making on one of its connections.  The operations of the connection do not run in the %Program: dates, for
-    example, are made in the time zone of the code that makes the operation.  A datasource created by the deleted
-    %Program opens its connections in the context of that %Program, so a new connection cannot be opened either
-    (\c JDBC-CONNECTION-ERROR while the %Program is being deleted, \c JNI-ERROR once it has been): keep the %Program
-    that creates a jdbc datasource for as long as the datasource is used, or create the datasource in the %Program
-    that uses it (qore#7665).
+    that cannot be re-established is; any transaction of the connection is lost.
+
+    Deleting the %Program waits for an operation that another thread is making on one of its connections: a thread
+    must not delete such a %Program while it holds a lock, or a transaction open on a database, that such an operation
+    can need, as the two threads would then wait for each other.
+
+    The operations of the connection do not run in the %Program: dates, for example, are made in the time zone of the
+    code that makes the operation.  A datasource or datasource pool belongs to the %Program that created it (a method
+    of a builtin object runs with the %Program of the object as its call context), and its connections are opened in
+    that %Program, also a connection that a pool opens while the code of another %Program uses it.  So a datasource
+    created by the deleted %Program cannot open a new connection either (\c JDBC-CONNECTION-ERROR while the %Program
+    is being deleted, \c JNI-ERROR once it has been): keep the %Program that creates a jdbc datasource for as long as
+    the datasource is used, or create the datasource in the %Program that uses it (qore#7665).
 
     @section jdbc_multiple_results Statements with Several Results
 

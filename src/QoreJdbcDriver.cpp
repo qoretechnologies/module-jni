@@ -65,8 +65,18 @@ static std::shared_ptr<const JavaExceptionTextMasker> jdbc_masker(const QoreJdbc
 */
 static int jdbc_use_program(Datasource* ds, QoreJdbcConnection* conn, QoreJdbcProgramUse& use,
         ExceptionSink* xsink) {
-    if (!conn || conn->useProgram(use)) {
+    if (!conn) {
         return 0;
+    }
+    try {
+        if (conn->useProgram(use)) {
+            return 0;
+        }
+    } catch (std::exception& e) {
+        // no C++ exception may reach libqore, which calls the driver; the connection is not aborted
+        xsink->raiseException("JDBC-CONNECTION-ERROR", "error taking the Program of the jdbc connection: %s",
+            e.what());
+        return -1;
     }
     xsink->raiseException("JDBC-CONNECTION-ERROR", "the Program that opened the jdbc connection has been deleted; "
         "the connection cannot be used for this operation and has been aborted");

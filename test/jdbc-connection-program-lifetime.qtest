@@ -83,6 +83,7 @@ import java.sql.Timestamp;
 import java.sql.Types;
 import java.util.Properties;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
 import java.util.logging.Logger;
 
 public class LifetimeDriver implements Driver {
@@ -92,7 +93,14 @@ public class LifetimeDriver implements Driver {
     //! returned by a handler for a method that returns the default value of its type
     private static final Object DEFAULT = new Object();
 
+    //! the latch that a query with the text \"block\" counts down when it runs, and the latch that it waits for; shared
+    //! with the test through the system properties, as the driver's class is in another class loader
+    static final String ENTERED = \"qore7665.entered\";
+    static final String RELEASE = \"qore7665.release\";
+
     static {
+        System.getProperties().putIfAbsent(ENTERED, new CountDownLatch(1));
+        System.getProperties().putIfAbsent(RELEASE, new CountDownLatch(1));
         try {
             DriverManager.registerDriver(new LifetimeDriver());
         } catch (SQLException e) {
@@ -208,6 +216,15 @@ public class LifetimeDriver implements Driver {
         });
     }
 
+    //! a query with the text \"block\" counts down the ENTERED latch, then waits until the RELEASE latch is released
+    static void block(String sql) throws InterruptedException {
+        if (!sql.contains(\"block\")) {
+            return;
+        }
+        ((CountDownLatch)System.getProperties().get(ENTERED)).countDown();
+        ((CountDownLatch)System.getProperties().get(RELEASE)).await();
+    }
+
     //! a statement of the query
     static PreparedStatement statement(String sql) {
         Object[] col = column(sql);
@@ -215,9 +232,11 @@ public class LifetimeDriver implements Driver {
         return implement(PreparedStatement.class, (proxy, method, args) -> {
             switch (method.getName()) {
                 case \"execute\":
+                    block(sql);
                     rs[0] = resultSet(col);
                     return true;
                 case \"executeQuery\":
+                    block(sql);
                     rs[0] = resultSet(col);
                     return rs[0];
                 case \"getResultSet\": {
@@ -306,6 +325,9 @@ public class LifetimeDriver implements Driver {
         addTestCase("coverage: exec() after the opening Program is deleted", \execDeletedTest());
         addTestCase("coverage: a statement executed before the opening Program is deleted", \stmtDeletedTest());
         addTestCase("coverage: a connection opened during the opening Program's teardown", \escapeTest());
+        addTestCase("coverage: more operations after the opening Program is deleted", \moreOpsDeletedTest());
+        addTestCase("coverage: a pool grows a connection while another Program's code uses it", \growTest());
+        addTestCase("coverage: the teardown waits for an operation of another thread", \waitTest());
         addTestCase("coverage: a transaction ends after the opening Program is deleted", \transactionDeletedTest());
         addTestCase("coverage: the opening Program is kept", \keptTest());
         addTestCase("coverage: a pool's opening Program is kept", \poolKeptTest());
@@ -377,6 +399,42 @@ public class LifetimeDriver implements Driver {
             assertEq("uuid: " + DeletedError, getLine(out, "uuid: "), out);
             checkAfter(out, "escape");
         }
+    }
+
+    #! the other guarded operations refuse to use the deleted Program
+    moreOpsDeletedTest() {
+        foreach string op in ("prepare", "selectrows", "execraw", "classpath") {
+            checkDeleted("ds-deleted-" + op, op);
+        }
+        checkDeleted("stmt-deleted-sbind", "sbind");
+    }
+
+    #! a pool's connections belong to the Program that created the pool: a connection that the pool opens while the
+    #! code of another Program uses it, in that code's thread, belongs to the pool's Program too (a method of a builtin
+    #! object runs with the object's Program as its call context), so it works after that other Program is deleted
+    growTest() {
+        string out = runChild("grow");
+        assertEq("opener: {x: 1}", getLine(out, "opener: "), out);
+        assertEq("user: {x: 1}", getLine(out, "user: "), out);
+        assertEq("p deleted", getLine(out, "p deleted"), out);
+        assertEq(sprintf("main: %y", Uuid), getLine(out, "main: "), out);
+        assertEq(sprintf("other: %y", Uuid), getLine(out, "other: "), out);
+        assertEq("commit: null", getLine(out, "commit: "), out);
+        checkAfter(out, "grow");
+    }
+
+    #! the teardown of the Program waits for an operation of another thread on its connection, which completes; the
+    #! next operation fails cleanly
+    waitTest() {
+        string out = runChild("wait");
+        if (out =~ /^wait: skipped/m) {
+            testSkip(getLine(out, "wait: skipped"));
+        }
+        assertEq("waiting: 1", getLine(out, "waiting: "), out);
+        assertEq("deleted before release: False", getLine(out, "deleted before release: "), out);
+        assertEq("block: {x: 1}", getLine(out, "block: "), out);
+        assertEq("next: " + DeletedError, getLine(out, "next: "), out);
+        checkAfter(out, "wait");
     }
 
     #! a commit and a rollback do not use the Program that opened the connection: the transaction that it started
