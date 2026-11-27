@@ -351,6 +351,18 @@
           "source": "The number of sample data rows returned per sheet",
           "message": "The number of sample data rows returned per sheet"
         },
+        "app.T0RT.action.cHJvZmlsZQ.option.aGVhZGVyX3Jvdw.display_name": {
+          "source": "Header Row",
+          "message": "Header Row"
+        },
+        "app.T0RT.action.cHJvZmlsZQ.option.aGVhZGVyX3Jvdw.short_desc": {
+          "source": "The row holding the column names, or 0 for none",
+          "message": "The row holding the column names, or 0 for none"
+        },
+        "app.T0RT.action.cHJvZmlsZQ.option.aGVhZGVyX3Jvdw.desc": {
+          "source": "The 1-based row holding the column names in every sheet, or `0` if the sheets have none; when not given, the header row is found from the sheet's content. Use it when the person who knows the file says where the column names are",
+          "message": "The 1-based row holding the column names in every sheet, or `0` if the sheets have none; when not given, the header row is found from the sheet's content. Use it when the person who knows the file says where the column names are"
+        },
         "app.T0RT.action.cHJvZmlsZQ.option.cmVkYWN0.display_name": {
           "source": "Redact Samples",
           "message": "Redact Samples"

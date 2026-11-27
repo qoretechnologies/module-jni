@@ -59,6 +59,18 @@
           "source": "The spreadsheet content to profile",
           "message": "프로파일링할 스프레드시트 내용"
         },
+        "app.T0RT.action.cHJvZmlsZQ.option.aGVhZGVyX3Jvdw.desc": {
+          "source": "The 1-based row holding the column names in every sheet, or `0` if the sheets have none; when not given, the header row is found from the sheet's content. Use it when the person who knows the file says where the column names are",
+          "message": "각 시트에서 열 이름이 있는 행(1부터 셈)이며, 시트에 열 이름이 없으면 `0`입니다. 지정하지 않으면 헤더 행을 시트의 내용에서 찾습니다. 파일을 아는 사람이 열 이름의 위치를 알려 줄 때 사용합니다"
+        },
+        "app.T0RT.action.cHJvZmlsZQ.option.aGVhZGVyX3Jvdw.display_name": {
+          "source": "Header Row",
+          "message": "헤더 행"
+        },
+        "app.T0RT.action.cHJvZmlsZQ.option.aGVhZGVyX3Jvdw.short_desc": {
+          "source": "The row holding the column names, or 0 for none",
+          "message": "열 이름이 있는 행, 없으면 0"
+        },
         "app.T0RT.action.cHJvZmlsZQ.option.bWF4X3Jvd3M.desc": {
           "source": "The maximum number of rows read and profiled per sheet; the total row count is still reported, and a `partial_profile` finding notes that the sheet has more rows",
           "message": "시트당 읽고 프로파일링할 최대 행 수, 전체 행 수는 그래도 보고되며 `partial_profile` 결과로 시트에 행이 더 있음을 알림"
