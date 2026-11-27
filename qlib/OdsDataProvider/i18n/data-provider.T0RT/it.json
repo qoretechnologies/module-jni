@@ -59,6 +59,18 @@
           "source": "The spreadsheet content to profile",
           "message": "Il contenuto del foglio di calcolo da profilare"
         },
+        "app.T0RT.action.cHJvZmlsZQ.option.aGVhZGVyX3Jvdw.desc": {
+          "source": "The 1-based row holding the column names in every sheet, or `0` if the sheets have none; when not given, the header row is found from the sheet's content. Use it when the person who knows the file says where the column names are",
+          "message": "La riga (numerata da 1) con i nomi delle colonne in ogni foglio, oppure `0` se i fogli non ne hanno; se non indicata, la riga di intestazione viene individuata dal contenuto del foglio. Usarla quando la persona che conosce il file indica dove si trovano i nomi delle colonne"
+        },
+        "app.T0RT.action.cHJvZmlsZQ.option.aGVhZGVyX3Jvdw.display_name": {
+          "source": "Header Row",
+          "message": "Riga di intestazione"
+        },
+        "app.T0RT.action.cHJvZmlsZQ.option.aGVhZGVyX3Jvdw.short_desc": {
+          "source": "The row holding the column names, or 0 for none",
+          "message": "La riga con i nomi delle colonne, oppure 0 se non c'è"
+        },
         "app.T0RT.action.cHJvZmlsZQ.option.bWF4X3Jvd3M.desc": {
           "source": "The maximum number of rows read and profiled per sheet; the total row count is still reported, and a `partial_profile` finding notes that the sheet has more rows",
           "message": "Il numero massimo di righe lette e profilate per foglio; il numero totale di righe viene comunque riportato, e un risultato `partial_profile` segnala che il foglio ha più righe"

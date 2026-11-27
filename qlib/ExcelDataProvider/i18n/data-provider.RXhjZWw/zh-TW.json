@@ -59,6 +59,18 @@
           "source": "The spreadsheet content to profile",
           "message": "要分析的試算表內容"
         },
+        "app.RXhjZWw.action.cHJvZmlsZQ.option.aGVhZGVyX3Jvdw.desc": {
+          "source": "The 1-based row holding the column names in every sheet, or `0` if the sheets have none; when not given, the header row is found from the sheet's content. Use it when the person who knows the file says where the column names are",
+          "message": "每個工作表中包含欄位名稱的列（從 1 起算），若工作表沒有則為 `0`；未指定時，會從工作表的內容判斷標頭列。當熟悉檔案的人指出欄位名稱所在位置時使用"
+        },
+        "app.RXhjZWw.action.cHJvZmlsZQ.option.aGVhZGVyX3Jvdw.display_name": {
+          "source": "Header Row",
+          "message": "標頭列"
+        },
+        "app.RXhjZWw.action.cHJvZmlsZQ.option.aGVhZGVyX3Jvdw.short_desc": {
+          "source": "The row holding the column names, or 0 for none",
+          "message": "包含欄位名稱的列，若沒有則為 0"
+        },
         "app.RXhjZWw.action.cHJvZmlsZQ.option.bWF4X3Jvd3M.desc": {
           "source": "The maximum number of rows read and profiled per sheet; the total row count is still reported, and a `partial_profile` finding notes that the sheet has more rows",
           "message": "每個工作表讀取並分析的最大列數；仍會回報總列數，且 `partial_profile` 發現會指出工作表還有更多列"

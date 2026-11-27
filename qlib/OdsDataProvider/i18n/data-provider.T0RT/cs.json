@@ -59,6 +59,18 @@
           "source": "The spreadsheet content to profile",
           "message": "Obsah tabulky k profilování"
         },
+        "app.T0RT.action.cHJvZmlsZQ.option.aGVhZGVyX3Jvdw.desc": {
+          "source": "The 1-based row holding the column names in every sheet, or `0` if the sheets have none; when not given, the header row is found from the sheet's content. Use it when the person who knows the file says where the column names are",
+          "message": "Řádek s názvy sloupců v každém listu číslovaný od 1, nebo `0`, pokud listy žádný nemají; pokud není zadán, řádek záhlaví se zjistí z obsahu listu. Použijte ho, když osoba, která soubor zná, řekne, kde jsou názvy sloupců"
+        },
+        "app.T0RT.action.cHJvZmlsZQ.option.aGVhZGVyX3Jvdw.display_name": {
+          "source": "Header Row",
+          "message": "Řádek záhlaví"
+        },
+        "app.T0RT.action.cHJvZmlsZQ.option.aGVhZGVyX3Jvdw.short_desc": {
+          "source": "The row holding the column names, or 0 for none",
+          "message": "Řádek s názvy sloupců, nebo 0, pokud žádný není"
+        },
         "app.T0RT.action.cHJvZmlsZQ.option.bWF4X3Jvd3M.desc": {
           "source": "The maximum number of rows read and profiled per sheet; the total row count is still reported, and a `partial_profile` finding notes that the sheet has more rows",
           "message": "Maximální počet čtených a profilovaných řádků na list; celkový počet řádků se přesto vykazuje a nález `partial_profile` upozorňuje, že list má více řádků"
