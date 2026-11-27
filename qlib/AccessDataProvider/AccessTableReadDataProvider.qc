@@ -37,7 +37,9 @@ public class AccessTableReadDataProvider inherits DataProvider::AbstractDataProv
         };
     }
 
-    private {
+    private:internal {
+        # private:internal: a subclass, which code restricted from the file system can declare, cannot read or
+        # change them (qore#7811)
         #! the iterator object
         AccessIterator i;
 
@@ -61,6 +63,15 @@ public class AccessTableReadDataProvider inherits DataProvider::AbstractDataProv
         DataProviderActionCatalog::checkSandboxAccess(AccessDataProvider::AppName);
         # the path names a local file that Java opens (qore#7811)
         Priv::check_path_option();
+        self.i = new AccessIterator(db_path, table_name);
+        self.name = name;
+        self.table_name = table_name;
+    }
+
+    #! Creates the object for an AccessReadDataProvider with the path of its creator (qore#7811)
+    constructor(string db_path, string name, string table_name, Priv::CreatorOptions token) {
+        # Java I/O that the sandbox does not control: sandboxed code is refused (qore#5632)
+        DataProviderActionCatalog::checkSandboxAccess(AccessDataProvider::AppName);
         self.i = new AccessIterator(db_path, table_name);
         self.name = name;
         self.table_name = table_name;
@@ -105,7 +116,7 @@ public class AccessTableReadDataProvider inherits DataProvider::AbstractDataProv
     }
 
     #! Cleans up the temp file if one was created
-    private cleanupTempFile() {
+    private:internal cleanupTempFile() {
         if (temp_path && is_file(temp_path)) {
             unlink(temp_path);
             temp_path = NOTHING;

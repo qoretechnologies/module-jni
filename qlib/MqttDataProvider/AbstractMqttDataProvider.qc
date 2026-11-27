@@ -122,16 +122,16 @@ public class AbstractMqttDataProvider inherits DataProvider::AbstractDataProvide
 
     #! Refuses options that name local files to calling code that is restricted from the file system (qore#7811)
     /** The Java client reads the keystore and truststore files, and the module's code runs with its own %Program's
-        options, so the restrictions of the calling code are checked here
-        (@ref Qore::SandboxManager::isCallerRestricted() "SandboxManager::isCallerRestricted()"); a connection that
-        the host lent creates its data provider from the options that its creator gave
+        options, so the restrictions of the calling code are checked here, also those of the code that a lent
+        object was lent to (@ref Qore::SandboxManager::isLentToRestricted() "SandboxManager::isLentToRestricted()");
+        the data providers and clients of a connection take the options of its creator without the check
 
         @throw PERMISSION-DENIED the calling code is restricted from the \c FILESYSTEM functional domain, and the
         options name a keystore or truststore file
     */
     static checkFileOptions(*hash<auto> copts) {
         *list<string> names = map $1, FileOptions, exists copts{$1};
-        if (names && SandboxManager::isCallerRestricted(DOM_FILESYSTEM)) {
+        if (names && SandboxManager::isLentToRestricted(DOM_FILESYSTEM)) {
             throw "PERMISSION-DENIED", sprintf("the calling code may not use the mqtt option(s) %y, which name local "
                 "files, as it is restricted from the FILESYSTEM functional domain", names);
         }

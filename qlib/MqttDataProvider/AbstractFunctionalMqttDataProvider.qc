@@ -502,13 +502,19 @@ public class AbstractFunctionalMqttDataProvider inherits AbstractMqttDataProvide
         init(options, False);
     }
 
-    #! Creates the object from the options of a connection's creator (qore#7811)
-    /** The connection is confined to the members and options that its creator gave it for code that it was lent to
+    #! Creates the object from a connection with the options of its creator (qore#7811)
+    /** The connection is confined to the members that its creator set and to the options that cannot change its
+        target for code that the host lent it to (MqttConnection::getDataProviderSource()), also when such code or
+        library code creates the object
+
+        @param conn the connection
+        @param options further options, which can only be options that cannot change the target for such code
     */
-    constructor(*hash<auto> options, Priv::CreatorOptions token) {
+    constructor(MqttConnection conn, *hash<auto> options) {
         # Java I/O that the sandbox does not control: sandboxed code is refused (qore#5632)
         DataProviderActionCatalog::checkSandboxAccess(MqttDataProvider::AppName);
-        init(options, True);
+        MqttConnection src = conn.getDataProviderSource(options);
+        init(src.orig_opts - "disable_automatic_pings" + {"url": src.real_url} + options, True);
     }
 
     #! Creates the object from the options
@@ -529,8 +535,8 @@ public class AbstractFunctionalMqttDataProvider inherits AbstractMqttDataProvide
         }
         configureAsyncApiOptions(copts);
         hash<auto> cinfo = creator_options
-            ? getClient(copts, logger, new Priv::CreatorOptions())
-            : getClient(copts, logger);
+            ? AbstractMqttDataProvider::getClient(copts, logger, new Priv::CreatorOptions())
+            : AbstractMqttDataProvider::getClient(copts, logger);
         client = cinfo.client;
         opts = cinfo.opts;
         topic = copts.subscription_topic;

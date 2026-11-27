@@ -121,6 +121,8 @@ class JniProviderPathRestrictedTest inherits QUnit::Test {
         const Sheet = "ProviderPathSheet";
         #! the worksheets of the spreadsheets of the test
         const SheetList = {"worksheets": ({"name": Sheet, "index": 0, "hidden": False},)};
+        #! the tables of the Access database with several tables
+        const MultiTables = ("Departments", "Employees", "Projects");
         #! the names of the users of the Access test database
         const AccessNames = ("Alice Smith", "Bob Johnson", "Carol Williams");
 
@@ -134,6 +136,31 @@ class JniProviderPathRestrictedTest inherits QUnit::Test {
 
         #! the error of an AsyncAPI validator location that was read: the spreadsheet is no AsyncAPI document
         const KafkaValidatorRead = "^(INVALID-ENCODING|JSON-PARSE-ERROR|YAML-PARSER-ERROR|ASYNCAPI)";
+
+        #! an AsyncAPI document with the channel "messages"
+        const AsyncApiSource = "asyncapi: 3.0.0
+info:
+  title: provider path test
+  version: 1.0.0
+channels:
+  messages:
+    address: qore.test
+    messages:
+      message:
+        $ref: '#/components/messages/TestMessage'
+operations:
+  sendMessage:
+    action: send
+    channel:
+      $ref: '#/channels/messages'
+    messages:
+      - $ref: '#/channels/messages/messages/message'
+components:
+  messages:
+    TestMessage:
+      payload:
+        type: object
+";
 
         #! the scheme of a location that uses no functional domain of the caller
         const TestScheme = "provpathtest";
@@ -281,6 +308,10 @@ string sub ctx_child(object o, string name, hash<auto> ctx) {
     return res(sub () { DataProviderDataContextHelper h(ctx); o.getChildProviderEx(name); return \"created\"; });
 }
 
+string sub lib_child_search(object o, string child) {
+    return ProviderPathLibrary::child_search(o, child);
+}
+
 string sub lib_dp(object conn, *hash<auto> opts) {
     return ProviderPathLibrary::get_data_provider(conn, opts);
 }
@@ -303,6 +334,10 @@ string sub member_dp(object conn, string member, string key, auto value) {
         string sql_dir;
         #! an Access database
         string accdb;
+        #! an Access database with several tables
+        string multi_accdb;
+        #! an AsyncAPI document
+        string asyncapi;
         #! the spreadsheets
         string ods;
         string xlsx;
@@ -323,6 +358,8 @@ string sub member_dp(object conn, string member, string key, auto value) {
         nodeset2 = script_dir + "/opcua-nodeset2-minimal.xml";
         sql_dir = tmp.path + "/sql";
         accdb = tmp.path + "/users.accdb";
+        multi_accdb = tmp.path + "/multi.accdb";
+        asyncapi = tmp.path + "/asyncapi.yaml";
         ods = tmp.path + "/book.ods";
         xlsx = tmp.path + "/book.xlsx";
 
@@ -377,6 +414,11 @@ string sub member_dp(object conn, string member, string key, auto value) {
         f.write("create table provider_path_marker (id int);\n");
         f.close();
         AccessTestHelper::createSimpleAccdb(accdb);
+        AccessTestHelper::createMultiTableAccdb(multi_accdb);
+        f = new File();
+        f.open2(asyncapi, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(AsyncApiSource);
+        f.close();
         {
             OdsWriteDataProvider w(ods, {"worksheet": Sheet});
             w.createRecord({"name": "row"});
@@ -628,6 +670,8 @@ string sub member_dp(object conn, string member, string key, auto value) {
             {"user": "u", "password": "p", "locations": (sql_dir,)});
         KafkaConnection kafka("c", "c", "kafka://127.0.0.1:1");
         MqttConnection mqtt("c", "c", "mqtt://127.0.0.1:1", {}, {"ssl.keystore.location": ods});
+        BusyLightConnection busylight("c", "c", "bltcp://127.0.0.1:1", {}, {"ssl.keystore.location": ods});
+        AccessReadDataProvider access(accdb);
         JmsConnection jms("c", "c", "jms://x", {},
             {"provider_classpath": jarOf("JmsLibrary"), "connection_factory_class": classOf("JmsLibrary")});
         foreach hash<auto> r in (Restrictions) {
@@ -643,6 +687,10 @@ string sub member_dp(object conn, string member, string key, auto value) {
             # the host's classpath is added and the connection factory class loaded, which has no URL setter
             assertRegex("^JMS-CONNECTION-ERROR: cannot set URL on connection factory class",
                 p.callFunction("lib_dp", jms), l + "jms connection data provider with the host's classpath");
+            assertEq("ok", p.callFunction("lib_dp", busylight), l + "busylight connection data provider with the "
+                "host's keystore");
+            assertEq(sprintf("ok: %y", AccessNames), p.callFunction("lib_child_search", access, "Users"),
+                l + "access provider's child with the host's path");
             assertRegex(LentRefused, p.callFunction("lib_dp", jdbc, {"classpath": jarOf("Refused")}),
                 l + "jdbc connection data provider with the caller's classpath");
             assertRegex(LentRefused, p.callFunction("lib_dp", fw, {"locations": (sql_dir,)}),
@@ -656,30 +704,86 @@ string sub member_dp(object conn, string member, string key, auto value) {
     #! the private methods of the classes; the variants that take a creator's options are not reachable that way
     subclassTest() {
         # private:internal methods and members, and a token of the module's own code, are not reachable
-        hash<string, string> parse_refused = {
-            "jms createConnectionFactoryIntern()": "class X inherits JmsDataProviderBase {
+        # code -> the access error that it must give
+        hash<string, hash<auto>> parse_refused = {
+            "jms createConnectionFactoryIntern()": {
+                "code": "class X inherits JmsDataProviderBase {
     static auto f(hash<auto> h) { return JmsDataProviderBase::createConnectionFactoryIntern(h, False); }
 }",
-            "jms init()": "class X inherits JmsDataProvider {
+                "error": "^PARSE-EXCEPTION: cannot resolve call "
+                    "'JmsDataProviderBase::createConnectionFactoryIntern\\(\\)'",
+            },
+            "jms init()": {
+                "code": "class X inherits JmsDataProvider {
     constructor() : JmsDataProvider({}) {}
     g() { init({}, True); }
 }",
-            "mqtt getClientIntern()": "class X inherits AbstractMqttDataProvider {
+                "error": "^PARSE-EXCEPTION: function 'init\\(\\)' cannot be found",
+            },
+            "mqtt getClientIntern()": {
+                "code": "class X inherits AbstractMqttDataProvider {
     static auto f(hash<auto> h) { return AbstractMqttDataProvider::getClientIntern(h); }
 }",
-            "kafka opts": "class X inherits KafkaDataProvider {
+                "error": "^PARSE-EXCEPTION: cannot resolve call 'AbstractMqttDataProvider::getClientIntern\\(\\)'",
+            },
+            "kafka opts": {
+                "code": "class X inherits KafkaDataProvider {
     static f(KafkaDataProvider o) { o.opts = {}; }
 }",
-            "kafka configureAsyncApiOptionsIntern()": "class X inherits KafkaDataProviderBase {
-    constructor(KafkaConnection c) : KafkaDataProviderBase(c) {}
-    static f(KafkaDataProviderBase o, hash<auto> h) { o.configureAsyncApiOptionsIntern(h); }
+                "error": "^PARSE-EXCEPTION: illegal access to private member 'opts'",
+            },
+            # an override that would receive the token of the module's own code
+            "kafka configureAsyncApiOptionsIntern() override": {
+                "code": "class X inherits KafkaProducerDataProvider {
+    constructor(KafkaConnection c) : KafkaProducerDataProvider(c) {}
+    private configureAsyncApiOptionsIntern(hash<auto> opts, object token) {}
 }",
+                "error": "^PARSE-EXCEPTION: .*final.*configureAsyncApiOptionsIntern",
+            },
+            "access db_path": {
+                "code": "class X inherits AccessReadDataProvider {
+    constructor() : AccessReadDataProvider({\"data\": <00>}) {}
+    static f(AccessReadDataProvider o) { o.db_path = \"x\"; }
+}",
+                "error": "^PARSE-EXCEPTION: illegal access to private member 'db_path'",
+            },
+            "access db_data": {
+                "code": "class X inherits AccessReadDataProvider {
+    constructor() : AccessReadDataProvider({\"data\": <00>}) {}
+    static f(AccessReadDataProvider o) { o.db_data = <00>; }
+}",
+                "error": "^PARSE-EXCEPTION: illegal access to private member 'db_data'",
+            },
+            "word write path": {
+                "code": "class X inherits WordWriteDataProvider {
+    static f(WordWriteDataProvider o) { o.path = \"x\"; }
+}",
+                "error": "^PARSE-EXCEPTION: illegal access to private member 'path'",
+            },
+            "camel ctx": {
+                "code": "class X inherits CamelProducerDataProvider {
+    static auto f(CamelProducerDataProvider o) { return o.ctx; }
+}",
+                "error": "^PARSE-EXCEPTION: illegal access to private member 'ctx'",
+            },
         };
         foreach hash<auto> r in (Restrictions) {
             foreach hash<auto> i in (parse_refused.pairIterator()) {
-                string rv = parseIn(r.opts, i.value);
-                assertRegex("^PARSE-", rv, sprintf("%s: subclass: %s: %s", r.label, i.key, rv));
+                string rv = parseIn(r.opts, i.value.code);
+                assertRegex(i.value.error, rv, sprintf("%s: subclass: %s: %s", r.label, i.key, rv));
             }
+            # a subclass's override of a method that gives the database path is not called by the module's code
+            Program ap = getProgram(r.opts, NOTHING, "class XAccess inherits AccessReadDataProvider {
+    private { string target; }
+    constructor(binary data, string target) : AccessReadDataProvider({\"data\": data}) { self.target = target; }
+    private string getDbPath() { return target; }
+}
+string sub access_override(binary data, string target) {
+    return res(sub () { XAccess x(data, target); return x.getChildProviderNames(); });
+}
+");
+            string rv = ap.callFunction("access_override", ReadOnlyFile::readBinaryFile(multi_accdb), accdb);
+            assertEq(sprintf("ok: %y", MultiTables), rv, r.label + ": subclass: access getDbPath() override");
             # a subclass's static method calls the connection's private getImpl() on a lent connection
             Program p = getProgram(r.opts, NOTHING, "class XMqtt inherits MqttConnection {
     static string f(MqttConnection c, hash<auto> h) {
@@ -832,6 +936,8 @@ string sub jms_get_impl(object c, hash<auto> h) { return XJms::f(c, h); }
         KafkaDataProvider kafka_opts(new KafkaConnection("c", "c", "kafka://127.0.0.1:1"),
             {"topics": ("provider-path",), "group.id": "provider-path"});
         KafkaDataProvider kafka_producer_opts(new KafkaConnection("c", "c", "kafka://127.0.0.1:1"), {"acks": "all"});
+        KafkaDataProvider kafka_validator(new KafkaConnection("c", "c", "kafka://127.0.0.1:1"),
+            {"validator": asyncapi, "asyncapi_channel": "messages"});
         foreach hash<auto> r in (Restrictions) {
             Program p = restricted{r.label};
             string l = r.label + ": lent ";
@@ -862,6 +968,8 @@ string sub jms_get_impl(object c, hash<auto> h) { return XJms::f(c, h); }
                 l + "kafka consumer with the host's options");
             assertEq("ok: \"created\"", p.callFunction("child", kafka_producer_opts, "producer"),
                 l + "kafka producer with the host's options");
+            assertEq("ok: \"created\"", p.callFunction("child", kafka_validator, "producer"),
+                l + "kafka producer with the host's validator file");
             # a plain endpoint of an in-memory component
             assertRegex("^ok: ", p.callFunction("request", camel_producer, {"endpoint": "seda:provider-path",
                 "body": "x"}), l + "camel producer in-memory endpoint");

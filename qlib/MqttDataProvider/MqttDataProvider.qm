@@ -230,8 +230,9 @@ mqtt.sendMessage(MqttDataProvider::MESSAGE_MQTT_MESSAGE, {
       (<a href="https://github.com/qoretechnologies/qore/issues/7811">issue 7811</a>)
     - <b>Behavior change</b>: the \c ssl.keystore.location and \c ssl.truststore.location options are refused to calling
       code that is restricted from the \c FILESYSTEM functional domain when it creates a data provider or calls
-      AbstractMqttDataProvider::getClient() itself; the data providers and clients of an MqttConnection take the
-      options of its creator, also for library code that creates them for such code
+      AbstractMqttDataProvider::getClient() itself, also to the code that a lent object was lent to; the data
+      providers and clients of an MqttConnection (also of a BusyLightConnection) take the options of its creator,
+      also for library code that creates them for such code
       (<a href="https://github.com/qoretechnologies/qore/issues/7811">issue 7811</a>)
     - the app declares \c external_io (@ref DataProvider::DataProviderAppInfo "DataProviderAppInfo"): its Java code does
       network or filesystem I/O that the sandbox does not control, so data provider consumers refuse it to sandboxed

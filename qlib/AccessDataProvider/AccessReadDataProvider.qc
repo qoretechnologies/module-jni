@@ -78,7 +78,9 @@ public class AccessReadDataProvider inherits DataProvider::AbstractDataProvider 
         };
     }
 
-    private {
+    private:internal {
+        # private:internal: a subclass, which code restricted from the file system can declare, cannot read or
+        # change them (qore#7811)
         #! The path to the database file (or temp file path)
         *string db_path;
 
@@ -154,7 +156,7 @@ public class AccessReadDataProvider inherits DataProvider::AbstractDataProvider 
     }
 
     #! Cleans up the temp file if one was created
-    private cleanupTempFile() {
+    private:internal cleanupTempFile() {
         if (temp_path && is_file(temp_path)) {
             unlink(temp_path);
             temp_path = NOTHING;
@@ -167,7 +169,7 @@ public class AccessReadDataProvider inherits DataProvider::AbstractDataProvider 
     }
 
     #! Returns the path to the database file, creating a temp file from binary data if needed
-    private string getDbPath() {
+    private:internal string getDbPath() {
         if (db_path) {
             return db_path;
         }
@@ -183,7 +185,7 @@ public class AccessReadDataProvider inherits DataProvider::AbstractDataProvider 
     }
 
     #! Common setup code
-    private checkIterator() {
+    private:internal checkIterator() {
         if (it) {
             return;
         }
@@ -237,7 +239,8 @@ public class AccessReadDataProvider inherits DataProvider::AbstractDataProvider 
                 if (db_data) {
                     return new AccessTableReadDataProvider({"data": db_data, "table_name": child_name});
                 }
-                return new AccessTableReadDataProvider(getDbPath(), name, child_name);
+                # the path of this object's creator (qore#7811)
+                return new AccessTableReadDataProvider(getDbPath(), name, child_name, new Priv::CreatorOptions());
             }
         }
     }

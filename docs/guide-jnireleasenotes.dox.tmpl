@@ -8,12 +8,21 @@
 
     - <b>Security</b> (qore#7811): the data provider modules use the options and request fields that name local
       paths with their own Program's options, so they now refuse them to code that is restricted from the
-      \c FILESYSTEM functional domain (\c PERMISSION-DENIED), as follows:
+      \c FILESYSTEM functional domain (\c PERMISSION-DENIED), as follows; with the \c jni module loaded, such a
+      restriction by parse options is only a boundary together with \c PO_NO_UNCONTROLLED_APIS, as code that may
+      use uncontrolled APIs can import Java classes such as those of \c java.io and \c java.nio itself:
       - <b>Behavior change</b>, JdbcDataProvider and FlywayDataProvider: code restricted from the \c DATABASE or
         \c FILESYSTEM domain cannot create the data providers from options (the URL, for example of a file
         database, the JDBC \c classpath and the Flyway \c locations name what they use), as it cannot create their
         connections (Qore::SandboxManager::isCallerRestricted())
-      - JakartaJmsDataProvider: the \c provider_classpath option is refused to such calling code
+      - JakartaJmsDataProvider: the \c provider_classpath option is refused to such calling code, also to the
+        code that a lent object was lent to (Qore::SandboxManager::isLentToRestricted()), as are the MQTT keystore
+        and truststore options and the Access \c path option
+      - the members of the data providers that hold the paths that they write or open later (the \c path of the
+        write data providers of the Avro, Email, Excel, ICS, ODP, ODT, ODS, VCF, PowerPoint and Word modules, the
+        JasperReports output path, the Access database path, the Camel context) and the methods that give or use
+        them, or that take a creator's options, are private:internal or final, so that a subclass that restricted
+        code declares cannot change them, also of an object that the host lent
       - <b>Behavior change</b>, MqttDataProvider and BusyLightDataProvider: their connections declare the
         \c FILESYSTEM domain, and the keystore and truststore options are refused to such calling code
       - AccessDataProvider: the \c path option is refused to such calling code; a database given as data is

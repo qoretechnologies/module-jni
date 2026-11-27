@@ -324,7 +324,7 @@ public class KafkaConsumerDataProvider inherits DataProvider::Observer, KafkaDat
         # before anything else is done with the options: they can name classes for the client to instantiate
         # (qore#5742)
         KafkaDataProviderBase::checkClassOptions(copts ?? {});
-        configureAsyncApiOptionsIntern(copts, new Priv::CreatorOptions());
+        KafkaDataProviderBase::configureAsyncApiOptionsIntern(copts, new Priv::CreatorOptions());
         removeAsyncApiOptions(\copts);
         # add default values automatically
         map copts{$1.key} = $1.value.default_value, ConstructorOptions.pairIterator(),

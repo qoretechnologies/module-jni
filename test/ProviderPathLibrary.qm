@@ -12,6 +12,15 @@ module ProviderPathLibrary {
 
 #! Library code that acts on a connection for its caller, as DataProvider's symbol checks do
 public namespace ProviderPathLibrary {
+#! Returns the names of the records of a child of the data provider for the caller, as "ok: <names>", or the error
+public string sub child_search(object o, string child) {
+    try {
+        return sprintf("ok: %y", (map $1.name, o.getChildProviderEx(child).searchRecords()));
+    } catch (hash<ExceptionInfo> ex) {
+        return sprintf("%s: %s", ex.err, ex.desc);
+    }
+}
+
 #! Returns "ok" if the connection's data provider is created for the caller, otherwise the error
 public string sub get_data_provider(object conn, *hash<auto> opts) {
     try {

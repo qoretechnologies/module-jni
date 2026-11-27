@@ -142,9 +142,13 @@ module AccessDataProvider {
     Data provider consumers reject sandboxed callers with <tt>APP-SANDBOX-ACCESS-DENIED</tt>.
 
     The \c path option names a local file that Java opens for reading and writing, so it is refused to calling
-    code that is restricted from the \c FILESYSTEM functional domain (\c PERMISSION-DENIED); see
-    @ref Qore::SandboxManager::isCallerRestricted() "SandboxManager::isCallerRestricted()".  A provider that host
-    code created with a path, and lent to such code, keeps reading its own database.
+    code that is restricted from the \c FILESYSTEM functional domain, also to the code that a lent object was lent
+    to (\c PERMISSION-DENIED); see @ref Qore::SandboxManager::isLentToRestricted()
+    "SandboxManager::isLentToRestricted()".  A provider that host code created with a path, and lent to such code,
+    keeps reading its own database, also through its child data providers and library code.
+    With the \c jni module loaded, a restriction of the \c FILESYSTEM domain by parse options is only a boundary
+    together with \c PO_NO_UNCONTROLLED_APIS: code that may use uncontrolled APIs can import Java classes such as
+    those of \c java.io and \c java.nio itself.
 
     @section AccessDataProvider_reading Reading Access Databases
 
@@ -203,7 +207,9 @@ module AccessDataProvider {
 
     @section AccessDataProvider_v1_0 AccessDataProvider Module Version 1.0
     - initial release
-    - the \c path option is refused to calling code that is restricted from the \c FILESYSTEM functional domain
+    - the \c path option is refused to calling code that is restricted from the \c FILESYSTEM functional domain,
+      also to the code that a lent object was lent to; the members and methods that hold and give the path are
+      private:internal, so that a subclass cannot change them
       (<a href="https://github.com/qoretechnologies/qore/issues/7811">issue 7811</a>)
 */
 
@@ -217,15 +223,25 @@ namespace Priv {
 #! Access logo
 const AccessLogo = File::readTextFile(get_script_dir() + "/access-logo.svg");
 
+#! A token of the module's own code: a data provider created with one takes its path from its creator (qore#7811)
+/** Only the module's code can create an object of this class, as its namespace is not exported, so a variant that
+    takes one cannot be called by other code: such a variant is called by the module's code with the path that the
+    creator of a parent data provider gave it, which is not checked again for the calling code
+*/
+class CreatorOptions {
+}
+
 #! Refuses a database path to calling code that is restricted from the file system (qore#7811)
 /** Java opens the file, and the module's code runs with its own %Program's options, so the restrictions of the
-    calling code are checked here before the path is used
-    (@ref Qore::SandboxManager::isCallerRestricted() "SandboxManager::isCallerRestricted()").
+    calling code are checked here before the path is used, also those of the code that a lent object was lent to, as
+    a lent object's method can give it the path of that code
+    (@ref Qore::SandboxManager::isLentToRestricted() "SandboxManager::isLentToRestricted()").  The child data
+    providers of a data provider take its creator's path without the check.
 
     @throw PERMISSION-DENIED the calling code is restricted from the \c FILESYSTEM functional domain
 */
 sub check_path_option() {
-    if (SandboxManager::isCallerRestricted(DOM_FILESYSTEM)) {
+    if (SandboxManager::isLentToRestricted(DOM_FILESYSTEM)) {
         throw "PERMISSION-DENIED", "the calling code may not use the access option \"path\", which names a local "
             "file, as it is restricted from the FILESYSTEM functional domain";
     }

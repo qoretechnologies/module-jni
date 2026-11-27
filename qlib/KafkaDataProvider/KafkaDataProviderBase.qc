@@ -135,7 +135,7 @@ public class KafkaDataProviderBase inherits AbstractDataProvider {
     configureAsyncApiOptions(hash<auto> opts) {
         # the locations of a caller that the provider may have been lent to (qore#7811)
         KafkaDataProviderBase::checkAsyncApiLocations(opts);
-        configureAsyncApiOptionsIntern(opts, new Priv::CreatorOptions());
+        KafkaDataProviderBase::configureAsyncApiOptionsIntern(opts, new Priv::CreatorOptions());
     }
 
     #! Refuses AsyncAPI locations of the file system to code restricted from it that the provider was lent to
@@ -155,9 +155,9 @@ public class KafkaDataProviderBase inherits AbstractDataProvider {
 
     #! Configures AsyncAPI validation from the options that the provider was created with, or that were checked
     /** The token of the module's code: a subclass, which code restricted from the file system can declare, cannot
-        call it (qore#7811)
+        call it, and it is final and called qualified, so that no override receives the token (qore#7811)
     */
-    private configureAsyncApiOptionsIntern(hash<auto> opts, Priv::CreatorOptions token) {
+    final private configureAsyncApiOptionsIntern(hash<auto> opts, Priv::CreatorOptions token) {
         *AsyncApi::AsyncApi3Schema new_validator = asyncapi_validator;
         *string new_channel = asyncapi_channel;
         *string asyncapi_url;
