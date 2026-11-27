@@ -107,7 +107,7 @@ public class BusyLightDataProvider inherits MqttDataProvider::AbstractFunctional
                     string json = make_json({"downlinks": (downlink,)});
                     softbinary payload = json;
                     connect();
-                    client.publish(msg.topic, payload, 2, False);
+                    publishIntern(msg.topic, payload, 2, False);
                     info("Busylight: published topic: %y R: 0x%x G: 0x%x B: 0x%x ON: 0x%x OFF: 0x%x payload: %y",
                         msg.topic, msg.red, msg.green, msg.blue, msg.on, msg.off, json);
                     return;

@@ -42,13 +42,19 @@ public class AbstractMqttDataProvider inherits DataProvider::AbstractDataProvide
         };
     }
 
-    private {
+    private:internal {
         #! The MQTT client itself
+        /** It and the connection options hold the host's credentials and key store and trust store passwords, so
+            subclasses, which restricted code can declare, use them only through the token-gated methods of this
+            class (qore#7866)
+        */
         MqttClient client;
 
         #! Connection options
         MqttConnectionOptions opts;
+    }
 
+    private {
         #! Subscription topic filter
         string topic;
 
@@ -115,6 +121,39 @@ public class AbstractMqttDataProvider inherits DataProvider::AbstractDataProvide
     */
     string getMessageFormat() {
         return message_format;
+    }
+
+    #! Returns the MQTT client for the classes of this module (qore#7866)
+    /** The token is a class of the module that code outside it cannot name or create, so only the module's own
+        classes can call it; a subclass that other code declares cannot
+    */
+    final private *MqttClient getMqttClientIntern(Priv::CreatorOptions token) {
+        return client;
+    }
+
+    #! Returns the connection options of the MQTT client for the classes of this module (qore#7866)
+    /** @see getMqttClientIntern()
+    */
+    final private *MqttConnectionOptions getMqttOptionsIntern(Priv::CreatorOptions token) {
+        return opts;
+    }
+
+    #! Sets the MQTT client and its connection options for the classes of this module (qore#7866)
+    /** @param cinfo the hash that getClient() returns
+        @param token a token of the module's code
+
+        @see getMqttClientIntern()
+    */
+    final private setMqttClientIntern(hash<auto> cinfo, Priv::CreatorOptions token) {
+        client = cinfo.client;
+        opts = cinfo.opts;
+    }
+
+    #! Releases the MQTT client for the classes of this module (qore#7866)
+    /** @see getMqttClientIntern()
+    */
+    final private clearMqttClientIntern(Priv::CreatorOptions token) {
+        delete client;
     }
 
     #! The options that name local files that the client reads

@@ -537,8 +537,7 @@ public class AbstractFunctionalMqttDataProvider inherits AbstractMqttDataProvide
         hash<auto> cinfo = creator_options
             ? AbstractMqttDataProvider::getClient(copts, logger, new Priv::CreatorOptions())
             : AbstractMqttDataProvider::getClient(copts, logger);
-        client = cinfo.client;
-        opts = cinfo.opts;
+        setMqttClientIntern(cinfo, new Priv::CreatorOptions());
         topic = copts.subscription_topic;
         qos = copts.subscription_qos;
         message_format = copts.message_format;
@@ -631,11 +630,13 @@ public class AbstractFunctionalMqttDataProvider inherits AbstractMqttDataProvide
 
     #! Disconnects the client and stops generating events
     private stop() {
-        if (client && client.isConnected()) {
-            client.disconnect();
-            debug("MQTT: Disconnected from %y", client.getServerURI());
+        Priv::CreatorOptions token();
+        *MqttClient mc = getMqttClientIntern(token);
+        if (mc && mc.isConnected()) {
+            mc.disconnect();
+            debug("MQTT: Disconnected from %y", mc.getServerURI());
         }
-        delete client;
+        clearMqttClientIntern(token);
     }
 
     #! Connects and starts receiving messages
@@ -645,7 +646,7 @@ public class AbstractFunctionalMqttDataProvider inherits AbstractMqttDataProvide
             lang::Class cb_cls = load_class("org/eclipse/paho/mqttv5/client/MqttCallback");
             mqtt_callback = cast<MqttCallback>(
                 implement_interface(new QoreInvocationHandler(\mqttCallbackHandler()), cb_cls));
-            client.setCallback(mqtt_callback);
+            getMqttClientIntern(new Priv::CreatorOptions()).setCallback(mqtt_callback);
 
             connect();
 
@@ -654,7 +655,7 @@ public class AbstractFunctionalMqttDataProvider inherits AbstractMqttDataProvide
             mqtt_sub.setNoLocal(no_local);
             mqtt_sub.setRetainAsPublished(retain_as_published);
             mqtt_sub.setRetainHandling(retain_handling);
-            client.subscribe((mqtt_sub,));
+            getMqttClientIntern(new Priv::CreatorOptions()).subscribe((mqtt_sub,));
             debug("MQTT: Listening on topic: %y (no_local: %y, retain_as_published: %y, retain_handling: %d)",
                 topic, no_local, retain_as_published, retain_handling);
         } catch (hash<ExceptionInfo> ex) {
@@ -667,14 +668,29 @@ public class AbstractFunctionalMqttDataProvider inherits AbstractMqttDataProvide
         }
     }
 
+    #! Publishes a message with the provider's client, for subclasses (qore#7866)
+    /** A subclass, also one that another module declares, publishes with the provider's client this way: it cannot
+        read the client, which holds the host's credentials, and publishing is what a provider's messages do anyway
+
+        @param topic the topic
+        @param payload the payload
+        @param qos the MQTT quality of service
+        @param retained if the broker retains the message
+    */
+    private publishIntern(string topic, binary payload, int qos, bool retained) {
+        getMqttClientIntern(new Priv::CreatorOptions()).publish(topic, payload, qos, retained);
+    }
+
     #! Connects to the server if necessary
     private connect() {
-        if (client.isConnected()) {
+        Priv::CreatorOptions token();
+        MqttClient mc = getMqttClientIntern(token);
+        if (mc.isConnected()) {
             return;
         }
-        debug("MQTT: Connecting to server %y", client.getServerURI());
-        client.connect(opts);
-        debug("MQTT: Connected to server %y", client.getServerURI());
+        debug("MQTT: Connecting to server %y", mc.getServerURI());
+        mc.connect(getMqttOptionsIntern(token));
+        debug("MQTT: Connected to server %y", mc.getServerURI());
     }
 
     #! Reports an error raised in an MQTT callback
@@ -967,7 +983,7 @@ public class AbstractFunctionalMqttDataProvider inherits AbstractMqttDataProvide
                         mqtt_msg.setProperties(props);
                     }
 
-                    client.publish(msg.topic, mqtt_msg);
+                    getMqttClientIntern(new Priv::CreatorOptions()).publish(msg.topic, mqtt_msg);
                     debug("MQTT: Published topic: %y qos: %y payload: %y retained: %y", msg.topic,
                         msg.qos, msg.payload, msg.retained);
                     break;

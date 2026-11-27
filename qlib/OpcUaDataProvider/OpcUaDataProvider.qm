@@ -561,6 +561,13 @@ public const AppName = "OpcUA";
 }
 
 namespace Priv {
+#! A token of the module's own code (qore#7866)
+/** Only the module's code can create an object of this class, as its namespace is not exported, so a method that
+    takes one cannot be called by other code, also not by a subclass that other code declares
+*/
+class ModuleToken {
+}
+
 #! OPC UA logo
 const OpcUaLogo = File::readTextFile(get_script_dir() + "/opc-ua-logo.svg");
 
