@@ -26,10 +26,12 @@ import org.apache.poi.ss.usermodel.DateUtil;
 import org.apache.poi.ss.usermodel.FormulaError;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.ss.util.CellRangeAddress;
 
 import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.Iterator;
+import java.util.List;
 
 /**
  * The rows of a worksheet of a workbook loaded in memory with the POI usermodel.
@@ -109,6 +111,12 @@ final class WorkbookSheetSource implements SheetSource {
     @Override
     public String getSheetName() {
         return sheet.getSheetName();
+    }
+
+    @Override
+    public List<CellRangeAddress> readMergedRegions() {
+        // the usermodel holds the merged regions of the sheet
+        return sheet.getMergedRegions();
     }
 
     @Override

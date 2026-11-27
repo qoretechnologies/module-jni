@@ -304,7 +304,9 @@ public class ExcelWriteDataProvider inherits DataProvider::AbstractDataProvider 
         };
     }
 
-    private {
+    private:internal {
+        # private:internal: a subclass, which code restricted from the file system can declare, cannot read or
+        # change them (qore#7811)
         #! The output path
         *string path;
 

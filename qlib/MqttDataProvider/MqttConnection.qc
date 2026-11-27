@@ -32,7 +32,8 @@ public class MqttConnection inherits ConnectionProvider::AbstractConnectionWithI
     /** The clients connect to an MQTT broker, also those of BusyLightConnection
     */
     private final int getConnectionDomainsImpl() {
-        return DOM_NETWORK;
+        # the clients also read the keystore and truststore files of the options (qore#7811)
+        return DOM_NETWORK | DOM_FILESYSTEM;
     }
 
     public {
@@ -130,7 +131,24 @@ public class MqttConnection inherits ConnectionProvider::AbstractConnectionWithI
         @return a data provider object for this connection, if supported
     */
     AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
-        return new MqttDataProvider(orig_opts - "disable_automatic_pings" + {"url": real_url} + constructor_options);
+        # the data provider is created from the members that the connection's creator set and only with options that
+        # cannot change its target, for code that the host lent the connection to and that is restricted from a
+        # domain of its clients (ConnectionProvider's getLentDataProviderSource(); qore#7811)
+        return new MqttDataProvider(self, constructor_options);
+    }
+
+    #! Returns the object that a data provider of the connection is created from for the calling code (qore#7811)
+    /** The connection itself, or, for code that the host lent the connection to and that is restricted from a
+        domain of its clients, a private copy with the members that its creator set; such code may give the data
+        provider only the options that cannot change its target (see
+        \c ConnectionProvider::AbstractConnection::getLentDataProviderSource())
+
+        @param constructor_options the constructor options of the data provider
+
+        @return the object to take the options of the data provider from
+    */
+    MqttConnection getDataProviderSource(*hash<auto> constructor_options) {
+        return cast<MqttConnection>(getLentDataProviderSource(constructor_options));
     }
 
     #! Returns the string type for the first data provider type
@@ -181,7 +199,12 @@ public class MqttConnection inherits ConnectionProvider::AbstractConnectionWithI
         @debug {
             LoggerWrapper::debug("MqttConnection::getImpl() connect: %y rtopts: %y", connect, rtopts);
         }
-        hash<auto> copts = MqttDataProvider::getClient(orig_opts + {"url": real_url} + rtopts, logger);
+        # ConnectionProvider confines the members and runtime options for code that the host lent the connection to
+        # the members of the creator and only runtime options that cannot change the target for code that the host
+        # lent the connection to, also when a subclass calls this method directly (qore#7811)
+        MqttConnection src = cast<MqttConnection>(getLentTargetSource(rtopts));
+        hash<auto> copts = MqttDataProvider::getClient(src.orig_opts + {"url": src.real_url} + rtopts, logger,
+            new Priv::CreatorOptions());
         if (connect) {
             copts.client.connect(copts.opts);
         }

@@ -86,10 +86,33 @@ public class JmsDataProviderBase inherits DataProvider::AbstractDataProvider {
         \c %%module-cmd(jni) add-classpath directives in your code.
     */
     static ConnectionFactory createConnectionFactory(hash<auto> copts) {
+        return JmsDataProviderBase::createConnectionFactoryIntern(copts, True);
+    }
+
+    #! Creates a JMS ConnectionFactory from the options of a connection's creator (qore#7811)
+    /** For the module's connections: the members and options of a connection are confined for code that the host lent
+        it to (ConnectionProvider's getLentTargetSource() and getLentDataProviderSource())
+    */
+    static ConnectionFactory createConnectionFactory(hash<auto> copts, Priv::CreatorOptions token) {
+        return JmsDataProviderBase::createConnectionFactoryIntern(copts, False);
+    }
+
+    #! Creates a JMS ConnectionFactory from options
+    /** @param copts the connection options
+        @param check_caller if the options are the calling code's, so that a \c provider_classpath is checked
+    */
+    private:internal static ConnectionFactory createConnectionFactoryIntern(hash<auto> copts, bool check_caller) {
+        # private:internal: a subclass, which code restricted from the file system can declare, cannot call it
+        # (qore#7811)
         # both options make Java load code that the sandbox does not control: before either is used (qore#5742);
         # the connection factory class is always named, so code that may not load arbitrary classes cannot use JMS
         if (copts.provider_classpath) {
             Jni::org::qore::jni::check_class_option("jakarta-jms", "provider_classpath");
+            # the classpath names local files that Java loads as code: the module's own Program would add them, so
+            # the calling code's file system restriction is checked here (qore#7811)
+            if (check_caller) {
+                Priv::check_path_option("provider_classpath");
+            }
         }
         Jni::org::qore::jni::check_class_option("jakarta-jms", "connection_factory_class");
 

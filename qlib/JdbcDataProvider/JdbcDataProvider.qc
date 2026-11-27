@@ -106,6 +106,8 @@ public class JdbcDataProvider inherits DataProvider::AbstractDataProvider {
     constructor(*hash<auto> options) {
         # Java I/O that the sandbox does not control: sandboxed code is refused (qore#5632)
         DataProviderActionCatalog::checkSandboxAccess(JdbcDataProvider::AppName);
+        # code restricted from the connection's domains uses the data provider of a lent connection (qore#7811)
+        Priv::check_creator();
         *hash<auto> copts = checkOptions("JDBC-CONSTRUCTOR-ERROR", ConstructorOptions, options);
         if (!copts.url) {
             error("JDBC-CONSTRUCTOR-ERROR", "the \"url\" option is required");
@@ -126,7 +128,8 @@ public class JdbcDataProvider inherits DataProvider::AbstractDataProvider {
     constructor(JdbcConnection conn, *hash<auto> options) {
         # Java I/O that the sandbox does not control: sandboxed code is refused (qore#5632)
         DataProviderActionCatalog::checkSandboxAccess(JdbcDataProvider::AppName);
-        hash<auto> copts = conn.getJdbcOptions();
+        # the options of the connection's creator for code that was lent the connection (qore#7811)
+        hash<auto> copts = conn.getDataProviderSource(options).getJdbcOptions();
         if (options) {
             copts += options;
         }

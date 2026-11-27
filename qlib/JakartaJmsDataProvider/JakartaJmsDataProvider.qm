@@ -195,6 +195,16 @@ module JakartaJmsDataProvider {
     The \c provider_classpath and \c connection_factory_class options are refused to sandboxed code
       (\c JNI-SANDBOX-ERROR).
 
+    The \c provider_classpath option names local files that Java loads as code, so it is refused to calling code
+    that is restricted from the \c FILESYSTEM functional domain, also to the code that a lent object was lent to
+    (\c PERMISSION-DENIED); see @ref Qore::SandboxManager::isLentToRestricted()
+    "SandboxManager::isLentToRestricted()".
+    With the \c jni module loaded, a restriction of the \c FILESYSTEM domain by parse options is only a boundary
+    together with \c PO_NO_UNCONTROLLED_APIS: code that may use uncontrolled APIs can import Java classes such as
+    those of \c java.io and \c java.nio itself.
+    A connection that host code lent to such code creates its data provider only from the members and options that
+    its creator gave it (\c ConnectionProvider::AbstractConnection::getLentDataProviderSource()).
+
     @subsection jakartajmsdataprovider_usecases Business Use Cases
 
     JMS is the standard Java messaging API used across enterprise systems. Common use cases include:
@@ -417,6 +427,16 @@ module JakartaJmsDataProvider {
 
     @section JakartaJmsDataProvider_v1_0 JakartaJmsDataProvider Module Version 1.0
     - initial release
+    - <b>Behavior change</b>: the \c provider_classpath option is refused to calling code that is restricted from the
+      \c FILESYSTEM functional domain, also to the code that a lent object was lent to: a method of a host object
+      that was lent to such code and creates a data provider with a path of the host gets \c PERMISSION-DENIED,
+      and uses Qore::SandboxManager::callWithSystemPolicy() for it
+      (<a href="https://github.com/qoretechnologies/qore/issues/7811">issue 7811</a>)
+    - <b>Behavior change</b>: a connection that host code lent to code restricted from a domain of its clients creates
+      its data provider only from the members and options that its creator gave it: such code can give it no data
+      provider options (also none that name no path, such as \c destination, \c message_selector, \c client_id or
+      \c session_mode) and change none of its members, so that it cannot make the data provider read the files that
+      the options name (<a href="https://github.com/qoretechnologies/qore/issues/7811">issue 7811</a>)
 */
 
 #! contains all public definitions in the JakartaJmsDataProvider module
@@ -426,6 +446,32 @@ public const AppName = "JakartaJMS";
 }
 
 namespace Priv {
+#! Refuses an option that names local paths to calling code that is restricted from the file system (qore#7811)
+/** The module's code adds the paths to the classpath of its own %Program, so the restrictions of the calling code
+    are not applied by the \c add-classpath module command: they are checked here before the paths are used
+    (@ref Qore::SandboxManager::isLentToRestricted() "SandboxManager::isLentToRestricted()").  A connection that the
+    host lent creates its data provider from the options that its creator gave, without the check
+    (\c ConnectionProvider::AbstractConnection::getLentDataProviderSource()).
+
+    @param option the name of the option, for the error
+
+    @throw PERMISSION-DENIED the calling code is restricted from the \c FILESYSTEM functional domain
+*/
+sub check_path_option(string option) {
+    if (SandboxManager::isLentToRestricted(DOM_FILESYSTEM)) {
+        throw "PERMISSION-DENIED", sprintf("the calling code may not use the jakarta-jms option %y, which names "
+            "local files, as it is restricted from the FILESYSTEM functional domain", option);
+    }
+}
+
 #! JMS logo
 const JmsLogo = File::readTextFile(get_script_dir() + "/jms-logo.svg");
+
+#! A token of the module's own code: a factory created with one takes its options from its creator (qore#7811)
+/** Only the module's code can create an object of this class, as its namespace is not exported, so a variant that
+    takes one cannot be called by other code: such a variant is called by the module's code with the options that
+    the creator of a connection gave it, which are not checked again for the calling code
+*/
+class CreatorOptions {
+}
 }

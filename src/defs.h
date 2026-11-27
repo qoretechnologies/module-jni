@@ -720,6 +720,8 @@ DLLLOCAL void jni_teardown_step(const char* step, F&& f) noexcept {
     runs in its own Program, as a call of a method of a Qore object does in Qore.
 
     @throw BasicException the calling code is governed by a sandbox and \a pgm is not the Program of the calling code
+    @throw QoreJniException \c JNI-SANDBOX-ERROR: once sandboxed code has used Java, the call was made by a Java object
+    whose origin cannot be determined (qore#7081)
 */
 DLLLOCAL void jni_check_governed_caller_reaches(const QoreProgram* pgm);
 
@@ -738,6 +740,53 @@ struct JniJavaCallerRecord {
     %Qore cleared (the caller of the Java code that supplies the value), else a record that reaches no Program
 */
 DLLLOCAL JniJavaCallerRecord jni_java_caller_owner();
+
+class Env;
+
+//! The origin of a Java object that sandboxed code made or handed over, as jni_origin_get() finds it (qore#7081)
+struct JniJavaOrigin {
+    //! true if an origin is recorded for the object
+    bool found = false;
+    //! true if the origin reaches no Program: more than one Program supplied the object, its Program has been
+    //! deleted, or the Program of the code that supplied it was not known
+    bool deny = false;
+    //! the Program of the origin, held with a dependency reference while this object exists, if found and not denied
+    QoreProgram* pgm = nullptr;
+
+    DLLLOCAL JniJavaOrigin() = default;
+    DLLLOCAL ~JniJavaOrigin();
+
+    JniJavaOrigin(const JniJavaOrigin&) = delete;
+    JniJavaOrigin& operator=(const JniJavaOrigin&) = delete;
+};
+
+//! Records the code of \a rec as the origin of the Java object \a obj (qore#7081)
+/** The origin is recorded by the Program's ID, in a map of QoreJavaApi with weak keys, which neither keeps the object
+    alive nor the Program: a Program is looked up by its ID, among the Programs with jni data, when the origin is
+    used.  An origin once recorded is kept; another one makes the object reach no Program.  A record that reaches no
+    Program is recorded as such.
+
+    @throw JavaException the Java call failed
+*/
+DLLLOCAL void jni_origin_record(Env& env, jobject obj, const JniJavaCallerRecord& rec);
+
+//! Records the origin of a Java object used as a %Qore closure that %Qore code hands to Java (qore#7081)
+/** Once sandboxed code has used Java in the process: the Program of the %Qore object \a o of the Java object, if that
+    Program is sandboxed, whatever code hands it over.  The objects of other Programs are not recorded: Java objects
+    that a host shares with sandboxed code are handed back to it, and must not become the sandboxed Program's.  Costs
+    only a load of the latch when no sandboxed code has used Java.
+
+    @throw JavaException the Java call failed
+*/
+DLLLOCAL void jni_origin_record_handed_over(Env& env, jobject obj, const QoreObject* o);
+
+//! Returns true if an origin can have been recorded (once sandboxed code has used Java and recorded one)
+DLLLOCAL bool jni_origins_recorded();
+
+//! Finds the origin of the Java object \a obj (qore#7081)
+/** @throw JavaException the Java call failed
+*/
+DLLLOCAL void jni_origin_get(Env& env, jobject obj, JniJavaOrigin& rv);
 
 //! Makes Java threads whose Qore caller is not known reach no Program by a Program pointer from now on (qore#7023)
 /** As once code that a sandbox governs has called Java in the process (see jni_governed_caller_reaches()); for the

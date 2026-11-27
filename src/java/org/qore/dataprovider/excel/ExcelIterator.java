@@ -221,7 +221,7 @@ public class ExcelIterator extends qore.Qore.AbstractIterator implements java.io
         Collections.addAll(this.headers, headers);
     }
 
-    public void setHeaderCells(String col_start, int row_start, String col_end, int row_end) {
+    public void setHeaderCells(String col_start, int row_start, String col_end, int row_end) throws QoreException {
         header_row_end = row_end == -1 ? row_start : row_end;
         // the header row is read in a pass of its own
         try (RowSeeker rows = new RowSeeker(getSource().openRows())) {
@@ -239,11 +239,14 @@ public class ExcelIterator extends qore.Qore.AbstractIterator implements java.io
             if (!col_end.equals("-")) {
                 end_cell = CellReference.convertColStringToIndex(col_end);
             }
+            // for each header, true if a merged cell gave it its value (qore#7751)
+            ArrayList<Boolean> filled = new ArrayList<Boolean>();
             while (true) {
                 SheetSource.Cell cell = row.getCell(cell_no);
                 if (cell == null) {
                     break;
                 }
+                filled.add(row.isFilled(cell_no));
                 CellType type = cell.getCellType();
                 if (type == CellType.BLANK) {
                     headers.add("BLANK");
@@ -280,8 +283,67 @@ public class ExcelIterator extends qore.Qore.AbstractIterator implements java.io
                 }
                 ++cell_no;
             }
+            // a merged cell whose value fills the header row names several columns, whose values would replace each
+            // other in the records (qore#7751)
+            checkFilledHeaders("EXCEL-READ-OPTION-ERROR", headers, filled);
         } catch (IOException e) {
             throw new UncheckedIOException(e);
+        }
+    }
+
+    /**
+     * Sets how merged cells are read (qore#7751)
+     *
+     * Call this before the header row is read and before the first iteration.
+     *
+     * @param mode "first" (the default): a merged cell's value is in its first cell only, as the sheet stores it;
+     * "fill_right": each cell of a merged range in the range's first row has its value, so that a group name merged
+     * over several columns names each of them; "fill": each cell of the range has its value
+     *
+     * @throws QoreException EXCEL-READ-OPTION-ERROR if the mode is unknown
+     * @throws IOException if the merged ranges of a worksheet cannot be read
+     */
+    public void setMergedCells(String mode) throws QoreException, IOException {
+        if (!"first".equals(mode) && !"fill_right".equals(mode) && !"fill".equals(mode)) {
+            throw new QoreException("EXCEL-READ-OPTION-ERROR", String.format("invalid \"merged_cells\" option "
+                + "\"%s\"; expecting \"first\", \"fill_right\", or \"fill\"", mode));
+        }
+        SheetSource source = getSource();
+        closeRows();
+        // a mode set before is replaced
+        if (source instanceof MergedCellSheetSource) {
+            source = ((MergedCellSheetSource)source).getSource();
+            res.source = source;
+        }
+        if ("first".equals(mode)) {
+            return;
+        }
+        java.util.List<org.apache.poi.ss.util.CellRangeAddress> regions = source.readMergedRegions();
+        // the source is closed with the iterator through the new source
+        res.source = new MergedCellSheetSource(source, regions, "fill".equals(mode));
+    }
+
+    /**
+     * Raises an error if a header name is repeated in a column that a merged cell gave its value, as a group name
+     * that fills the header row: the values of the columns would replace each other in the records (qore#7751)
+     *
+     * @param err the error code
+     * @param headers the headers
+     * @param filled for each header, true if a merged cell gave it its value
+     */
+    static void checkFilledHeaders(String err, java.util.List<String> headers, java.util.List<Boolean> filled)
+            throws QoreException {
+        java.util.HashMap<String, Integer> count = new java.util.HashMap<String, Integer>();
+        for (String header : headers) {
+            count.merge(header, 1, Integer::sum);
+        }
+        for (int i = 0; i < headers.size() && i < filled.size(); ++i) {
+            if (filled.get(i) && count.get(headers.get(i)) > 1) {
+                throw new QoreException(err, String.format("the header row names more than one column \"%s\" "
+                    + "with the \"merged_cells\" option, as a merged cell gives its value to several header cells; "
+                    + "the values of the columns would replace each other in the records; read the header row as "
+                    + "data, or give the column names with \"headers\"; headers: %s", headers.get(i), headers));
+            }
         }
     }
 
@@ -622,8 +684,10 @@ public class ExcelIterator extends qore.Qore.AbstractIterator implements java.io
             }
             row_data.put(key, val);
 
-            if (formula_field != null && cell != null) {
-                String formula = cell.getCellFormula();
+            // the formula of the row's own cell, not of the merged cell whose value fills it (qore#7751)
+            SheetSource.Cell own = formula_field == null || cell == null ? null : row.getOwnCell(cell_no);
+            if (own != null) {
+                String formula = own.getCellFormula();
                 if (formula != null) {
                     if (formulas == null) {
                         formulas = new Hash();

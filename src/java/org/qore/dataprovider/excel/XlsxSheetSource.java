@@ -68,6 +68,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.zip.ZipEntry;
@@ -671,6 +672,22 @@ final class XlsxSheetSource implements SheetSource {
     }
 
     @Override
+    public List<CellRangeAddress> readMergedRegions() throws IOException {
+        if (pkg == null) {
+            throw new IOException("the workbook is closed");
+        }
+        if (sheet_part == null) {
+            // a chart sheet has no cells and no merged regions
+            return new ArrayList<CellRangeAddress>();
+        }
+        // the merged regions follow the rows of the sheet: a pass skips the rows, whose cells it does not read
+        try (XlsxRowReader rows = new XlsxRowReader()) {
+            rows.skipToMergedRegions();
+        }
+        return new ArrayList<CellRangeAddress>(merged_regions);
+    }
+
+    @Override
     public void enableFormulas() {
         read_formulas = true;
     }
@@ -988,6 +1005,35 @@ final class XlsxSheetSource implements SheetSource {
             } catch (XMLStreamException e) {
                 throw new IOException("invalid worksheet XML: " + e.getMessage(), e);
             }
+        }
+
+        /**
+         * Skips the rows of the sheet without reading their cells, and reads the merged regions that follow them
+         * (qore#7751)
+         */
+        void skipToMergedRegions() throws IOException {
+            if (xr == null) {
+                return;
+            }
+            try {
+                while (xr.hasNext()) {
+                    int ev = xr.next();
+                    if (ev == XMLStreamConstants.START_ELEMENT) {
+                        if (in_sheet_data || !NS_MAIN.equals(xr.getNamespaceURI())) {
+                            skipElement(xr);
+                        } else if ("sheetData".equals(xr.getLocalName())) {
+                            in_sheet_data = true;
+                        }
+                    } else if (ev == XMLStreamConstants.END_ELEMENT && in_sheet_data) {
+                        readMergedRegions();
+                        break;
+                    }
+                }
+            } catch (XMLStreamException e) {
+                throw new IOException("invalid worksheet XML: " + e.getMessage(), e);
+            }
+            // the reader is done; after an error, the caller closes it
+            close();
         }
 
         /**

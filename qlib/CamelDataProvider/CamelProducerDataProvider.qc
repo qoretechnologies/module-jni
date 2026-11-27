@@ -92,7 +92,9 @@ public class CamelProducerDataProvider inherits DataProvider::AbstractDataProvid
         };
     }
 
-    private {
+    private:internal {
+        # private:internal: a subclass, which code restricted from the file system can declare, cannot read or
+        # change them (qore#7811)
         #! The Camel context
         QoreCamelContext ctx;
     }
@@ -128,6 +130,12 @@ public class CamelProducerDataProvider inherits DataProvider::AbstractDataProvid
         if (!scheme || !InMemorySchemes{scheme}) {
             Jni::org::qore::jni::check_class_option("camel", "endpoint", "selects a Camel component that can load "
                 "classes, run code or access files");
+            # a component can access local files; the code that the provider was lent to counts (qore#7811)
+            if (SandboxManager::isLentToRestricted(DOM_FILESYSTEM)) {
+                throw "PERMISSION-DENIED", "the calling code may not use a camel producer endpoint other than a plain "
+                    "endpoint name of an in-memory component, which can access local files, as it is restricted from "
+                    "the FILESYSTEM functional domain";
+            }
         }
         return ctx.sendBodyAndHeaders(req.endpoint, req.body, req.headers);
     }

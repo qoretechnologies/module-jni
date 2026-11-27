@@ -152,6 +152,37 @@ public class ExcelReadDataProvider inherits DataProvider::AbstractDataProvider {
                     },
                 ),
             },
+            "merged_cells": <DataProviderOptionInfo>{
+                "display_name": "Merged Cells",
+                "short_desc": "How the cells of merged ranges are read",
+                "type": AbstractDataProviderType::get(StringType),
+                "desc": "How the cells of a merged range are read, in the header row and in the data:\n\n"
+                    "- `first` (the default): a merged range's value is in its first cell only, as the file stores "
+                    "it, and its other cells are empty\n"
+                    "- `fill_right`: each cell of the range's first row has the range's value, so that a group name "
+                    "merged over several columns names each of them; the rows of the range below its first are "
+                    "empty\n"
+                    "- `fill`: each cell of the range has the range's value\n\n"
+                    "Only the rows that the file holds are read: an empty row under a merged range is not added.",
+                "default_value": "first",
+                "allowed_values": (
+                    <AllowedValueInfo>{
+                        "value": "first",
+                        "display_name": "First Cell",
+                        "short_desc": "The value is in the range's first cell only",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "fill_right",
+                        "display_name": "Fill Right",
+                        "short_desc": "Each cell of the range's first row has its value",
+                    },
+                    <AllowedValueInfo>{
+                        "value": "fill",
+                        "display_name": "Fill",
+                        "short_desc": "Each cell of the range has its value",
+                    },
+                ),
+            },
             "error_field": <DataProviderOptionInfo>{
                 "display_name": "Error Field",
                 "short_desc": "Return the errors of each row's cells in a field with this name",
@@ -643,8 +674,11 @@ public class ExcelReadDataProvider inherits DataProvider::AbstractDataProvider {
             return;
         }
         resolveSheet();
-        it = new ExcelIterator(getWorkbookFile().getPath(), sheet);
-        ExcelReadDataProvider::configureIterator(it, opts);
+        # set once configured: a configuration that fails is made again by the next call (qore#7751)
+        ExcelIterator i = new ExcelIterator(getWorkbookFile().getPath(), sheet);
+        on_error i.close();
+        ExcelReadDataProvider::configureIterator(i, opts);
+        it = i;
     }
 
     #! Configures an iterator from processed options
@@ -658,6 +692,10 @@ public class ExcelReadDataProvider inherits DataProvider::AbstractDataProvider {
         \c error_field is the name of a column or of the formula field
     */
     static configureIterator(ExcelIterator it, *hash<auto> opts) {
+        # set first: the header row is read with the merged cells as set (qore#7751)
+        if (opts.merged_cells && opts.merged_cells != "first") {
+            it.setMergedCells(opts.merged_cells);
+        }
         if (opts.header_cells) {
             it.setHeaderCells(opts.header_cells.start.column, opts.header_cells.start.row,
                 opts.header_cells.end.column, opts.header_cells.end.row);

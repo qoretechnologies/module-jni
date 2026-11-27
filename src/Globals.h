@@ -181,6 +181,8 @@ public:
     DLLLOCAL static jmethodID methodQoreSandboxExpandClasspath;                   // static void expandClasspath(ResolvedClasspath, int)
     DLLLOCAL static jmethodID methodQoreJavaApiGetStackTrace;                     // StackTraceElement[] getStackTrace()
     DLLLOCAL static jmethodID methodQoreJavaApiGetStackProgramPtrs;               // long[] getStackProgramPtrs()
+    DLLLOCAL static jmethodID methodQoreJavaApiSetOrigin;                         // void setOrigin(Object, long)
+    DLLLOCAL static jmethodID methodQoreJavaApiGetOrigin;                         // long getOrigin(Object)
     DLLLOCAL static GlobalReference<jclass> classJavaCollectionTypes;             // org.qore.jni.JavaCollectionTypes
     DLLLOCAL static jmethodID methodJavaCollectionTypesIsStringKeyMap;            // boolean isStringKeyMap(Object)
     DLLLOCAL static jmethodID methodJavaCollectionTypesMayBeListOrMap;            // boolean mayBeListOrMap(Class)

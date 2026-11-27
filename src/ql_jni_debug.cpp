@@ -41,6 +41,7 @@
 #include <cerrno>
 
 #include <atomic>
+#include <chrono>
 #include <condition_variable>
 #include <map>
 #include <mutex>
@@ -917,6 +918,13 @@ static QoreValue f_dbg_jni_object_program_id(const QoreListNode* args, RuntimeCo
     return pgm ? static_cast<int64>(pgm->getProgramId()) : static_cast<int64>(-1);
 }
 
+//! Returns true once code that a sandbox governs has called Java in the process, or with the strict policy of Java
+//! threads (qore#7081)
+static QoreValue f_dbg_jni_java_thread_policy_strict(const QoreListNode* args, RuntimeConfig& rtcfg,
+        ExceptionSink* xsink) {
+    return jni::jni_java_thread_policy_strict();
+}
+
 //! Ends the hold of dbg_jni_hold_context_lock() or dbg_jni_hold_context_program()
 static QoreValue f_dbg_jni_release_context_hold(const QoreListNode* args, RuntimeConfig& rtcfg,
         ExceptionSink* xsink) {
@@ -924,7 +932,52 @@ static QoreValue f_dbg_jni_release_context_hold(const QoreListNode* args, Runtim
     return QoreValue();
 }
 
+namespace {
+//! the number of times that the teardown of a Program marked the state of its jdbc connections deleted, and the
+//! number of them that waited for the jdbc operations of other threads (qore#7665)
+std::mutex jdbc_deleted_wait_lock;
+std::condition_variable jdbc_deleted_wait_cond;
+int64 jdbc_deleted_marks = 0;
+int64 jdbc_deleted_waits = 0;
+}
+
+void dbg_jni_jdbc_deleted_wait_entered(bool waits) {
+    std::lock_guard<std::mutex> lock(jdbc_deleted_wait_lock);
+    ++jdbc_deleted_marks;
+    if (waits) {
+        ++jdbc_deleted_waits;
+    }
+    jdbc_deleted_wait_cond.notify_all();
+}
+
+//! Waits until the teardown of Programs has marked the state of their jdbc connections deleted \a count times in
+//! all, or for \a timeout_ms milliseconds, and returns {"marks": <count>, "waits": <the marks that waited for
+//! operations of other threads>, "timeout": <true if the count was not reached>}; with 0, returns the numbers at once
+static QoreValue f_dbg_jni_jdbc_deleted_wait(const QoreListNode* args, RuntimeConfig& rtcfg, ExceptionSink* xsink) {
+    int64 count = get_param_value(args, 0).getAsBigInt();
+    int64 timeout_ms = get_param_value(args, 1).getAsBigInt();
+    int64 marks;
+    int64 waits;
+    bool reached;
+    {
+        std::unique_lock<std::mutex> lock(jdbc_deleted_wait_lock);
+        // the bound is a guard against a test that would never end, not a synchronization
+        reached = jdbc_deleted_wait_cond.wait_for(lock, std::chrono::milliseconds(timeout_ms),
+            [count] () { return jdbc_deleted_marks >= count; });
+        marks = jdbc_deleted_marks;
+        waits = jdbc_deleted_waits;
+    }
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    rv->setKeyValue("marks", marks, xsink);
+    rv->setKeyValue("waits", waits, xsink);
+    rv->setKeyValue("timeout", !reached, xsink);
+    return rv.release();
+}
+
 void init_jni_debug_functions(QoreNamespace& ns) {
+    ns.addBuiltinVariant("dbg_jni_jdbc_deleted_wait", f_dbg_jni_jdbc_deleted_wait, QCF_NO_FLAGS, QDOM_DEFAULT,
+        hashTypeInfo, 2, bigIntTypeInfo, QoreValue(), "count", softBigIntTypeInfo, QoreValue((int64)60000),
+        "timeout_ms");
     ns.addBuiltinVariant("dbg_jni_hold_context_lock", f_dbg_jni_hold_context_lock, QCF_NO_FLAGS, QDOM_DEFAULT,
         nothingTypeInfo);
     ns.addBuiltinVariant("dbg_jni_hold_context_program", f_dbg_jni_hold_context_program, QCF_NO_FLAGS, QDOM_DEFAULT,
@@ -953,6 +1006,8 @@ void init_jni_debug_functions(QoreNamespace& ns) {
         bigIntTypeInfo, 1, codeTypeInfo, QoreValue(), "code");
     ns.addBuiltinVariant("dbg_jni_object_program_id", f_dbg_jni_object_program_id, QCF_NO_FLAGS, QDOM_DEFAULT,
         bigIntTypeInfo, 1, objectTypeInfo, QoreValue(), "obj");
+    ns.addBuiltinVariant("dbg_jni_java_thread_policy_strict", f_dbg_jni_java_thread_policy_strict, QCF_NO_FLAGS,
+        QDOM_DEFAULT, boolTypeInfo);
     ns.addBuiltinVariant("dbg_jni_wait_child_status", f_dbg_jni_wait_child_status, QCF_NO_FLAGS, QDOM_DEFAULT,
         stringTypeInfo, 1, bigIntTypeInfo, QoreValue(), "pid");
     ns.addBuiltinVariant("dbg_jni_describe_throwable", f_dbg_jni_describe_throwable, QCF_NO_FLAGS, QDOM_DEFAULT,

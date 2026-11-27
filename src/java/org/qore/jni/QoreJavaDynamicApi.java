@@ -197,11 +197,6 @@ public class QoreJavaDynamicApi {
         return f.get(obj);
     }
 
-    //! returns a lookup object for the program's context
-    public static MethodHandles.Lookup lookup() {
-        return MethodHandles.lookup();
-    }
-
     //! sets the Java caller context and runs ServiceLoader.load()
     public static <S> ServiceLoader<S> loadServiceLoader(Class<S> c, ClassLoader cl) {
         return ServiceLoader.load(c, cl);

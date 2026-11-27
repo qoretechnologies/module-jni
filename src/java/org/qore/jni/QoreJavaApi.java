@@ -2,7 +2,14 @@ package org.qore.jni;
 
 import org.qore.jni.QoreURLClassLoader;
 
+import java.lang.ref.WeakReference;
+import java.lang.reflect.Proxy;
 import java.util.Arrays;
+import java.util.EnumSet;
+import java.util.Iterator;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 //! This class provides methods that allow Java to interface with Qore code
 /**
@@ -317,12 +324,327 @@ public class QoreJavaApi {
         @return the distinct Program pointers, in stack order
     */
     static long[] getStackProgramPtrs() {
-        return StackWalker.getInstance(StackWalker.Option.RETAIN_CLASS_REFERENCE).walk(frames -> frames
-            .map(f -> f.getDeclaringClass().getClassLoader())
-            .mapToLong(QoreJavaApi::getLoaderProgramPtr)
-            .filter(ptr -> ptr != 0L)
-            .distinct()
-            .toArray());
+        return STACK_WALKER.walk(QoreJavaApi::stackProgramPtrs);
+    }
+
+    //! the pointer that getStackProgramPtrs() adds when the code that made the call is not known (qore#7081)
+    /** The first frame below the entry point of the call that is not passed over is a class of the JDK, an adapter
+        or a proxy (see callOrigin())
+    */
+    static final long UNKNOWN_ORIGIN_PTR = -2L;
+
+    //! the pointer that getStackProgramPtrs() adds when an adapter or a proxy made the call (qore#7081)
+    /** As UNKNOWN_ORIGIN_PTR, also passing over the frames of the JDK's named classes, whose code does not depend on
+        an object that other code made (see adapterOrigin()): for class loading, which the JDK's class loading code
+        mediates for any code
+    */
+    static final long ADAPTER_ORIGIN_PTR = -3L;
+
+    //! walks every frame, also those of hidden classes (ex: lambdas), which are defined by the class loader of the
+    //! class that defines them
+    private static final StackWalker STACK_WALKER = StackWalker.getInstance(EnumSet.of(
+        StackWalker.Option.RETAIN_CLASS_REFERENCE, StackWalker.Option.SHOW_HIDDEN_FRAMES));
+
+    //! Returns the Program pointers of the frames, and the pointers of the origin of the call (qore#7081)
+    /** The stack is walked from the innermost frame: the frames of the walk itself, up to the native method of the
+        call from Java into Qore that asks (the first native frame), are not the caller's.  Below it, the frames of
+        the call's entry point (this class, the class loader, the generated bindings) and of the JDK's reflection,
+        method handle and class loading machinery are passed over, as they run no code of their own choice; the first
+        other frame is the code that made the call (see callOrigin()), and UNKNOWN_ORIGIN_PTR is added if it is not
+        known.  ADAPTER_ORIGIN_PTR is added if an adapter or a proxy made the call, also passing over the frames of
+        the JDK's named classes (see adapterOrigin())
+    */
+    private static long[] stackProgramPtrs(java.util.stream.Stream<StackWalker.StackFrame> frames) {
+        long[] rv = new long[8];
+        int n = 0;
+        // true once the native method of the call has been passed
+        boolean below = false;
+        // the origins, ORIGIN_PASS while not known
+        int strict = ORIGIN_PASS;
+        int adapter = ORIGIN_PASS;
+        for (Iterator<StackWalker.StackFrame> i = frames.iterator(); i.hasNext(); ) {
+            StackWalker.StackFrame f = i.next();
+            Class<?> cls = f.getDeclaringClass();
+            long ptr = getLoaderProgramPtr(cls.getClassLoader());
+            if (ptr != 0L) {
+                boolean seen = false;
+                for (int j = 0; j < n; ++j) {
+                    if (rv[j] == ptr) {
+                        seen = true;
+                        break;
+                    }
+                }
+                if (!seen) {
+                    if (n == rv.length) {
+                        rv = Arrays.copyOf(rv, n * 2);
+                    }
+                    rv[n++] = ptr;
+                }
+            }
+            if (!below) {
+                below = f.isNativeMethod();
+                continue;
+            }
+            if (adapter != ORIGIN_PASS) {
+                continue;
+            }
+            int kind = frameKind(cls);
+            boolean nativeMethod = f.isNativeMethod();
+            if (strict == ORIGIN_PASS) {
+                strict = callOrigin(kind, nativeMethod, ptr);
+            }
+            adapter = adapterOrigin(kind, nativeMethod, ptr);
+        }
+        if (strict == ORIGIN_UNKNOWN) {
+            rv = Arrays.copyOf(rv, n + 2);
+            rv[n++] = UNKNOWN_ORIGIN_PTR;
+            if (adapter == ORIGIN_UNKNOWN) {
+                rv[n++] = ADAPTER_ORIGIN_PTR;
+            }
+        }
+        return Arrays.copyOf(rv, n);
+    }
+
+    //! a frame that runs no code of its own choice for the call (see callOrigin())
+    private static final int ORIGIN_PASS = 0;
+    //! the code that made the call is known: Qore code (through the module), or Java code of a Program or of a trusted
+    //! class loader
+    private static final int ORIGIN_KNOWN = 1;
+    //! the code that made the call cannot be told: an object of the JDK's classes only, or an adapter or proxy class
+    private static final int ORIGIN_UNKNOWN = 2;
+
+    //! Returns the origin of the call that a frame tells (qore#7081)
+    /** A Java object has no Program of its own: an object made only of the JDK's classes, of an adapter or of a proxy
+        class does the same whatever code made it, so a call into Qore that such a frame makes has no known origin.
+        A frame of a class of a Program's class loader is that Program's code (see getLoaderProgramPtr()), and a
+        frame of a trusted class loader's class other than the JDK's (ex: the module's own library classes) is
+        trusted code; the native method of a call from Qore into Java (ex: the module calling a Java method for Qore
+        code) is the boundary to the Qore code that the call records as its caller
+
+        @param kind the kind of the frame's class (see frameKind())
+        @param nativeMethod true if the frame is of a native method
+        @param ptr the Program pointer of the class's class loader (see getLoaderProgramPtr())
+    */
+    private static int callOrigin(int kind, boolean nativeMethod, long ptr) {
+        if (nativeMethod && kind == KIND_MODULE) {
+            return ORIGIN_KNOWN;
+        }
+        if (kind == KIND_PASS || kind == KIND_MODULE || kind == KIND_DISPATCH) {
+            return ORIGIN_PASS;
+        }
+        // an adapter or a proxy does what the code that made it chose, whatever its class loader
+        if (kind == KIND_ADAPTER) {
+            return ORIGIN_UNKNOWN;
+        }
+        // a class of a Program's class loader (also a lambda of the Program's code)
+        if (ptr != 0L) {
+            return ORIGIN_KNOWN;
+        }
+        return kind == KIND_JDK ? ORIGIN_UNKNOWN : ORIGIN_KNOWN;
+    }
+
+    //! Returns the origin of the call that a frame tells, passing over the frames of the JDK's own code
+    /** As callOrigin(), except that a frame of the JDK's own code (a named class of the JDK, or a lambda of one) is
+        passed over: its code is the JDK's, whatever code called it, and the frame below it is asked
+    */
+    private static int adapterOrigin(int kind, boolean nativeMethod, long ptr) {
+        if (kind == KIND_JDK && ptr == 0L) {
+            return ORIGIN_PASS;
+        }
+        return callOrigin(kind, nativeMethod, ptr);
+    }
+
+    //! the frames of the entry points of Java's calls into Qore and of the JDK's reflection and method handles
+    private static final int KIND_PASS = 0;
+    //! the classes of this module that run Java's calls into Qore (their native methods are the boundary to Qore)
+    private static final int KIND_MODULE = 1;
+    //! the module's class that calls Java methods for Qore code (one copy is defined for each Program)
+    private static final int KIND_DISPATCH = 2;
+    //! the JDK's own code: a named class of a module of the JDK, or a lambda of one
+    private static final int KIND_JDK = 3;
+    //! an adapter or a proxy: a proxy class, a hidden class that is not a lambda of the class that defines it, or a
+    //! class of a module that is not of the JDK's boot layer (ex: a dynamic module), whatever its class loader
+    private static final int KIND_ADAPTER = 4;
+    //! any other class
+    private static final int KIND_OTHER = 5;
+
+    //! Returns the kind of the frames of the class \a cls; only the frames near the entry point of the call are
+    //! classified, until the code that made the call is found
+    private static int frameKind(Class<?> cls) {
+        String name = cls.getName();
+        ClassLoader loader = cls.getClassLoader();
+        // by name, as the module defines some of them with other class loaders: a class of the same name that a
+        // Program's class loader or an unknown class loader defines is attributed to its class loader all the same
+        // (see stackProgramPtrs()), which refuses its calls into another Program
+        if (MODULE_CLASS_NAMES.contains(name)) {
+            return KIND_MODULE;
+        }
+        // one copy is defined by the class loader of each Program
+        if (loader instanceof QoreURLClassLoader && !cls.isHidden() && (name.equals("org.qore.jni.QoreJavaDynamicApi")
+            || name.startsWith("org.qore.jni.QoreJavaDynamicApi$"))) {
+            return KIND_DISPATCH;
+        }
+        // the Java classes generated for the Qore definitions of a Program call into Qore through JavaClassBuilder
+        // and QoreObjectBase with the bindings of their Program, which are checked
+        if (loader instanceof QoreURLClassLoader && !cls.isHidden() && isGeneratedBindingName(name)) {
+            return KIND_PASS;
+        }
+        if (Proxy.isProxyClass(cls)) {
+            return KIND_ADAPTER;
+        }
+        Module module = cls.getModule();
+        // the JDK's own code: a named module of the boot or platform class loader
+        boolean jdk = false;
+        if (module.isNamed()) {
+            if (module.getLayer() == null) {
+                // a dynamic module, of no layer (ex: of an adapter that the JDK defines for an interface of any class
+                // loader)
+                return KIND_ADAPTER;
+            }
+            jdk = loader == null || loader == PLATFORM_LOADER;
+        }
+        if (jdk) {
+            String pkg = cls.getPackageName();
+            // the machinery of reflection, method handles and class loading runs no code of its own choice: the
+            // frame below it made the call (an object that carries the code that it runs has frames of its own
+            // class, which are not passed over)
+            if (pkg.equals("jdk.internal.reflect") || cls == java.lang.reflect.Method.class
+                || cls == java.lang.reflect.Constructor.class || cls == ClassLoader.class || cls == Class.class
+                || pkg.equals("jdk.internal.loader")
+                || (pkg.equals("java.lang.invoke") && (cls.isHidden() || name.endsWith("$Holder")))) {
+                return KIND_PASS;
+            }
+        }
+        if (cls.isHidden()) {
+            // a lambda is defined in the nest of the class that defines it, by its class loader and in its module: its
+            // code is that class's code; any other hidden class is an adapter
+            Class<?> host = cls.getNestHost();
+            if (host == cls || host.isHidden() || host.getModule() != module || host.getClassLoader() != loader) {
+                return KIND_ADAPTER;
+            }
+            return frameKind(host);
+        }
+        // a named module of another class loader (ex: an application's module) is the code of its class loader
+        return jdk ? KIND_JDK : KIND_OTHER;
+    }
+
+    //! the classes of the module whose methods are the entry points of Java's calls into Qore
+    private static final java.util.Set<String> MODULE_CLASS_NAMES = java.util.Set.of(
+        "org.qore.jni.QoreJavaApi", "org.qore.jni.QoreURLClassLoader", "org.qore.jni.JavaClassBuilder",
+        "org.qore.jni.QoreObjectBase", "org.qore.jni.QoreClosure", "org.qore.jni.QoreObject",
+        "org.qore.jni.QoreInvocationHandler");
+
+    //! Returns true if \a name is the name of a Java class generated for the Qore definitions of a Program
+    private static boolean isGeneratedBindingName(String name) {
+        return name.startsWith("qore.") || name.startsWith("qoremod.") || name.startsWith("python.")
+            || name.startsWith("pythonmod.");
+    }
+
+    //! the origin that setOrigin() records for an object that more than one origin supplied (qore#7081)
+    static final long ORIGIN_CONFLICT = -1L;
+
+    //! the origins of the Java objects that sandboxed code made or handed over, by the identity hash of the objects
+    /** Each bucket is an array of entries, which is replaced, never changed, so that it is read without a lock; each
+        entry is a pair of a weak reference to the object, which does not keep it alive, and its origin (qore#7081)
+    */
+    private static final ConcurrentHashMap<Integer, Object[][]> ORIGINS = new ConcurrentHashMap<>();
+    //! the number of origins recorded since the entries of the collected objects were last removed
+    private static final AtomicInteger ORIGIN_ADDS = new AtomicInteger();
+    //! the number of origins recorded at which the entries of the collected objects are removed
+    private static volatile int originPurgeAt = 64;
+    //! true while the entries of the collected objects are being removed
+    private static final AtomicBoolean ORIGIN_PURGING = new AtomicBoolean();
+
+    //! Removes the entries of the objects that have been collected, once enough origins have been recorded since
+    //! they were last removed (amortized)
+    private static void purgeOrigins() {
+        if (ORIGIN_ADDS.get() < originPurgeAt || !ORIGIN_PURGING.compareAndSet(false, true)) {
+            return;
+        }
+        try {
+            ORIGIN_ADDS.set(0);
+            int live = 0;
+            for (Integer key : ORIGINS.keySet()) {
+                Object[][] rv = ORIGINS.computeIfPresent(key, (k, bucket) -> {
+                    int n = 0;
+                    for (Object[] e : bucket) {
+                        if (((WeakReference<?>)e[0]).get() != null) {
+                            ++n;
+                        }
+                    }
+                    if (n == bucket.length) {
+                        return bucket;
+                    }
+                    if (n == 0) {
+                        return null;
+                    }
+                    Object[][] kept = new Object[n][];
+                    int j = 0;
+                    for (Object[] e : bucket) {
+                        if (((WeakReference<?>)e[0]).get() != null) {
+                            kept[j++] = e;
+                        }
+                    }
+                    return kept;
+                });
+                if (rv != null) {
+                    live += rv.length;
+                }
+            }
+            originPurgeAt = Math.max(64, live * 2);
+        } finally {
+            ORIGIN_PURGING.set(false);
+        }
+    }
+
+    //! Records the origin \a origin (the ID of a Program plus one, or ORIGIN_CONFLICT) of the object \a obj
+    /** An origin, once recorded, is kept: an object that another origin supplies too gets ORIGIN_CONFLICT, which
+        reaches no Program.  Called by the module only (qore#7081)
+    */
+    static void setOrigin(Object obj, long origin) {
+        if (obj == null) {
+            return;
+        }
+        boolean[] added = new boolean[1];
+        ORIGINS.compute(System.identityHashCode(obj), (k, bucket) -> {
+            if (bucket != null) {
+                for (int i = 0; i < bucket.length; ++i) {
+                    if (((WeakReference<?>)bucket[i][0]).get() == obj) {
+                        if ((Long)bucket[i][1] == origin || (Long)bucket[i][1] == ORIGIN_CONFLICT) {
+                            return bucket;
+                        }
+                        Object[][] rv = bucket.clone();
+                        rv[i] = new Object[] {bucket[i][0], ORIGIN_CONFLICT};
+                        return rv;
+                    }
+                }
+            }
+            int n = bucket == null ? 0 : bucket.length;
+            Object[][] rv = bucket == null ? new Object[1][] : Arrays.copyOf(bucket, n + 1);
+            rv[n] = new Object[] {new WeakReference<Object>(obj), origin};
+            added[0] = true;
+            return rv;
+        });
+        if (added[0]) {
+            ORIGIN_ADDS.incrementAndGet();
+            purgeOrigins();
+        }
+    }
+
+    //! Returns the origin recorded for the object \a obj, or 0 if none (qore#7081)
+    static long getOrigin(Object obj) {
+        if (obj == null) {
+            return 0L;
+        }
+        Object[][] bucket = ORIGINS.get(System.identityHashCode(obj));
+        if (bucket != null) {
+            for (Object[] e : bucket) {
+                if (((WeakReference<?>)e[0]).get() == obj) {
+                    return (Long)e[1];
+                }
+            }
+        }
+        return 0L;
     }
 
     //! the class loader of the JDK, whose classes are trusted, like those of the system class loader, which is read

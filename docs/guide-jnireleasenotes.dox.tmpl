@@ -6,6 +6,58 @@
 
     @section jni_3_0_0 jni Module Version 3.0.0
 
+    - <b>Security</b> (qore#7811): the data provider modules use the options and request fields that name local
+      paths with their own Program's options, so they now refuse them to code that is restricted from the
+      \c FILESYSTEM functional domain (\c PERMISSION-DENIED), as follows; with the \c jni module loaded, such a
+      restriction by parse options is only a boundary together with \c PO_NO_UNCONTROLLED_APIS, as code that may
+      use uncontrolled APIs can import Java classes such as those of \c java.io and \c java.nio itself:
+      - <b>Behavior change</b>, JdbcDataProvider and FlywayDataProvider: code restricted from the \c DATABASE or
+        \c FILESYSTEM domain cannot create the data providers from options (the URL, for example of a file
+        database, the JDBC \c classpath and the Flyway \c locations name what they use), as it cannot create their
+        connections (Qore::SandboxManager::isCallerRestricted())
+      - <b>Behavior change</b>, JakartaJmsDataProvider: the \c provider_classpath option is refused to such
+        calling code, also to the code that a lent object was lent to (Qore::SandboxManager::isLentToRestricted()), as
+        are the MQTT keystore and truststore options and the Access \c path option: a method of a host object that
+        was lent to such code and creates such a data provider with a path of the host gets \c PERMISSION-DENIED,
+        and uses Qore::SandboxManager::callWithSystemPolicy() for it
+      - AccessDataProvider: a deserialized data provider takes no temporary file and no iterator from the serialized
+        data, and a database path of the serialized data is refused to such code
+      - the members of the data providers that hold the paths that they write or open later (the \c path of the
+        write data providers of the Avro, Email, Excel, ICS, ODP, ODT, ODS, VCF, PowerPoint and Word modules, the
+        JasperReports output path, the Access database path) and the methods that give or use them, or that take a
+        creator's options, are private:internal or final, so that a subclass that restricted code declares cannot
+        change them, also of an object that the host lent
+      - <b>Behavior change</b>, MqttDataProvider and BusyLightDataProvider: their connections declare the
+        \c FILESYSTEM domain, and the keystore and truststore options are refused to such calling code
+      - AccessDataProvider: the \c path option is refused to such calling code; a database given as data is
+        unaffected
+      - OdsDataProvider and ExcelDataProvider: request locations of the file system of the \c list-worksheets and
+        \c profile actions are refused also when the host lent the provider to such code
+        (Qore::SandboxManager::isLentToRestricted()), as is a location with options in the location string or of a
+        scheme without a handler
+      - WordDataProvider: the same for the \c template_path and \c path request fields of the
+        \c inspect-template and \c fill-template actions
+      - OpcUaDataProvider: the same for the location of importNodeSet2(); KafkaDataProvider: the same for the
+        \c validator and \c asyncapi locations of KafkaDataProviderBase::configureAsyncApiOptions()
+      - CamelDataProvider: a lent producer refuses an endpoint other than a plain endpoint of an in-memory
+        component
+      - <b>Behavior change</b>, the connections of JdbcDataProvider, JakartaJmsDataProvider, FlywayDataProvider,
+        KafkaDataProvider, MqttDataProvider, BusyLightDataProvider, OpcUaDataProvider and CamelDataProvider: the data
+        providers of a connection that the host lent to such code are created only from the members and options
+        that its creator gave it (\c ConnectionProvider::AbstractConnection::getLentDataProviderSource()), also when
+        such code creates them itself from the connection or with library code: it can give them no options, also
+        none that name no path (such as JMS \c destination, \c message_selector, \c client_id and
+        \c session_mode, Kafka \c topics, Flyway \c schemas and \c table), and change none of the connection's
+        members; the runtime options of lent MQTT, BusyLight and OPC UA connections are confined in the same way
+      - <b>Behavior change</b>, KafkaDataProvider: the creator's options of a KafkaDataProvider are a
+        \c private:internal member, which a subclass cannot read; the new
+        KafkaDataProvider::KafkaDataProvider::getClientConfig() returns the provider's connection and creator's
+        options to trusted code (for example to make a client of the same cluster), and refuses them with
+        \c PERMISSION-DENIED to code that is restricted from the \c NETWORK or \c FILESYSTEM functional domain, or
+        that the provider was lent to and that is restricted from those domains
+    - <b>Behavior change</b> (qore#7738): \c org.qore.jni.QoreJavaDynamicApi.lookup(), which returned a lookup
+      object for the class loader of the Program whose copy of the class it was called on, has been removed; nothing
+      in the module used it
     - <b>Security</b>: when code that a restricting sandbox governs calls a library (the code of a module, which every
       Program that calls it shares), the following Java state that the library code creates for it belongs to the
       Program of that code, never to the library's shared Program: a class defined with \c define_class(), the save
@@ -178,21 +230,30 @@
       runs in its own Program, as in %Qore; Java code that a sandboxed Program defined (the classes of its class loader)
       reaches only that Program, also when other code calls it, as a host that calls a method of a tenant's Java object,
       and the class loaders of a Program can no longer be changed or created for it by code that cannot reach that
-      Program.  Java objects have no Program of their own: a host must not run Java objects or closures that sandboxed
-      code supplied or could have built (it wraps them in a %Qore closure that it controls, or does not accept them), as
-      their calls into %Qore are made with the host's authority.  These checks are defense in depth: a sandbox that
-      allows uncontrolled APIs, and so Java, is not an isolation boundary against malicious code (qore#7023)
-    - <b>Behavior change</b> (qore#7023): once code that a sandbox governs has called Java in the process, or after
-      the new \c set-java-thread-policy \c strict module command, which trusted code issues to apply the policy
-      before any sandboxed code runs, a Java thread that no %Qore code calls (ex: a thread of a pool or of a listener)
-      can no longer call into %Qore by a Program pointer (\c QoreJavaApi, the class loader of a Program, the Java
-      classes generated for %Qore definitions): its %Qore caller is not known, and sandboxed code can hand work to any
-      such thread.  Code that runs work on Java threads hands Java a callback instead (a %Qore closure, a %Qore object,
-      or an interface implemented with \c QoreInvocationHandler), which runs in its own Program and is not affected.
-      A process with trusted code only is unchanged.  One case needs a %Qore library that reports the Program of
-      the call site of a builtin call: a call of a method of a Java class of another Program made by code that the
-      other Program called directly, as a closure, is otherwise judged with the Program that called that code
-      (qore#7028)
+      Program.  Java objects have no Program of their own, so a Java object or closure that sandboxed code supplied
+      could call into %Qore with the authority of the host code that ran it; once code that a sandbox governs has used
+      Java in the process, a Java object that sandboxed code creates with a %Qore \c new of a Java class, and a Java
+      object used as a %Qore closure of a sandboxed Program, now keep that Program as their origin, which governs the
+      module's calls of them, and a call into %Qore whose origin cannot be determined is refused with
+      \c JNI-SANDBOX-ERROR (qore#7081).  The origin follows the objects that the module creates or hands over, not
+      state that Java code copies between objects.  These checks are defense in depth: a sandbox that allows
+      uncontrolled APIs, and so Java, is not an isolation boundary against malicious code (qore#7023)
+    - <b>Behavior change</b> (qore#7023, qore#7081): once code that a sandbox governs has called Java in the
+      process, or after the new \c set-java-thread-policy \c strict module command, which trusted code issues to
+      apply the policy before any sandboxed code runs, a Java thread that no %Qore code calls (ex: a thread of a pool
+      or of a listener) can no longer call into %Qore by a Program pointer (\c QoreJavaApi, the class loader of a
+      Program, the Java classes generated for %Qore definitions): its %Qore caller is not known, and sandboxed code
+      can hand work to any such thread.  Code that runs work on Java threads hands Java a callback instead (a %Qore
+      closure, a %Qore object, or an interface implemented with \c QoreInvocationHandler), which runs in its own
+      Program and is not affected.  Such a call into %Qore made by a Java object or closure that is made only of the
+      JDK's classes, of adapters or of proxies is also refused with \c JNI-SANDBOX-ERROR, as are a change to or the
+      creation of a Program's class loader that such an object makes, also when trusted code made the object (ex: a
+      call through \c MethodHandle.invokeWithArguments(), or a JDK service loader that creates objects of the
+      generated classes); trusted code makes such calls from the Java code of its own classes (also their lambdas) or
+      from %Qore code, or hands Java a %Qore closure (qore#7081).  A process with trusted code only is unchanged.
+      One case needs a %Qore library that reports the Program of the call site of a builtin call: a call of a method
+      of a Java class of another Program made by code that the other Program called directly, as a closure, is
+      otherwise judged with the Program that called that code (qore#7028)
     - Clearing a Program's compilation cache, which the Java compiler does when it ends, did not take the Program's
       code generation lock, so a class generated at the same time could be stored in the cache as it was cleared and
       stay there; the clear is now serialized with code generation without waiting for its lock: it is made at once,
@@ -239,6 +300,14 @@
       and their \c global-* forms raise it, as does the \c classpath option of the \c jdbc driver when a connection
       is opened, and the module's initialization fails with it for the \c QORE_JNI_CLASSPATH environment variable;
       an entry that does not exist or cannot be used is still left out (qore#6779, see @ref jniimport)
+    - fixed a use-after-free and a crash in the @ref jnijdbc_driverguide "jdbc driver" when the %Program that opened
+      a connection was deleted while its \c Datasource or \c DatasourcePool lived on in another %Program: the
+      connection kept that %Program and its jni data without a reference, so describing a statement's result read the
+      freed jni data, and converting a Java value (ex: a \c java.util.UUID column) used the deleted %Program, whose
+      jni data was gone (an assertion failure in a debug build).  The connection does not keep the %Program from
+      being deleted; an operation of the connection after the %Program has been deleted raises
+      \c JDBC-CONNECTION-ERROR and aborts the connection, and deleting the %Program waits for an operation of another
+      thread that uses it (see @ref jdbc_program_lifetime, qore#7665)
     - fixed a Java exception raised while the \c QORE_JNI_CLASSPATH environment variable was processed when the
       module was loaded, which aborted a debug build in an assertion, as it was converted before the jni data of the
       Program was registered, and which a release build ignored: it is now a module initialization error

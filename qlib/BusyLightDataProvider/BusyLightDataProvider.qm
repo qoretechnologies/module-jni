@@ -121,6 +121,11 @@ module BusyLightDataProvider {
 /** @page busylightdataproviderreleasenotes BusyLightDataProvider Release Notes
 
     @section BusyLightDataProvider_v1_1 BusyLightDataProvider v1.1
+    - <b>Behavior change</b>: BusyLightConnection declares the \c FILESYSTEM domain, as MqttConnection does: code
+      restricted from it cannot create such a connection, and the data provider of a connection that host code lent to
+      such code is created only from the members and options that its creator gave it (also none that name no path, such
+      as the device options)
+      (<a href="https://github.com/qoretechnologies/qore/issues/7811">issue 7811</a>)
     - the app declares \c external_io (@ref DataProvider::DataProviderAppInfo "DataProviderAppInfo"): its Java code does
       network or filesystem I/O that the sandbox does not control, so data provider consumers refuse it to sandboxed
       callers (\c APP-SANDBOX-ACCESS-DENIED); the module requires \c DataProvider 3.12 or later

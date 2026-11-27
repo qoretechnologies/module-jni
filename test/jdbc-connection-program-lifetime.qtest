@@ -1,0 +1,583 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+# A jdbc connection kept the Program that opened it, and that Program's jni data, as raw pointers (qore#7665): when
+# the Program was deleted while its Datasource or DatasourcePool lived on in another Program, the next use of the
+# connection read the freed jni data (SQLStatement::describe() loads the class of a column's values with its class
+# loader) or used the deleted Program to convert a Java value (a java.util.UUID column), whose jni data was gone (an
+# assertion failed in a debug build).  The connection now holds a dependency reference to the Program, and an
+# operation of the connection once the Program has been deleted raises JDBC-CONNECTION-ERROR and aborts the
+# connection.
+#
+# The JDBC driver of the test is compiled when the test runs (as in test/jdbc-exception-url.qtest), so the test needs
+# no database; each case runs test/jdbc-connection-program-lifetime-child.q in a new process, as the failure
+# terminated the process.
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../build"
+%requires jni
+%requires QUnit
+%requires Util
+%requires FsUtil
+
+%module-cmd(jni) add-relative-classpath ../build/qore-jni-compiler.jar
+%module-cmd(jni) import org.qore.jni.compiler.QoreJavaCompiler
+%module-cmd(jni) import org.qore.jni.compiler.CompilerOutput
+
+%exec-class JdbcConnectionProgramLifetimeTest
+
+class JdbcConnectionProgramLifetimeTest inherits QUnit::Test {
+    private {
+        #! the classpath directory of the test's JDBC driver
+        TmpDir tmp("jdbc-connection-program-lifetime-");
+    }
+
+    public {
+        #! the UUID that the driver returns for the column "u"
+        const Uuid = "6f1e0b2a-7665-4c1d-9e2f-000000007665";
+
+        #! the result of describe() for the column "x"
+        const XDesc = {
+            "x": {
+                "name": "x",
+                "type": NT_INT,
+                "maxsize": 10,
+                "native_type": "INTEGER",
+                "internal_id": 4,
+                "nullable": False,
+            },
+        };
+
+        #! the error of an operation that needs the deleted Program that opened the connection
+        const DeletedError = "JDBC-CONNECTION-ERROR: the Program that opened the jdbc connection has been deleted; "
+            "the connection cannot be used for this operation and has been aborted";
+
+        #! the error of opening the connection again in the context of the deleted Program
+        const ReopenError = "JNI-ERROR: the Program is being deleted; its jni context cannot be created";
+
+        #! the time of the value of the TIMESTAMP column "ts", in milliseconds since the epoch: 2026-01-01T00:00:00Z
+        const TsMs = 1767225600000;
+
+        #! a JDBC driver whose connections return one row for any query: a column "u" with a java.util.UUID value if
+        #! the query has the text "uuid", a column "ts" with a java.sql.Timestamp value if it has the text "ts", or
+        #! else a column "x" with an INTEGER value
+        /** The methods of the JDBC interfaces that the jdbc driver does not call return a default value
+        */
+        const DriverSource = "package org.qore.test7665;
+
+import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.Proxy;
+import java.sql.Connection;
+import java.sql.DatabaseMetaData;
+import java.sql.Driver;
+import java.sql.DriverManager;
+import java.sql.DriverPropertyInfo;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
+import java.sql.SQLException;
+import java.sql.SQLFeatureNotSupportedException;
+import java.sql.Timestamp;
+import java.sql.Types;
+import java.util.Properties;
+import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.logging.Logger;
+
+public class LifetimeDriver implements Driver {
+    public static final String PREFIX = \"jdbc:qore-lifetime7665:\";
+    public static final UUID ID = UUID.fromString(\"" + Uuid + "\");
+
+    //! returned by a handler for a method that returns the default value of its type
+    private static final Object DEFAULT = new Object();
+
+    //! the latch that a query with the text \"block\" counts down when it runs, and the latch that it waits for; shared
+    //! with the test through the system properties, as the driver's class is in another class loader
+    static final String ENTERED = \"qore7665.entered\";
+    static final String RELEASE = \"qore7665.release\";
+
+    static {
+        System.getProperties().putIfAbsent(ENTERED, new CountDownLatch(1));
+        System.getProperties().putIfAbsent(RELEASE, new CountDownLatch(1));
+        try {
+            DriverManager.registerDriver(new LifetimeDriver());
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    //! returns the default value of a type: false, 0 or null
+    static Object defaultValue(Class<?> t) {
+        if (t == boolean.class) {
+            return Boolean.FALSE;
+        }
+        if (t == int.class) {
+            return 0;
+        }
+        if (t == long.class) {
+            return 0L;
+        }
+        if (t == short.class) {
+            return (short)0;
+        }
+        if (t == byte.class) {
+            return (byte)0;
+        }
+        if (t == double.class) {
+            return 0.0;
+        }
+        if (t == float.class) {
+            return 0.0f;
+        }
+        return null;
+    }
+
+    //! returns an implementation of the interface whose methods the handler implements
+    @SuppressWarnings(\"unchecked\")
+    static <T> T implement(Class<T> iface, InvocationHandler h) {
+        return (T)Proxy.newProxyInstance(LifetimeDriver.class.getClassLoader(), new Class<?>[] {iface},
+            (proxy, method, args) -> {
+                switch (method.getName()) {
+                    case \"hashCode\":
+                        return System.identityHashCode(proxy);
+                    case \"equals\":
+                        return proxy == args[0];
+                    case \"toString\":
+                        return iface.getSimpleName() + \"7665\";
+                }
+                Object rv = h.invoke(proxy, method, args);
+                return rv == DEFAULT ? defaultValue(method.getReturnType()) : rv;
+            });
+    }
+
+    //! the column of the query: \"u\" (UUID) for \"uuid\", \"ts\" (TIMESTAMP) for \"ts\", or else \"x\" (INTEGER)
+    /** The column is an array of its name, SQL type, type name, value class, precision and value; the driver is
+        compiled into one class, so it declares no nested class
+    */
+    static Object[] column(String sql) {
+        if (sql.contains(\"uuid\")) {
+            return new Object[] {\"u\", Types.OTHER, \"UUID\", UUID.class, 36, ID};
+        }
+        if (sql.contains(\"ts\")) {
+            return new Object[] {\"ts\", Types.TIMESTAMP, \"TIMESTAMP\", Timestamp.class, 26,
+                new Timestamp(" + TsMs + "L)};
+        }
+        return new Object[] {\"x\", Types.INTEGER, \"INTEGER\", Integer.class, 10, Integer.valueOf(1)};
+    }
+
+    //! the metadata of the result of the query
+    static ResultSetMetaData metaData(Object[] col) {
+        return implement(ResultSetMetaData.class, (proxy, method, args) -> {
+            switch (method.getName()) {
+                case \"getColumnCount\":
+                    return 1;
+                case \"getColumnLabel\":
+                case \"getColumnName\":
+                    return col[0];
+                case \"getColumnType\":
+                    return col[1];
+                case \"getColumnTypeName\":
+                    return col[2];
+                case \"getColumnClassName\":
+                    return ((Class<?>)col[3]).getName();
+                case \"getPrecision\":
+                    return col[4];
+                case \"isNullable\":
+                    return ResultSetMetaData.columnNoNulls;
+            }
+            return DEFAULT;
+        });
+    }
+
+    //! the result of the query: one row
+    static ResultSet resultSet(Object[] col) {
+        ResultSetMetaData md = metaData(col);
+        Object value = col[5];
+        int[] row = {0};
+        return implement(ResultSet.class, (proxy, method, args) -> {
+            switch (method.getName()) {
+                case \"next\":
+                    return ++row[0] == 1;
+                case \"getMetaData\":
+                    return md;
+                case \"getObject\":
+                    return value;
+                case \"getTimestamp\":
+                    return value instanceof Timestamp ? value : null;
+                case \"getInt\":
+                case \"getLong\":
+                    return value instanceof Integer ? value : DEFAULT;
+                case \"getString\":
+                    return value.toString();
+            }
+            return DEFAULT;
+        });
+    }
+
+    //! a query with the text \"block\" counts down the ENTERED latch, then waits until the RELEASE latch is released
+    static void block(String sql) throws InterruptedException {
+        if (!sql.contains(\"block\")) {
+            return;
+        }
+        ((CountDownLatch)System.getProperties().get(ENTERED)).countDown();
+        ((CountDownLatch)System.getProperties().get(RELEASE)).await();
+    }
+
+    //! a statement of the query
+    static PreparedStatement statement(String sql) {
+        Object[] col = column(sql);
+        ResultSet[] rs = {null};
+        return implement(PreparedStatement.class, (proxy, method, args) -> {
+            switch (method.getName()) {
+                case \"execute\":
+                    block(sql);
+                    rs[0] = resultSet(col);
+                    return true;
+                case \"executeQuery\":
+                    block(sql);
+                    rs[0] = resultSet(col);
+                    return rs[0];
+                case \"getResultSet\": {
+                    ResultSet r = rs[0];
+                    rs[0] = null;
+                    return r;
+                }
+                case \"getMetaData\":
+                    return metaData(col);
+                case \"getUpdateCount\":
+                    return -1;
+            }
+            return DEFAULT;
+        });
+    }
+
+    public Connection connect(String url, Properties info) throws SQLException {
+        if (!acceptsURL(url)) {
+            return null;
+        }
+        DatabaseMetaData dmd = implement(DatabaseMetaData.class, (proxy, method, args) -> {
+            switch (method.getName()) {
+                case \"getDatabaseProductName\":
+                case \"getDriverName\":
+                    return \"LifetimeDriver7665\";
+                case \"getDatabaseProductVersion\":
+                case \"getDriverVersion\":
+                    return \"1.0\";
+                case \"getDatabaseMajorVersion\":
+                case \"getDriverMajorVersion\":
+                    return 1;
+            }
+            return DEFAULT;
+        });
+        return implement(Connection.class, (proxy, method, args) -> {
+            switch (method.getName()) {
+                case \"prepareStatement\":
+                case \"prepareCall\":
+                    return statement((String)args[0]);
+                case \"createStatement\":
+                    return statement(\"\");
+                case \"getMetaData\":
+                    return dmd;
+                case \"isValid\":
+                case \"getAutoCommit\":
+                    return true;
+            }
+            return DEFAULT;
+        });
+    }
+
+    public boolean acceptsURL(String url) {
+        return url != null && url.startsWith(PREFIX);
+    }
+
+    public int getMajorVersion() {
+        return 1;
+    }
+
+    public int getMinorVersion() {
+        return 0;
+    }
+
+    public DriverPropertyInfo[] getPropertyInfo(String url, Properties info) {
+        return new DriverPropertyInfo[0];
+    }
+
+    public boolean jdbcCompliant() {
+        return false;
+    }
+
+    public Logger getParentLogger() throws SQLFeatureNotSupportedException {
+        throw new SQLFeatureNotSupportedException();
+    }
+}
+";
+    }
+
+    constructor() : Test("jdbc connection program lifetime", "1.0") {
+        addTestCase("regression: describe() after the opening Program is deleted", \describeDeletedTest());
+        addTestCase("regression: a UUID value after the opening Program is deleted", \uuidDeletedTest());
+        addTestCase("regression: a pool's describe() after the opening Program is deleted",
+            \poolDescribeDeletedTest());
+        addTestCase("regression: a pool's UUID value after the opening Program is deleted", \poolUuidDeletedTest());
+        addTestCase("coverage: an int value after the opening Program is deleted", \intDeletedTest());
+        addTestCase("coverage: exec() after the opening Program is deleted", \execDeletedTest());
+        addTestCase("coverage: a statement executed before the opening Program is deleted", \stmtDeletedTest());
+        addTestCase("coverage: a connection opened during the opening Program's teardown", \escapeTest());
+        addTestCase("coverage: more operations after the opening Program is deleted", \moreOpsDeletedTest());
+        addTestCase("coverage: a pool grows a connection while another Program's code uses it", \growTest());
+        addTestCase("coverage: the teardown waits for an operation of another thread", \waitTest());
+        addTestCase("coverage: an SQLStatement of another Program opens a connection", \stmtOpenTest());
+        addTestCase("coverage: a transaction ends after the opening Program is deleted", \transactionDeletedTest());
+        addTestCase("coverage: the opening Program is kept", \keptTest());
+        addTestCase("coverage: a pool's opening Program is kept", \poolKeptTest());
+        addTestCase("coverage: a Program that holds its own datasource is deleted", \ownDatasourceTest());
+        addTestCase("negative: an unknown case is refused by the child", \unknownCaseTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        # the driver is compiled into a classpath directory with its service file, as a driver jar has it
+        QoreJavaCompiler compiler();
+        CompilerOutput out = compiler.compile("org.qore.test7665.LifetimeDriver", DriverSource);
+        binary b = out.file.openInputStream().readAllBytes();
+        string dir = join_paths(tmp.path, "org", "qore", "test7665");
+        mkdir(dir, 0755, True);
+        File f();
+        f.open2(join_paths(dir, "LifetimeDriver.class"), O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(b);
+        f.close();
+        dir = join_paths(tmp.path, "META-INF", "services");
+        mkdir(dir, 0755, True);
+        f = new File();
+        f.open2(join_paths(dir, "java.sql.Driver"), O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("org.qore.test7665.LifetimeDriver\n");
+        f.close();
+    }
+
+    describeDeletedTest() {
+        checkDeleted("ds-deleted-describe", "describe");
+    }
+
+    uuidDeletedTest() {
+        checkDeleted("ds-deleted-uuid", "uuid");
+    }
+
+    poolDescribeDeletedTest() {
+        checkDeleted("pool-deleted-describe", "describe");
+    }
+
+    poolUuidDeletedTest() {
+        checkDeleted("pool-deleted-uuid", "uuid");
+    }
+
+    intDeletedTest() {
+        checkDeleted("ds-deleted-int", "int");
+    }
+
+    execDeletedTest() {
+        checkDeleted("ds-deleted-exec", "exec");
+    }
+
+    #! a statement that the deleted Program executed: describing it and fetching its results refuse to use the Program
+    stmtDeletedTest() {
+        foreach string op in ("sdescribe", "sfetch", "sfetchrows") {
+            checkDeleted("stmt-deleted-" + op, op);
+        }
+    }
+
+    #! a connection that the Program opens in its own destructor, once its teardown has started, and that escapes it,
+    #! refuses to use the Program afterwards
+    escapeTest() {
+        # the Program has jni data, which it copied from its parent, when its teardown starts; with NO_JNI it gets it
+        # only in the destructor that opens the connection, after its cleanup callback
+        foreach *string define in ((NOTHING, "NO_JNI")) {
+            string out = runChild("escape", define);
+            # the destructor uses the connection while the Program's data still exists
+            assertEq("escaper: {x: 1}", getLine(out, "escaper: "), out);
+            assertEq("deleted", getLine(out, "deleted"), out);
+            assertEq("uuid: " + DeletedError, getLine(out, "uuid: "), out);
+            checkAfter(out, "escape");
+        }
+    }
+
+    #! the other guarded operations refuse to use the deleted Program
+    moreOpsDeletedTest() {
+        foreach string op in ("prepare", "selectrows", "execraw", "classpath") {
+            checkDeleted("ds-deleted-" + op, op);
+        }
+        checkDeleted("stmt-deleted-sbind", "sbind");
+    }
+
+    #! a pool's connections belong to the Program that created the pool: a connection that the pool opens while the
+    #! code of another Program uses it, in that code's thread, belongs to the pool's Program too (a method of a builtin
+    #! object runs with the object's Program as its call context), so it works after that other Program is deleted
+    growTest() {
+        string out = runChild("grow");
+        assertEq("opener: {x: 1}", getLine(out, "opener: "), out);
+        assertEq("user: {x: 1}", getLine(out, "user: "), out);
+        assertEq("p deleted", getLine(out, "p deleted"), out);
+        assertEq(sprintf("main: %y", Uuid), getLine(out, "main: "), out);
+        assertEq(sprintf("other: %y", Uuid), getLine(out, "other: "), out);
+        assertEq("commit: null", getLine(out, "commit: "), out);
+        checkAfter(out, "grow");
+    }
+
+    #! an SQLStatement is an object of the Program that created it: when its execution opens the connection of a
+    #! datasource of another Program, the connection belongs to the statement's Program, so after that Program is
+    #! deleted the connection refuses the next operation and is aborted; the datasource then opens a new connection
+    #! in the context of its own Program
+    stmtOpenTest() {
+        string out = runChild("stmtopen");
+        assertEq("user: {x: 1}", getLine(out, "user: "), out);
+        assertEq("p deleted", getLine(out, "p deleted"), out);
+        assertEq("uuid: " + DeletedError, getLine(out, "uuid: "), out);
+        assertEq(sprintf("again: %y", Uuid), getLine(out, "again: "), out);
+        checkAfter(out, "stmtopen");
+
+        # the same with a pool that grows a connection for the statement, in the statement Program's thread
+        out = runChild("stmtopen-pool");
+        assertEq("user: {x: 1}", getLine(out, "user: "), out);
+        assertEq("p deleted", getLine(out, "p deleted"), out);
+        assertEq(sprintf("main: %y", Uuid), getLine(out, "main: "), out);
+        assertEq("other: " + DeletedError, getLine(out, "other: "), out);
+        assertEq(sprintf("again: %y", Uuid), getLine(out, "again: "), out);
+        assertEq("commit: null", getLine(out, "commit: "), out);
+        checkAfter(out, "stmtopen-pool");
+    }
+
+    #! the teardown of the Program waits for an operation of another thread on its connection, which completes; the
+    #! next operation fails cleanly
+    waitTest() {
+        string out = runChild("wait");
+        if (out =~ /^wait: skipped/m) {
+            testSkip(getLine(out, "wait: skipped"));
+        }
+        # the bounded waits of the child ended in time
+        assertEq("entered: True", getLine(out, "entered: "), out);
+        assertEq("marked: True", getLine(out, "marked: "), out);
+        assertEq("waiting: 1", getLine(out, "waiting: "), out);
+        assertEq("deleted before release: False", getLine(out, "deleted before release: "), out);
+        assertEq("operation done: True", getLine(out, "operation done: "), out);
+        assertEq("deleted: True", getLine(out, "deleted: "), out);
+        assertEq("block: {x: 1}", getLine(out, "block: "), out);
+        assertEq("next: " + DeletedError, getLine(out, "next: "), out);
+        checkAfter(out, "wait");
+    }
+
+    #! a commit and a rollback do not use the Program that opened the connection: the transaction that it started
+    #! can be ended after it has been deleted
+    transactionDeletedTest() {
+        foreach string op in ("commit", "rollback") {
+            string case_name = "dstx-deleted-" + op;
+            string out = runChild(case_name);
+            assertEq("opener: {x: 1}", getLine(out, "opener: "), out);
+            assertEq(op + ": null", getLine(out, op + ": "), out);
+            # the connection was not aborted: the next operation that uses the Program aborts it
+            assertEq("again: " + DeletedError, getLine(out, "again: "), out);
+            checkAfter(out, case_name);
+        }
+    }
+
+    keptTest() {
+        checkKept("ds");
+    }
+
+    poolKeptTest() {
+        checkKept("pool");
+    }
+
+    #! the connection does not keep its Program from being deleted (no reference cycle through the datasource)
+    ownDatasourceTest() {
+        string out = runChild("own");
+        assertEq(sprintf("opener: %y", Uuid), getLine(out, "opener: "), out);
+        # the Program's teardown destroyed its global variables before the delete operator returned
+        list<string> lines = map $1, out.split("\n"), $1 == "opener destroyed" || $1 == "deleted";
+        assertEq(("opener destroyed", "deleted"), lines, out);
+        checkAfter(out, "own");
+    }
+
+    unknownCaseTest() {
+        int rc;
+        string out = runChildRc("ds-deleted-nothing", \rc);
+        assertEq(2, rc, out);
+        assertRegex("unknown case", out);
+        assertEq("", getLine(out, "after: "), out);
+    }
+
+    #! the connection opened by the deleted Program refuses the operation and is aborted
+    private checkDeleted(string case_name, string op) {
+        string out = runChild(case_name);
+        assertEq("opener: {x: 1}", getLine(out, "opener: "), out);
+        assertEq(op + ": " + DeletedError, getLine(out, op + ": "), out);
+        # the next operation fails cleanly as well: a Datasource opens its connection again in the context of its
+        # deleted Program, which cannot get jni data any more; a DatasourcePool's next connection is another
+        # connection that the deleted Program opened
+        assertEq("again: " + (case_name =~ /^pool-/ ? DeletedError : ReopenError), getLine(out, "again: "), out);
+        checkAfter(out, case_name);
+    }
+
+    #! the connection of the kept Program works for every operation
+    private checkKept(string opener) {
+        string out = runChild(opener + "-kept-describe");
+        assertEq(sprintf("describe: %y", XDesc), getLine(out, "describe: "), out);
+        assertEq(sprintf("again: %y", Uuid), getLine(out, "again: "), out);
+        checkAfter(out, opener + "-kept-describe");
+
+        out = runChild(opener + "-kept-uuid");
+        assertEq(sprintf("uuid: %y", Uuid), getLine(out, "uuid: "), out);
+        checkAfter(out, opener + "-kept-uuid");
+
+        out = runChild(opener + "-kept-int");
+        assertEq("int: {x: 1}", getLine(out, "int: "), out);
+        checkAfter(out, opener + "-kept-int");
+
+        # the date is made in the time zone of the Program that runs the operation (the child process's zone, as
+        # this process's), not in the time zone of the Program that opened the connection
+        out = runChild(opener + "-kept-ts");
+        assertEq(sprintf("ts: %y", localtime(TsMs / 1000).format("YYYY-MM-DD HH:mm:SS Z")), getLine(out, "ts: "),
+            out);
+        checkAfter(out, opener + "-kept-ts");
+    }
+
+    private checkAfter(string out, string case_name) {
+        assertFalse(out =~ /unhandled QORE/, out);
+        assertEq("after: " + case_name, getLine(out, "after: "), out);
+    }
+
+    #! returns the first line of the output that starts with the prefix, or an empty string
+    private static string getLine(string out, string prefix) {
+        foreach string line in (out.split("\n")) {
+            if (line.equalPartial(prefix)) {
+                return line;
+            }
+        }
+        return "";
+    }
+
+    #! runs the child with the case and returns its output, checking that it exited with status 0
+    private string runChild(string case_name, *string define) {
+        int rc;
+        string out = runChildRc(case_name, \rc, define);
+        assertEq(0, rc, "exit code: " + out);
+        return out;
+    }
+
+    #! runs the child with the case and returns its output (stdout and stderr) and its exit code
+    /** @param define a parse define for the child, if any
+    */
+    private string runChildRc(string case_name, reference<int> rc, *string define) {
+        string child = normalize_dir(get_script_dir() + "/jdbc-connection-program-lifetime-child.q");
+        # the variables that make the JVM print a notice on startup are removed, as the output of the child is
+        # checked; no core file is written for a crash
+        string cmd = sprintf("ulimit -c 0; env -u JAVA_TOOL_OPTIONS -u _JAVA_OPTIONS -u JDK_JAVA_OPTIONS %s -b "
+            "--enable-debug %s%s %s %s 2>&1", shellQuote(QORE_ARGV[0]), define ? "-D" + define + " " : "",
+            shellQuote(child), shellQuote(case_name), shellQuote(tmp.path));
+        return backquote(cmd, \rc);
+    }
+
+    private static string shellQuote(string arg) {
+        return "'" + replace(arg, "'", "'\\''") + "'";
+    }
+}

@@ -66,5 +66,8 @@ private:
     //! the record of the code that obtained the callable from Java, which governs Java's calls into Qore during its
     //! calls (qore#7023); its Program is only compared, never used otherwise, and is dependency-referenced
     JniJavaCallerRecord owner;
+    //! true if the owner is the origin of the Java object (qore#7081): code that a restricting sandbox governs and
+    //! that is not the origin's Program reaches no Program with it
+    bool owner_is_origin = false;
 };
 }

@@ -59,6 +59,18 @@
           "source": "The spreadsheet content to profile",
           "message": "Zawartość arkusza kalkulacyjnego do profilowania"
         },
+        "app.RXhjZWw.action.cHJvZmlsZQ.option.aGVhZGVyX3Jvdw.desc": {
+          "source": "The 1-based row holding the column names in every sheet, or `0` if the sheets have none; when not given, the header row is found from the sheet's content. Use it when the person who knows the file says where the column names are",
+          "message": "Wiersz z nazwami kolumn w każdym arkuszu numerowany od 1 lub `0`, jeśli arkusze go nie mają; jeśli nie jest podany, wiersz nagłówka jest ustalany na podstawie zawartości arkusza. Użyj go, gdy osoba znająca plik wskaże, gdzie są nazwy kolumn"
+        },
+        "app.RXhjZWw.action.cHJvZmlsZQ.option.aGVhZGVyX3Jvdw.display_name": {
+          "source": "Header Row",
+          "message": "Wiersz nagłówka"
+        },
+        "app.RXhjZWw.action.cHJvZmlsZQ.option.aGVhZGVyX3Jvdw.short_desc": {
+          "source": "The row holding the column names, or 0 for none",
+          "message": "Wiersz z nazwami kolumn lub 0, jeśli go nie ma"
+        },
         "app.RXhjZWw.action.cHJvZmlsZQ.option.bWF4X3Jvd3M.desc": {
           "source": "The maximum number of rows read and profiled per sheet; the total row count is still reported, and a `partial_profile` finding notes that the sheet has more rows",
           "message": "Maksymalna liczba odczytywanych i profilowanych wierszy na arkusz; łączna liczba wierszy jest i tak raportowana, a ustalenie `partial_profile` informuje, że arkusz ma więcej wierszy"
@@ -262,6 +274,42 @@
         "app.RXhjZWw.action.cmVhZA.option.aWdub3JlX2VtcHR5.short_desc": {
           "source": "Skip empty rows instead of stopping at the first one",
           "message": "Pomijaj puste wiersze zamiast zatrzymywać się na pierwszym"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.bWVyZ2VkX2NlbGxz.allowed-value.c3RyaW5nOmZpbGw.display_name": {
+          "source": "Fill",
+          "message": "Wypełnij"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.bWVyZ2VkX2NlbGxz.allowed-value.c3RyaW5nOmZpbGw.short_desc": {
+          "source": "Each cell of the range has its value",
+          "message": "Każda komórka zakresu ma jego wartość"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.bWVyZ2VkX2NlbGxz.allowed-value.c3RyaW5nOmZpbGxfcmlnaHQ.display_name": {
+          "source": "Fill Right",
+          "message": "Wypełnij w prawo"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.bWVyZ2VkX2NlbGxz.allowed-value.c3RyaW5nOmZpbGxfcmlnaHQ.short_desc": {
+          "source": "Each cell of the range's first row has its value",
+          "message": "Każda komórka pierwszego wiersza zakresu ma jego wartość"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.bWVyZ2VkX2NlbGxz.allowed-value.c3RyaW5nOmZpcnN0.display_name": {
+          "source": "First Cell",
+          "message": "Pierwsza komórka"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.bWVyZ2VkX2NlbGxz.allowed-value.c3RyaW5nOmZpcnN0.short_desc": {
+          "source": "The value is in the range's first cell only",
+          "message": "Wartość znajduje się tylko w pierwszej komórce zakresu"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.bWVyZ2VkX2NlbGxz.desc": {
+          "source": "How the cells of a merged range are read, in the header row and in the data:\n\n- `first` (the default): a merged range's value is in its first cell only, as the file stores it, and its other cells are empty\n- `fill_right`: each cell of the range's first row has the range's value, so that a group name merged over several columns names each of them; the rows of the range below its first are empty\n- `fill`: each cell of the range has the range's value\n\nOnly the rows that the file holds are read: an empty row under a merged range is not added.",
+          "message": "Jak są odczytywane komórki scalonego zakresu, w wierszu nagłówka i w danych:\n\n- `first` (domyślnie): wartość scalonego zakresu znajduje się tylko w jego pierwszej komórce, tak jak zapisuje ją plik, a pozostałe komórki są puste\n- `fill_right`: każda komórka pierwszego wiersza zakresu ma wartość zakresu, dzięki czemu nazwa grupy scalona na kilka kolumn nazywa każdą z nich; wiersze zakresu poniżej pierwszego są puste\n- `fill`: każda komórka zakresu ma wartość zakresu\n\nOdczytywane są tylko wiersze, które zawiera plik: pusty wiersz pod scalonym zakresem nie jest dodawany."
+        },
+        "app.RXhjZWw.action.cmVhZA.option.bWVyZ2VkX2NlbGxz.display_name": {
+          "source": "Merged Cells",
+          "message": "Scalone komórki"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.bWVyZ2VkX2NlbGxz.short_desc": {
+          "source": "How the cells of merged ranges are read",
+          "message": "Jak są odczytywane komórki scalonych zakresów"
         },
         "app.RXhjZWw.action.cmVhZA.option.cGF0aA.desc": {
           "source": "The location of the Excel data; mutually exclusive with `data` and `stream`; resolved with a call to [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)",
@@ -514,6 +562,42 @@
         "app.RXhjZWw.action.cmVhZC1kYXRh.option.aWdub3JlX2VtcHR5.short_desc": {
           "source": "Skip empty rows instead of stopping at the first one",
           "message": "Pomijaj puste wiersze zamiast zatrzymywać się na pierwszym"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.bWVyZ2VkX2NlbGxz.allowed-value.c3RyaW5nOmZpbGw.display_name": {
+          "source": "Fill",
+          "message": "Wypełnij"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.bWVyZ2VkX2NlbGxz.allowed-value.c3RyaW5nOmZpbGw.short_desc": {
+          "source": "Each cell of the range has its value",
+          "message": "Każda komórka zakresu ma jego wartość"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.bWVyZ2VkX2NlbGxz.allowed-value.c3RyaW5nOmZpbGxfcmlnaHQ.display_name": {
+          "source": "Fill Right",
+          "message": "Wypełnij w prawo"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.bWVyZ2VkX2NlbGxz.allowed-value.c3RyaW5nOmZpbGxfcmlnaHQ.short_desc": {
+          "source": "Each cell of the range's first row has its value",
+          "message": "Każda komórka pierwszego wiersza zakresu ma jego wartość"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.bWVyZ2VkX2NlbGxz.allowed-value.c3RyaW5nOmZpcnN0.display_name": {
+          "source": "First Cell",
+          "message": "Pierwsza komórka"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.bWVyZ2VkX2NlbGxz.allowed-value.c3RyaW5nOmZpcnN0.short_desc": {
+          "source": "The value is in the range's first cell only",
+          "message": "Wartość znajduje się tylko w pierwszej komórce zakresu"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.bWVyZ2VkX2NlbGxz.desc": {
+          "source": "How the cells of a merged range are read, in the header row and in the data:\n\n- `first` (the default): a merged range's value is in its first cell only, as the file stores it, and its other cells are empty\n- `fill_right`: each cell of the range's first row has the range's value, so that a group name merged over several columns names each of them; the rows of the range below its first are empty\n- `fill`: each cell of the range has the range's value\n\nOnly the rows that the file holds are read: an empty row under a merged range is not added.",
+          "message": "Jak są odczytywane komórki scalonego zakresu, w wierszu nagłówka i w danych:\n\n- `first` (domyślnie): wartość scalonego zakresu znajduje się tylko w jego pierwszej komórce, tak jak zapisuje ją plik, a pozostałe komórki są puste\n- `fill_right`: każda komórka pierwszego wiersza zakresu ma wartość zakresu, dzięki czemu nazwa grupy scalona na kilka kolumn nazywa każdą z nich; wiersze zakresu poniżej pierwszego są puste\n- `fill`: każda komórka zakresu ma wartość zakresu\n\nOdczytywane są tylko wiersze, które zawiera plik: pusty wiersz pod scalonym zakresem nie jest dodawany."
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.bWVyZ2VkX2NlbGxz.display_name": {
+          "source": "Merged Cells",
+          "message": "Scalone komórki"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.bWVyZ2VkX2NlbGxz.short_desc": {
+          "source": "How the cells of merged ranges are read",
+          "message": "Jak są odczytywane komórki scalonych zakresów"
         },
         "app.RXhjZWw.action.cmVhZC1kYXRh.option.cHJlc2VydmVfZW1wdHlfcm93cw.desc": {
           "source": "If `True`, return empty rows through the last stored worksheet row, within `data_cells`. Use this to verify exports containing records whose fields are all empty. Takes precedence over `ignore_empty`; `False` by default.",

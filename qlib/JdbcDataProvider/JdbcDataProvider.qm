@@ -164,6 +164,13 @@ module JdbcDataProvider {
     The \c classpath and \c driver_class options, and a \c url with driver properties, are refused to sandboxed
       code (\c JNI-SANDBOX-ERROR).
 
+    Code restricted from the \c DATABASE or \c FILESYSTEM functional domain cannot create a data provider from options
+    (\c PERMISSION-DENIED), as it cannot create a connection: the options (the URL, for example of a file database, and
+    the \c classpath, which names local files that Java loads as code) name what the data provider uses.  The data
+    providers of a connection that host code lent to such code are created only from the members and options that the
+    connection's creator gave it (JdbcConnection::getDataProviderSource()), also when such code creates them itself or
+    with library code.
+
     @section jdbcdataprovider_examples JDBC Data Provider Examples
 
     These examples are with \c qdp, the command-line interface to the Data Provider API.
@@ -189,6 +196,15 @@ module JdbcDataProvider {
 
     @section jdbcdataprovider_v1_0 JdbcDataProvider Module Version 1.0
     - initial release
+    - <b>Behavior change</b>: code restricted from the \c DATABASE or \c FILESYSTEM functional domain cannot create a
+      JdbcDataProvider from options, as it cannot create a JdbcConnection: the options (the URL, for example of a file
+      database, and the \c classpath of the driver, which names local files that Java loads as code) name what it uses
+      (<a href="https://github.com/qoretechnologies/qore/issues/7811">issue 7811</a>)
+    - <b>Behavior change</b>: the data providers of a connection that host code lent to code restricted from a domain of
+      its clients are created only from the members and options that its creator gave it, also when that code creates
+      them itself from the connection or with library code: such code can give them no options (also none that name no
+      path, such as \c url or \c user) and change none of the connection's members
+      (<a href="https://github.com/qoretechnologies/qore/issues/7811">issue 7811</a>)
 */
 
 #! Contains all public definitions in the JdbcDataProvider module
@@ -198,6 +214,31 @@ public const AppName = "JdbcDP";
 }
 
 namespace Priv {
+
+#! Refuses a data provider that code restricted from the domains of its connections creates itself (qore#7811)
+/** A data provider of the module connects to a database, and its options (the URL, for example of a file database,
+    and the classpath of the driver) name what it uses, as the options of a JdbcConnection do: code restricted from the
+    domains of the connection (\c DATABASE and \c FILESYSTEM) cannot create the connection, and so it cannot create
+    the data provider itself either; such code uses the data provider of a connection that the host lent it
+    (JdbcConnection::getDataProvider()), which is created with the options of the connection's creator (see
+    JdbcConnection::getDataProviderSource())
+
+    @throw PERMISSION-DENIED the calling code is restricted from the \c DATABASE or \c FILESYSTEM functional domain
+*/
+sub check_creator() {
+    list<string> denied = ();
+    if (SandboxManager::isCallerRestricted(DOM_DATABASE)) {
+        denied += "DATABASE";
+    }
+    if (SandboxManager::isCallerRestricted(DOM_FILESYSTEM)) {
+        denied += "FILESYSTEM";
+    }
+    if (denied) {
+        throw "PERMISSION-DENIED", sprintf("code restricted from the %s functional domain%s cannot create a jdbc-dp "
+            "data provider itself; use the data provider of a connection that the host provides",
+            denied.join(" and "), denied.size() > 1 ? "s" : "");
+    }
+}
 
 #! Adds JDBC driver classpath entries and optionally instantiates the driver class
 /** @param copts connection options; supports optional \c classpath and \c driver_class keys

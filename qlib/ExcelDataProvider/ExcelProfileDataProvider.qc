@@ -73,12 +73,16 @@ public class ExcelProfileDataProvider inherits AbstractTabularProfileDataProvide
 
     #! Returns the content of the file at a location
     private binary readLocation(string location) {
+        # a location of the code that the provider may have been lent to (qore#7811)
+        Priv::check_request_location("profile", "path", location);
         return FileLocationHandler::getBinaryFileFromLocation(location);
     }
 
     #! Reads the workbook at a location as a raw grid of cells, from a stream, so that its content is not held in
     #! memory (with DataProvider 3.11 and later)
     private hash<TabularWorkbookGrid> readLocationGrid(string location, int max_rows) {
+        # a location of the code that the provider may have been lent to (qore#7811)
+        Priv::check_request_location("profile", "path", location);
         return TabularProfiler::gridFromHash(ExcelGridReader::readGrid(
             FileLocationHandler::getBinaryStreamFromLocation(location), max_rows));
     }

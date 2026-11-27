@@ -147,6 +147,42 @@
           "source": "Error cells are read as the error's text, such as `#DIV/0!`, in any column",
           "message": "Error cells are read as the error's text, such as `#DIV/0!`, in any column"
         },
+        "app.RXhjZWw.action.cmVhZA.option.bWVyZ2VkX2NlbGxz.display_name": {
+          "source": "Merged Cells",
+          "message": "Merged Cells"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.bWVyZ2VkX2NlbGxz.short_desc": {
+          "source": "How the cells of merged ranges are read",
+          "message": "How the cells of merged ranges are read"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.bWVyZ2VkX2NlbGxz.desc": {
+          "source": "How the cells of a merged range are read, in the header row and in the data:\n\n- `first` (the default): a merged range's value is in its first cell only, as the file stores it, and its other cells are empty\n- `fill_right`: each cell of the range's first row has the range's value, so that a group name merged over several columns names each of them; the rows of the range below its first are empty\n- `fill`: each cell of the range has the range's value\n\nOnly the rows that the file holds are read: an empty row under a merged range is not added.",
+          "message": "How the cells of a merged range are read, in the header row and in the data:\n\n- `first` (the default): a merged range's value is in its first cell only, as the file stores it, and its other cells are empty\n- `fill_right`: each cell of the range's first row has the range's value, so that a group name merged over several columns names each of them; the rows of the range below its first are empty\n- `fill`: each cell of the range has the range's value\n\nOnly the rows that the file holds are read: an empty row under a merged range is not added."
+        },
+        "app.RXhjZWw.action.cmVhZA.option.bWVyZ2VkX2NlbGxz.allowed-value.c3RyaW5nOmZpcnN0.display_name": {
+          "source": "First Cell",
+          "message": "First Cell"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.bWVyZ2VkX2NlbGxz.allowed-value.c3RyaW5nOmZpcnN0.short_desc": {
+          "source": "The value is in the range's first cell only",
+          "message": "The value is in the range's first cell only"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.bWVyZ2VkX2NlbGxz.allowed-value.c3RyaW5nOmZpbGxfcmlnaHQ.display_name": {
+          "source": "Fill Right",
+          "message": "Fill Right"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.bWVyZ2VkX2NlbGxz.allowed-value.c3RyaW5nOmZpbGxfcmlnaHQ.short_desc": {
+          "source": "Each cell of the range's first row has its value",
+          "message": "Each cell of the range's first row has its value"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.bWVyZ2VkX2NlbGxz.allowed-value.c3RyaW5nOmZpbGw.display_name": {
+          "source": "Fill",
+          "message": "Fill"
+        },
+        "app.RXhjZWw.action.cmVhZA.option.bWVyZ2VkX2NlbGxz.allowed-value.c3RyaW5nOmZpbGw.short_desc": {
+          "source": "Each cell of the range has its value",
+          "message": "Each cell of the range has its value"
+        },
         "app.RXhjZWw.action.cmVhZA.option.ZXJyb3JfZmllbGQ.display_name": {
           "source": "Error Field",
           "message": "Error Field"
@@ -314,6 +350,18 @@
         "app.RXhjZWw.action.cHJvZmlsZQ.option.c2FtcGxlX3Jvd3M.desc": {
           "source": "The number of sample data rows returned per sheet",
           "message": "The number of sample data rows returned per sheet"
+        },
+        "app.RXhjZWw.action.cHJvZmlsZQ.option.aGVhZGVyX3Jvdw.display_name": {
+          "source": "Header Row",
+          "message": "Header Row"
+        },
+        "app.RXhjZWw.action.cHJvZmlsZQ.option.aGVhZGVyX3Jvdw.short_desc": {
+          "source": "The row holding the column names, or 0 for none",
+          "message": "The row holding the column names, or 0 for none"
+        },
+        "app.RXhjZWw.action.cHJvZmlsZQ.option.aGVhZGVyX3Jvdw.desc": {
+          "source": "The 1-based row holding the column names in every sheet, or `0` if the sheets have none; when not given, the header row is found from the sheet's content. Use it when the person who knows the file says where the column names are",
+          "message": "The 1-based row holding the column names in every sheet, or `0` if the sheets have none; when not given, the header row is found from the sheet's content. Use it when the person who knows the file says where the column names are"
         },
         "app.RXhjZWw.action.cHJvZmlsZQ.option.cmVkYWN0.display_name": {
           "source": "Redact Samples",
@@ -494,6 +542,42 @@
         "app.RXhjZWw.action.cmVhZC1kYXRh.option.ZXJyb3JfY2VsbHM.allowed-value.c3RyaW5nOnRleHQ.desc": {
           "source": "Error cells are read as the error's text, such as `#DIV/0!`, in any column",
           "message": "Error cells are read as the error's text, such as `#DIV/0!`, in any column"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.bWVyZ2VkX2NlbGxz.display_name": {
+          "source": "Merged Cells",
+          "message": "Merged Cells"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.bWVyZ2VkX2NlbGxz.short_desc": {
+          "source": "How the cells of merged ranges are read",
+          "message": "How the cells of merged ranges are read"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.bWVyZ2VkX2NlbGxz.desc": {
+          "source": "How the cells of a merged range are read, in the header row and in the data:\n\n- `first` (the default): a merged range's value is in its first cell only, as the file stores it, and its other cells are empty\n- `fill_right`: each cell of the range's first row has the range's value, so that a group name merged over several columns names each of them; the rows of the range below its first are empty\n- `fill`: each cell of the range has the range's value\n\nOnly the rows that the file holds are read: an empty row under a merged range is not added.",
+          "message": "How the cells of a merged range are read, in the header row and in the data:\n\n- `first` (the default): a merged range's value is in its first cell only, as the file stores it, and its other cells are empty\n- `fill_right`: each cell of the range's first row has the range's value, so that a group name merged over several columns names each of them; the rows of the range below its first are empty\n- `fill`: each cell of the range has the range's value\n\nOnly the rows that the file holds are read: an empty row under a merged range is not added."
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.bWVyZ2VkX2NlbGxz.allowed-value.c3RyaW5nOmZpcnN0.display_name": {
+          "source": "First Cell",
+          "message": "First Cell"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.bWVyZ2VkX2NlbGxz.allowed-value.c3RyaW5nOmZpcnN0.short_desc": {
+          "source": "The value is in the range's first cell only",
+          "message": "The value is in the range's first cell only"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.bWVyZ2VkX2NlbGxz.allowed-value.c3RyaW5nOmZpbGxfcmlnaHQ.display_name": {
+          "source": "Fill Right",
+          "message": "Fill Right"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.bWVyZ2VkX2NlbGxz.allowed-value.c3RyaW5nOmZpbGxfcmlnaHQ.short_desc": {
+          "source": "Each cell of the range's first row has its value",
+          "message": "Each cell of the range's first row has its value"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.bWVyZ2VkX2NlbGxz.allowed-value.c3RyaW5nOmZpbGw.display_name": {
+          "source": "Fill",
+          "message": "Fill"
+        },
+        "app.RXhjZWw.action.cmVhZC1kYXRh.option.bWVyZ2VkX2NlbGxz.allowed-value.c3RyaW5nOmZpbGw.short_desc": {
+          "source": "Each cell of the range has its value",
+          "message": "Each cell of the range has its value"
         },
         "app.RXhjZWw.action.cmVhZC1kYXRh.option.ZXJyb3JfZmllbGQ.display_name": {
           "source": "Error Field",

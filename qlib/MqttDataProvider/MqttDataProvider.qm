@@ -169,6 +169,11 @@ module MqttDataProvider {
     - <b>Connection lifecycle events</b>: \c connected and \c disconnected events
     - <b>Failover</b>: multiple server URIs for automatic failover
 
+    @par File system restrictions
+    With the \c jni module loaded, a restriction of the \c FILESYSTEM functional domain by parse options is only a
+    boundary together with \c PO_NO_UNCONTROLLED_APIS: code that may use uncontrolled APIs can import Java classes
+    such as those of \c java.io and \c java.nio itself.
+
     @section mqttdataprovider_examples MQTT Data Provider Examples
 
     These examples are with \c qdp, the command-line interface to the Data Provider API.
@@ -222,6 +227,18 @@ mqtt.sendMessage(MqttDataProvider::MESSAGE_MQTT_MESSAGE, {
 /** @page mqttdataproviderreleasenotes MqttDataProvider Release Notes
 
     @section MqttDataProvider_v3_0 MqttDataProvider v3.0
+    - <b>Behavior change</b>: the clients of MqttConnection (also of BusyLightConnection) read the keystore and
+      truststore files of its options, so it declares the \c FILESYSTEM domain: code restricted from it cannot create
+      such a connection, and the data provider of a connection that host code lent to such code is created only from the
+      members and options that its creator gave it (also none that name no path, such as the topic and QoS options); a
+      lent connection's runtime options are confined in the same way
+      (<a href="https://github.com/qoretechnologies/qore/issues/7811">issue 7811</a>)
+    - <b>Behavior change</b>: the \c ssl.keystore.location and \c ssl.truststore.location options are refused to calling
+      code that is restricted from the \c FILESYSTEM functional domain when it creates a data provider or calls
+      AbstractMqttDataProvider::getClient() itself, also to the code that a lent object was lent to; the data
+      providers and clients of an MqttConnection (also of a BusyLightConnection) take the options of its creator,
+      also for library code that creates them for such code
+      (<a href="https://github.com/qoretechnologies/qore/issues/7811">issue 7811</a>)
     - the app declares \c external_io (@ref DataProvider::DataProviderAppInfo "DataProviderAppInfo"): its Java code does
       network or filesystem I/O that the sandbox does not control, so data provider consumers refuse it to sandboxed
       callers (\c APP-SANDBOX-ACCESS-DENIED); the module requires \c DataProvider 3.12 or later
@@ -274,4 +291,12 @@ public const AppName = "MQTT";
 namespace Priv {
 #! MQTT logo
 const MqttLogo = File::readTextFile(get_script_dir() + "/mqtt-logo.svg");
+
+#! A token of the module's own code: a client created with one takes its options from its creator (qore#7811)
+/** Only the module's code can create an object of this class, as its namespace is not exported, so a variant that
+    takes one cannot be called by other code: such a variant is called by the module's code with the options that
+    the creator of a connection gave it, which are not checked again for the calling code
+*/
+class CreatorOptions {
+}
 }

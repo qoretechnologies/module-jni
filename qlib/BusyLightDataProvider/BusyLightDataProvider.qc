@@ -49,6 +49,12 @@ public class BusyLightDataProvider inherits MqttDataProvider::AbstractFunctional
         DataProviderActionCatalog::checkSandboxAccess(BusyLightDataProvider::AppName);
     }
 
+    #! Creates the object from a connection with the options of its creator (qore#7811)
+    constructor(MqttConnection conn, *hash<auto> options) : AbstractFunctionalMqttDataProvider(conn, options) {
+        # Java I/O that the sandbox does not control: sandboxed code is refused (qore#5632)
+        DataProviderActionCatalog::checkSandboxAccess(BusyLightDataProvider::AppName);
+    }
+
     #! Creates the object from constructor options
     constructor(*hash<auto> options) : AbstractFunctionalMqttDataProvider(options) {
         # Java I/O that the sandbox does not control: sandboxed code is refused (qore#5632)

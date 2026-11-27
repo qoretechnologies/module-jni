@@ -184,6 +184,10 @@ public class ExcelListWorksheetsDataProvider inherits AbstractDataProvider {
         if (exists req.path == exists req.data) {
             throw "EXCEL-READ-OPTION-ERROR", "exactly one of the \"path\" and \"data\" options must be given";
         }
+        if (exists req.path) {
+            # a location of the code that the provider may have been lent to (qore#7811)
+            Priv::check_request_location("list-worksheets", "path", req.path);
+        }
         ExcelFile file(exists req.data
             ? new BinaryInputStream(req.data)
             : FileLocationHandler::getBinaryStreamFromLocation(req.path));

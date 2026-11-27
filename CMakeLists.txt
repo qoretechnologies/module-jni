@@ -378,6 +378,7 @@ set(EXCEL_SOURCES
     ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/excel/ExcelWriter.java
     ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/excel/ExcelTestHelper.java
     ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/excel/SheetSource.java
+    ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/excel/MergedCellSheetSource.java
     ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/excel/WorkbookSheetSource.java
     ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/excel/XlsxSheetSource.java
     ${CMAKE_SOURCE_DIR}/src/java/org/qore/dataprovider/excel/ExcelFile.java
@@ -1285,6 +1286,9 @@ set(JAVA_TEST_JAR_SRC
     test/java/src/org/qore/jni/test/ClasspathUrlProbe.java
     test/java/src/org/qore/jni/test/GovernedProgramProbe.java
     test/java/src/org/qore/jni/test/HostObjectProbe.java
+    test/java/src/org/qore/jni/test/SuppliedClosureProbe.java
+    test/java/src/org/qore/jni/test/SuppliedFunction.java
+    test/java/src/org/qore/jni/test/SuppliedTask.java
     test/java/src/org/qore/jni/test/LibraryFieldHolder.java
     test/java/src/org/qore/jni/test/NativeHandleProbe.java
     test/java/src/org/qore/jni/test/SandboxIo.java
@@ -1402,6 +1406,26 @@ add_custom_target(jni-classpath-manifest-jars ALL
     COMMAND ${CMAKE_COMMAND} -E copy_directory ${CPMAN_JAR_DIR} ${CMAKE_SOURCE_DIR}/test/jni-classpath-manifest-jars
 )
 add_dependencies(jni-classpath-manifest-jars ${CPMAN_JARS})
+
+# the jars of the provider path tests (test/jni-provider-path-restricted.qtest): on no classpath, they are given to
+# the classpath options of the JDBC and JMS data providers; each has one class of its own, generated from
+# test/java/provpath/PathMarker.java.in, so that each test case uses a jar that no other case loads; they are copied
+# to test/jni-provider-path-jars
+set(PROVPATH_JAR_DIR ${CMAKE_CURRENT_BINARY_DIR}/jni-provider-path-jars)
+set(PROVPATH_JARS)
+foreach(_provpath_name Refused JdbcUnrestricted JmsUnrestricted JdbcLent JmsLent JdbcLibrary JmsLibrary JdbcDatabase)
+    set(PROVPATH_CLASS ${_provpath_name}Marker)
+    set(_provpath_src ${CMAKE_CURRENT_BINARY_DIR}/provpath-src/${_provpath_name}/org/qore/jni/test/provpath)
+    configure_file(test/java/provpath/PathMarker.java.in ${_provpath_src}/${PROVPATH_CLASS}.java @ONLY)
+    string(TOLOWER ${_provpath_name} _provpath_lower)
+    add_jar(jni-provider-path-${_provpath_lower} ${_provpath_src}/${PROVPATH_CLASS}.java
+        OUTPUT_DIR ${PROVPATH_JAR_DIR})
+    list(APPEND PROVPATH_JARS jni-provider-path-${_provpath_lower})
+endforeach()
+add_custom_target(jni-provider-path-jars ALL
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${PROVPATH_JAR_DIR} ${CMAKE_SOURCE_DIR}/test/jni-provider-path-jars
+)
+add_dependencies(jni-provider-path-jars ${PROVPATH_JARS})
 
 set(QPP_SRC
     src/ql_jni.qpp

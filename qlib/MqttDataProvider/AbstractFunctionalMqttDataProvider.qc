@@ -499,13 +499,44 @@ public class AbstractFunctionalMqttDataProvider inherits AbstractMqttDataProvide
     constructor(*hash<auto> options) {
         # Java I/O that the sandbox does not control: sandboxed code is refused (qore#5632)
         DataProviderActionCatalog::checkSandboxAccess(MqttDataProvider::AppName);
+        init(options, False);
+    }
+
+    #! Creates the object from a connection with the options of its creator (qore#7811)
+    /** The connection is confined to the members that its creator set and to the options that cannot change its
+        target for code that the host lent it to (MqttConnection::getDataProviderSource()), also when such code or
+        library code creates the object
+
+        @param conn the connection
+        @param options further options, which can only be options that cannot change the target for such code
+    */
+    constructor(MqttConnection conn, *hash<auto> options) {
+        # Java I/O that the sandbox does not control: sandboxed code is refused (qore#5632)
+        DataProviderActionCatalog::checkSandboxAccess(MqttDataProvider::AppName);
+        MqttConnection src = conn.getDataProviderSource(options);
+        init(src.orig_opts - "disable_automatic_pings" + {"url": src.real_url} + options, True);
+    }
+
+    #! Creates the object from the options
+    /** @param options the options of the calling code, or of a connection's creator
+        @param creator_options if the options are those of a connection's creator
+    */
+    private:internal init(*hash<auto> options, bool creator_options) {
+        # private:internal: a subclass, which code restricted from the file system can declare, cannot call it
+        # (qore#7811)
         @debug {
             LoggerWrapper::debug("AbstractFunctionalMqttDataProvider::constructor() url: %y client_id: %y",
                 options.url, options.client_id);
         }
         hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
+        # the options of the calling code (qore#7811)
+        if (!creator_options) {
+            AbstractMqttDataProvider::checkFileOptions(copts);
+        }
         configureAsyncApiOptions(copts);
-        hash<auto> cinfo = getClient(copts, logger);
+        hash<auto> cinfo = creator_options
+            ? AbstractMqttDataProvider::getClient(copts, logger, new Priv::CreatorOptions())
+            : AbstractMqttDataProvider::getClient(copts, logger);
         client = cinfo.client;
         opts = cinfo.opts;
         topic = copts.subscription_topic;
@@ -956,7 +987,9 @@ public class AbstractFunctionalMqttDataProvider inherits AbstractMqttDataProvide
         }
     }
 
-    private configureAsyncApiOptions(hash<auto> opts) {
+    private:internal configureAsyncApiOptions(hash<auto> opts) {
+        # private:internal: a subclass, which code restricted from the file system can declare, cannot call it
+        # (qore#7811)
         *AsyncApi::AsyncApi3Schema new_validator = asyncapi_validator;
         *string new_channel = asyncapi_channel;
         *string asyncapi_url;
