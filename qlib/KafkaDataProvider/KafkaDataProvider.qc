@@ -25,7 +25,10 @@
 #! Contains all public definitions in the KafkaDataProvider module
 public namespace KafkaDataProvider {
 #! Event- and message-based data provider for KAFKA client-side events
-/**
+/** @note getClientConfig() returns the connection and the creator's options of a provider, and refuses them to code
+    restricted from a functional domain of the connection's clients (\c NETWORK, \c FILESYSTEM) and to sandboxed
+    code, also when the host lent the provider to such code, as they can hold the host's credentials and key store
+    and trust store settings.  The creator's options are a \c private:internal member (qore#7811).
 */
 public class KafkaDataProvider inherits KafkaDataProviderBase {
     public {
@@ -134,6 +137,45 @@ public class KafkaDataProvider inherits KafkaDataProviderBase {
         # Java I/O that the sandbox does not control: sandboxed code is refused (qore#5632)
         DataProviderActionCatalog::checkSandboxAccess(KafkaDataProvider::AppName);
         self.opts = opts;
+    }
+
+    #! Returns the connection and the creator's options of the provider, to make a client of the same cluster
+    /** The connection is the one that the provider's child providers are created with, and the options are the ones
+        that the provider's creator gave it, without the options of the connection.
+
+        @return a hash with the following keys:
+        - \c connection: the provider's @ref KafkaConnection
+        - \c options: the options that the provider's creator gave it without the connection options
+          (@ref ConnectionConstructorOptions), or @ref nothing if none were given
+
+        @throw PERMISSION-DENIED the calling code, or the code that the provider was lent to, is restricted from the
+        \c NETWORK or \c FILESYSTEM functional domain (see
+        @ref Qore::SandboxManager::isLentToRestricted() "SandboxManager::isLentToRestricted()"), or is sandboxed (see
+        @ref Qore::SandboxManager::callerMayReceiveHostSecrets() "SandboxManager::callerMayReceiveHostSecrets()")
+
+        @par Example:
+        @code{.py}
+hash<auto> config = provider.getClientConfig();
+KafkaProducerDataProvider producer(config.connection, config.options);
+        @endcode
+
+        @since KafkaDataProvider 2.1
+    */
+    final hash<auto> getClientConfig() {
+        # the connection and options can hold the host's credentials and key stores (qore#7811)
+        if (SandboxManager::isLentToRestricted(DOM_NETWORK | DOM_FILESYSTEM)) {
+            throw "PERMISSION-DENIED", "the calling code may not read the connection and options of a kafka data "
+                "provider, as it is restricted from the NETWORK or FILESYSTEM functional domain";
+        }
+        # sandboxed code receives no host credentials either
+        if (!SandboxManager::callerMayReceiveHostSecrets()) {
+            throw "PERMISSION-DENIED", "the calling code may not read the connection and options of a kafka data "
+                "provider, as sandboxed code receives no host credentials";
+        }
+        return {
+            "connection": conn,
+            "options": opts,
+        };
     }
 
     string getName() {

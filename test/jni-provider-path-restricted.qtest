@@ -357,6 +357,14 @@ string sub member_dp(object conn, string member, string key, auto value) {
     return res(sub () { hash<auto> h = conn{member} ?? {}; h{key} = value; conn{member} = h;
         conn.getDataProvider(); return \"created\"; });
 }
+
+string sub kafka_client_config(object o) {
+    return res(sub () { return o.getClientConfig().options; });
+}
+
+string sub kafka_own_client_config(object conn) {
+    return res(sub () { KafkaDataProvider dp(conn); return dp.getClientConfig().options; });
+}
 ";
     }
 
@@ -425,6 +433,8 @@ string sub member_dp(object conn, string member, string key, auto value) {
             \libraryTest());
         addTestCase("subclasses of restricted code cannot reach the paths of a creator's options",
             \subclassTest());
+        addTestCase("the connection and creator's options of a Kafka data provider are refused to restricted code",
+            \kafkaClientConfigTest());
         addTestCase("deserialized Access data providers take no path of restricted code", \deserializationTest());
         addTestCase("restricted callers keep what does not name a path", \restrictedAllowedTest());
         addTestCase("sandbox policy refuses the classpath and request files", \sandboxTest());
@@ -776,6 +786,13 @@ string sub member_dp(object conn, string member, string key, auto value) {
 }",
                 "error": "^PARSE-EXCEPTION: illegal access to private member 'opts'",
             },
+            # the creator's options are read only with getClientConfig(), which refuses restricted code
+            "kafka opts read": {
+                "code": "class X inherits KafkaDataProvider {
+    static auto f(KafkaDataProvider o) { return o.opts; }
+}",
+                "error": "^PARSE-EXCEPTION: illegal access to private member 'opts'",
+            },
             # an override that would receive the token of the module's own code
             "kafka configureAsyncApiOptionsIntern() override": {
                 "code": "class X inherits KafkaProducerDataProvider {
@@ -850,6 +867,58 @@ string sub jms_get_impl(object c, hash<auto> h) { return XJms::f(c, h); }
                 l + "jms getImpl() runtime options");
         }
         assertEq(0, markerCount("Refused"), "the jar's class did not run for a subclass");
+    }
+
+    #! KafkaDataProvider::getClientConfig() gives trusted code the provider's connection and creator's options, and
+    #! refuses them to restricted code, also to a borrower that the host lent the provider to (qore#7811)
+    kafkaClientConfigTest() {
+        # trusted code: a provider made from options; the connection options are not part of the creator's options
+        hash<auto> opts = {"acks": "all", "key.serializer": "org.apache.kafka.common.serialization.StringSerializer"};
+        KafkaDataProvider dp({"server": "127.0.0.1:1", "bootstrap.servers": ("127.0.0.1:2",)} + opts);
+        hash<auto> config = dp.getClientConfig();
+        assertEq(("connection", "options"), keys config);
+        assertEq("KafkaConnection", config.connection.className());
+        assertEq("127.0.0.1:1", config.connection.url);
+        assertEq(opts, config.options);
+        # a client of the same cluster can be made with them
+        KafkaProducerDataProvider producer(config.connection, config.options);
+        assertEq("producer", producer.getName());
+
+        # trusted code: a provider made from a connection takes that connection
+        KafkaConnection kafka("c", "c", "kafka://127.0.0.1:1");
+        KafkaDataProvider conn_dp(kafka, {"acks": "1"});
+        config = conn_dp.getClientConfig();
+        assertTrue(config.connection == kafka, "the provider's connection is the creator's");
+        assertEq({"acks": "1"}, config.options);
+        # no options given
+        assertEq(NOTHING, new KafkaDataProvider(kafka).getClientConfig().options);
+
+        foreach hash<auto> r in (Restrictions) {
+            Program p = restricted{r.label};
+            string l = r.label + ": ";
+            # a restricted borrower of a lent provider is refused the host's connection and options
+            string rv = p.callFunction("kafka_client_config", dp);
+            assertRegex("^PERMISSION-DENIED: the calling code may not read the connection and options of a kafka "
+                "data provider, as it is restricted from the NETWORK or FILESYSTEM functional domain", rv,
+                l + "lent provider: " + rv);
+            rv = p.callFunction("kafka_client_config", conn_dp);
+            assertRegex("^PERMISSION-DENIED: the calling code may not read", rv,
+                l + "lent provider of a connection: " + rv);
+            # restricted code is refused also for a provider that it made itself from a lent connection
+            rv = p.callFunction("kafka_own_client_config", kafka);
+            assertRegex("^PERMISSION-DENIED: the calling code may not read", rv, l + "own provider: " + rv);
+            # a restricted subclass is refused the method as well
+            Program sp = getProgram(r.opts, NOTHING, "class XKafka inherits KafkaDataProvider {
+    static string f(KafkaDataProvider o) {
+        try { o.getClientConfig(); return \"read\"; } catch (hash<ExceptionInfo> ex) { return ex.err; }
+    }
+}
+string sub kafka_subclass_config(object o) { return XKafka::f(o); }
+");
+            assertEq("PERMISSION-DENIED", sp.callFunction("kafka_subclass_config", dp), l + "subclass");
+        }
+        # the host still reads them after the borrowers were refused
+        assertEq(opts, dp.getClientConfig().options);
     }
 
     #! Parses the code in a new Program with the parse options and the modules; returns the error or "parsed"
