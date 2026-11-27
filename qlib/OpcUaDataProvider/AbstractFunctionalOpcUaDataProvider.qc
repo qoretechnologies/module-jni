@@ -548,6 +548,17 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
         };
     }
 
+    private:internal {
+        #! OPC UA subscription (prevent GC)
+        /** It gives the client (OpcUaSubscription.getClient()), so subclasses, which restricted code can declare,
+            cannot read it (qore#7866)
+        */
+        *OpcUaSubscription subscription;
+
+        #! Per-monitored-item data value listener callbacks (prevent GC), which give the subscription
+        list<auto> monitored_item_listeners;
+    }
+
     private {
         #! Monitored node IDs
         list<string> monitored_nodes;
@@ -564,11 +575,6 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
         #! Discard oldest flag
         bool discard_oldest;
 
-        #! OPC UA subscription (prevent GC)
-        *OpcUaSubscription subscription;
-
-        #! Per-monitored-item data value listener callbacks (prevent GC)
-        list<auto> monitored_item_listeners;
 
         #! Mutex serializing access to the node metadata cache
         Qore::Thread::Mutex schema_cache_lock();

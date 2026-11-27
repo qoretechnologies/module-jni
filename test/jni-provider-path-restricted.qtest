@@ -941,7 +941,7 @@ string sub kafka_subclass_config(object o) { return XKafka::f(o); }
         assertEq("KafkaProducerDataProvider", dp.getChildProviderEx("producer").className());
     }
 
-    #! The client and connection options of the MQTT and OPC UA data providers are private:internal (qore#7866)
+    #! The clients and connection options of the MQTT, OPC UA and Kafka data providers are private:internal (qore#7866)
     /** They hold the host's credentials and key store passwords: a subclass, which restricted code can declare,
         could read them from a provider that the host lent it; the module's own classes use token-gated methods,
         which a subclass cannot call, as code outside the module cannot name the token (the private:internal helpers
@@ -958,7 +958,15 @@ string sub kafka_subclass_config(object o) { return XKafka::f(o); }
     static auto f(AbstractMqttDataProvider o) { return o.opts; }
 }
 "),
-            ("MQTT accessor", "cannot resolve namespace 'Priv'", "class XMqtt inherits AbstractMqttDataProvider {
+            ("MQTT accessor without the token", "argument 'token'", "class XMqtt inherits AbstractMqttDataProvider {
+    static auto f(AbstractMqttDataProvider o) { return o.getMqttClientIntern(); }
+}
+"),
+            ("MQTT accessor with NOTHING", "argument 'token'", "class XMqtt inherits AbstractMqttDataProvider {
+    static auto f(AbstractMqttDataProvider o) { return o.getMqttClientIntern(NOTHING); }
+}
+"),
+            ("MQTT token", "cannot resolve namespace 'Priv'", "class XMqtt inherits AbstractMqttDataProvider {
     static auto f(AbstractMqttDataProvider o) { return o.getMqttClientIntern(new Priv::CreatorOptions()); }
 }
 "),
@@ -970,8 +978,33 @@ string sub kafka_subclass_config(object o) { return XKafka::f(o); }
     static auto f(AbstractOpcUaDataProvider o) { return o.copts; }
 }
 "),
-            ("OPC UA accessor", "cannot resolve namespace 'Priv'", "class XOpcUa inherits AbstractOpcUaDataProvider {
+            ("OPC UA accessor without the token", "argument 'token'", "class XOpcUa inherits AbstractOpcUaDataProvider {
+    static auto f(AbstractOpcUaDataProvider o) { return o.getOpcUaOptionsIntern(); }
+}
+"),
+            ("OPC UA token", "cannot resolve namespace 'Priv'", "class XOpcUa inherits AbstractOpcUaDataProvider {
     static auto f(AbstractOpcUaDataProvider o) { return o.getOpcUaOptionsIntern(new Priv::ModuleToken()); }
+}
+"),
+            ("OPC UA subscription", "private member 'subscription'", "class XOpcUa inherits AbstractFunctionalOpcUaDataProvider {
+    static auto f(AbstractFunctionalOpcUaDataProvider o) { return o.subscription; }
+}
+"),
+            ("OPC UA monitored item listeners", "private member 'monitored_item_listeners'", "class XOpcUa
+        inherits AbstractFunctionalOpcUaDataProvider {
+    static auto f(AbstractFunctionalOpcUaDataProvider o) { return o.monitored_item_listeners; }
+}
+"),
+            ("Kafka connection accessor without the token", "argument 'token'", "class XKafka inherits KafkaDataProvider {
+    static auto f(KafkaDataProvider o) { return o.getConnectionIntern(); }
+}
+"),
+            ("Kafka producer", "private member 'prod'", "class XKafka inherits KafkaProducerDataProvider {
+    static auto f(KafkaProducerDataProvider o) { return o.prod; }
+}
+"),
+            ("Kafka consumer", "private member 'cons'", "class XKafka inherits KafkaConsumerDataProvider {
+    static auto f(KafkaConsumerDataProvider o) { return o.cons; }
 }
 "),
         );
@@ -979,8 +1012,32 @@ string sub kafka_subclass_config(object o) { return XKafka::f(o); }
         list<hash<auto>> restrictions = Restrictions + ({"label": "trusted", "opts": 0},);
         foreach hash<auto> r in (restrictions) {
             foreach list<string> c in (cases) {
-                assertRegex("^PARSE-EXCEPTION: .*" + c[1], parseIn(r.opts, c[2]), r.label + ": " + c[0]);
+                assertRegex("^PARSE-(EXCEPTION|TYPE-ERROR): .*" + c[1], parseIn(r.opts, c[2]), r.label + ": " + c[0]);
             }
+        }
+
+        # the creator's options of an MQTT connection, with its passwords, are checked without a virtual call: an
+        # override of checkOptions() in a subclass does not receive them
+        MqttConnection mconn("c", "c", "mqtt://localhost:1883", {"opts": {"username": "u", "password": "host-secret"}});
+        foreach hash<auto> r in (restrictions) {
+            Program p(PO_NEW_STYLE | r.opts);
+            map p.loadModule($1), Modules;
+            p.parse("our *hash<auto> seen;
+class XMqtt inherits MqttDataProvider {
+    constructor(MqttConnection c) : MqttDataProvider(c) {
+    }
+    *hash<auto> checkOptions(string err, *hash<string, hash<DataProviderOptionInfo>> defaults,
+            *hash<auto> user_options, *string req) {
+        seen = user_options;
+        return MqttDataProvider::checkOptions(err, defaults, user_options, req);
+    }
+}
+string sub probe(object c) {
+    XMqtt x(c);
+    return exists seen ? sprintf(\"override called with %y\", keys seen) : \"not called\";
+}
+", "jni-provider-path-checkoptions");
+            assertEq("not called", p.callFunction("probe", mconn), r.label + ": checkOptions() override");
         }
     }
 

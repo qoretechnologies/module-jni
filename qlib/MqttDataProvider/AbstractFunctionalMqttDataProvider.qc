@@ -528,7 +528,9 @@ public class AbstractFunctionalMqttDataProvider inherits AbstractMqttDataProvide
             LoggerWrapper::debug("AbstractFunctionalMqttDataProvider::constructor() url: %y client_id: %y",
                 options.url, options.client_id);
         }
-        hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
+        # not a virtual call: the options can be those of a connection's creator, with its passwords, which an
+        # override of checkOptions() in a subclass would receive (qore#7866)
+        hash<auto> copts = AbstractDataProvider::checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
         # the options of the calling code (qore#7811)
         if (!creator_options) {
             AbstractMqttDataProvider::checkFileOptions(copts);
@@ -720,7 +722,10 @@ public class AbstractFunctionalMqttDataProvider inherits AbstractMqttDataProvide
     }
 
     #! Qore callback for the MqttCallback interface
-    private mqttCallbackHandler(Method method, *list<auto> args) {
+    /** private:internal: an override in a subclass, which restricted code can declare, would receive the arguments of
+        the Paho callbacks, whose tokens give the client (qore#7866)
+    */
+    private:internal mqttCallbackHandler(Method method, *list<auto> args) {
         string method_name = method.getName();
         debug("MQTT callback: method=%y", method_name);
         try {
@@ -818,7 +823,7 @@ public class AbstractFunctionalMqttDataProvider inherits AbstractMqttDataProvide
     }
 
     #! Handles the connectComplete callback
-    private handleConnectComplete(*list<auto> args) {
+    private:internal handleConnectComplete(*list<auto> args) {
         bool reconnect = args[0] ?? False;
         string server_uri = args[1] ?? "";
         hash<auto> event_data = {
@@ -830,7 +835,7 @@ public class AbstractFunctionalMqttDataProvider inherits AbstractMqttDataProvide
     }
 
     #! Handles the disconnected callback
-    private handleDisconnected(*list<auto> args) {
+    private:internal handleDisconnected(*list<auto> args) {
         hash<auto> event_data;
         if (args[0] instanceof MqttDisconnectResponse) {
             MqttDisconnectResponse resp = args[0];

@@ -263,8 +263,13 @@ public class KafkaConsumerDataProvider inherits DataProvider::Observer, KafkaDat
         const BackOffPollMs = 250;
     }
 
-    private {
+    private:internal {
+        #! The consumer: QoreKafkaConsumer.getConsumer() gives the Kafka client, authenticated with the host's
+        #! credentials, so subclasses, which restricted code can declare, cannot read it (qore#7866)
         QoreKafkaConsumer cons;
+    }
+
+    private {
         Mutex event_m();
         WaitGroup event_wg();
         bool events_started = False;
