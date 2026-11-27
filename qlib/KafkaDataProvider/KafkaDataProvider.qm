@@ -135,6 +135,11 @@ module KafkaDataProvider {
     This data provider provides Kafka functionality with the \c Kafka factory and data provider with the same name,
     supporting asynchronous Kafka events and messaging (class @ref KafkaDataProvider::KafkaDataProvider "KafkaDataProvider").
 
+    @par File system restrictions
+    With the \c jni module loaded, a restriction of the \c FILESYSTEM functional domain by parse options is only a
+    boundary together with \c PO_NO_UNCONTROLLED_APIS: code that may use uncontrolled APIs can import Java classes
+    such as those of \c java.io and \c java.nio itself.
+
     @section kafkadataprovider_examples Kafka Data Provider Examples
 
     These examples are with \c qdp, the command-line interface to the Data Provider API.

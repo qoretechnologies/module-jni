@@ -79,6 +79,9 @@ public class AccessReadDataProvider inherits DataProvider::AbstractDataProvider 
     }
 
     private:internal {
+        #! the members that are never taken from serialized data
+        const DeserializationOwnMembers = ("temp_path", "it");
+
         # private:internal: a subclass, which code restricted from the file system can declare, cannot read or
         # change them (qore#7811)
         #! The path to the database file (or temp file path)
@@ -155,7 +158,22 @@ public class AccessReadDataProvider inherits DataProvider::AbstractDataProvider 
         cleanupTempFile();
     }
 
-    #! Cleans up the temp file if one was created
+    #! Assigns the members of the object after deserialization (qore#7811)
+    /** No constructor runs for a deserialized object, so a database path of the serialized data is checked here as
+        the \c path option of the calling code is; the temporary file and the iterator are the object's own, which it
+        creates when it needs them, never the serialized data's, as the object deletes its temporary file
+
+        @throw PERMISSION-DENIED the serialized data names a database path, and the calling code is restricted from the
+        \c FILESYSTEM functional domain
+    */
+    private:internal deserializeMembers(hash<auto> members) {
+        if (exists members.db_path) {
+            Priv::check_path_option();
+        }
+        self += members - DeserializationOwnMembers;
+    }
+
+    #! Removes the temporary file, if one was created
     private:internal cleanupTempFile() {
         if (temp_path && is_file(temp_path)) {
             unlink(temp_path);

@@ -427,8 +427,11 @@ module JakartaJmsDataProvider {
 
     @section JakartaJmsDataProvider_v1_0 JakartaJmsDataProvider Module Version 1.0
     - initial release
-    - the \c provider_classpath option is refused to calling code that is restricted from the \c FILESYSTEM
-      functional domain (<a href="https://github.com/qoretechnologies/qore/issues/7811">issue 7811</a>)
+    - <b>Behavior change</b>: the \c provider_classpath option is refused to calling code that is restricted from the
+      \c FILESYSTEM functional domain, also to the code that a lent object was lent to: a method of a host object
+      that was lent to such code and creates a data provider with a path of the host gets \c PERMISSION-DENIED,
+      and uses Qore::SandboxManager::callWithSystemPolicy() for it
+      (<a href="https://github.com/qoretechnologies/qore/issues/7811">issue 7811</a>)
     - <b>Behavior change</b>: a connection that host code lent to code restricted from a domain of its clients creates
       its data provider only from the members and options that its creator gave it: such code can give it no data
       provider options (also none that name no path, such as \c destination, \c message_selector, \c client_id or

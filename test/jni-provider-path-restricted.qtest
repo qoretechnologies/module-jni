@@ -308,6 +308,43 @@ string sub ctx_child(object o, string name, hash<auto> ctx) {
     return res(sub () { DataProviderDataContextHelper h(ctx); o.getChildProviderEx(name); return \"created\"; });
 }
 
+#! the serialized data of an Access data provider with the given class and members
+hash<SerializationInfo> sub access_data(string cls, hash<auto> members) {
+    hash<SerializationInfo> h = Serializable::serializeToData(new AccessReadDataProvider({\"data\": <00>}));
+    h._index{\"0\"}._class = cls;
+    h._index{\"0\"}._class_data = h._index{\"0\"}._class_data - \"AccessDataProvider::AccessReadDataProvider\"
+        + {cls: members};
+    return h;
+}
+
+string sub deser_open(string path) {
+    return res(sub () {
+        AccessReadDataProvider b = Serializable::deserialize(access_data(\"AccessDataProvider::AccessReadDataProvider\",
+            {\"db_path\": path, \"name\": \"n\", \"table_name\": \"Users\"}));
+        return (map $1.name, b.searchRecords());
+    });
+}
+
+string sub deser_delete(string cls, string path) {
+    return res(sub () {
+        object b = Serializable::deserialize(access_data(cls, {\"temp_path\": path, \"name\": \"n\",
+            \"table_name\": \"Users\"}));
+        delete b;
+        return \"deleted\";
+    });
+}
+
+string sub mqtt_from_conn(object conn, string keystore) {
+    # the class is looked up at run time, as the constructor that takes a connection is new (qore#7811)
+    return res(sub () { object o = Class::forName(\"MqttDataProvider\").newObject(conn,
+        {\"ssl.keystore.location\": keystore}); return \"created\"; });
+}
+
+string sub busylight_from_conn(object conn, string keystore) {
+    return res(sub () { object o = Class::forName(\"BusyLightDataProvider\").newObject(conn,
+        {\"ssl.keystore.location\": keystore}); return \"created\"; });
+}
+
 string sub lib_child_search(object o, string child) {
     return ProviderPathLibrary::child_search(o, child);
 }
@@ -388,6 +425,7 @@ string sub member_dp(object conn, string member, string key, auto value) {
             \libraryTest());
         addTestCase("subclasses of restricted code cannot reach the paths of a creator's options",
             \subclassTest());
+        addTestCase("deserialized Access data providers take no path of restricted code", \deserializationTest());
         addTestCase("restricted callers keep what does not name a path", \restrictedAllowedTest());
         addTestCase("sandbox policy refuses the classpath and request files", \sandboxTest());
         addTestCase("unrestricted callers use every path option and request location", \unrestrictedTest());
@@ -548,6 +586,12 @@ string sub member_dp(object conn, string member, string key, auto value) {
                 l + "mqtt keystore");
             assertRegex(LentRefused, p.callFunction("get_dp", busylight, {"validator": ods,
                 "asyncapi_channel": "x"}), l + "busylight validator");
+            assertRegex(LentRefused, p.callFunction("get_dp", busylight, {"ssl.keystore.location": ods}),
+                l + "busylight keystore");
+            assertRegex(LentRefused, p.callFunction("mqtt_from_conn", mqtt, ods),
+                l + "new MqttDataProvider(conn) with a keystore");
+            assertRegex(LentRefused, p.callFunction("busylight_from_conn", busylight, ods),
+                l + "new BusyLightDataProvider(conn) with a keystore");
             assertRegex(LentRefused, p.callFunction("get_dp", opcua, {"schema_location": nodeset2}),
                 l + "opcua schema_location");
             assertRegex(LentRefused, p.callFunction("get_dp", opcua, {"nodeset2_location": nodeset2}),
@@ -818,6 +862,33 @@ string sub jms_get_impl(object c, hash<auto> h) { return XJms::f(c, h); }
         } catch (hash<ExceptionInfo> ex) {
             return sprintf("%s: %s", ex.err, ex.desc);
         }
+    }
+
+    #! No constructor runs for a deserialized object: the database path is checked, and the temporary file and
+    #! the iterator are never taken from serialized data (qore#7811)
+    deserializationTest() {
+        foreach hash<auto> r in (Restrictions) {
+            Program p = restricted{r.label};
+            string l = r.label + ": deserialized ";
+            assertDenied(p.callFunction("deser_open", accdb), "path", l + "access database path");
+            foreach string cls in ("AccessDataProvider::AccessReadDataProvider",
+                    "AccessDataProvider::AccessTableReadDataProvider") {
+                string victim = tmp.path + "/victim.txt";
+                File f();
+                f.open2(victim, O_CREAT | O_WRONLY | O_TRUNC);
+                f.write("x");
+                f.close();
+                assertEq("ok: \"deleted\"", p.callFunction("deser_delete", cls, victim), l + cls);
+                assertTrue(is_file(victim), l + cls + ": the file named as the temporary file was not deleted");
+            }
+        }
+        # unrestricted code deserializes the data providers that it serialized
+        AccessReadDataProvider by_path(accdb, {"table_name": "Users"});
+        AccessReadDataProvider copy = Serializable::deserialize(Serializable::serialize(by_path));
+        assertEq(AccessNames, (map $1.name, copy.searchRecords()), "unrestricted: a provider with a path");
+        AccessReadDataProvider by_data({"data": ReadOnlyFile::readBinaryFile(accdb), "table_name": "Users"});
+        copy = Serializable::deserialize(Serializable::serialize(by_data));
+        assertEq(AccessNames, (map $1.name, copy.searchRecords()), "unrestricted: a provider with data");
     }
 
     restrictedAllowedTest() {

@@ -15,14 +15,18 @@
         \c FILESYSTEM domain cannot create the data providers from options (the URL, for example of a file
         database, the JDBC \c classpath and the Flyway \c locations name what they use), as it cannot create their
         connections (Qore::SandboxManager::isCallerRestricted())
-      - JakartaJmsDataProvider: the \c provider_classpath option is refused to such calling code, also to the
-        code that a lent object was lent to (Qore::SandboxManager::isLentToRestricted()), as are the MQTT keystore
-        and truststore options and the Access \c path option
+      - <b>Behavior change</b>, JakartaJmsDataProvider: the \c provider_classpath option is refused to such
+        calling code, also to the code that a lent object was lent to (Qore::SandboxManager::isLentToRestricted()), as
+        are the MQTT keystore and truststore options and the Access \c path option: a method of a host object that
+        was lent to such code and creates such a data provider with a path of the host gets \c PERMISSION-DENIED,
+        and uses Qore::SandboxManager::callWithSystemPolicy() for it
+      - AccessDataProvider: a deserialized data provider takes no temporary file and no iterator from the serialized
+        data, and a database path of the serialized data is refused to such code
       - the members of the data providers that hold the paths that they write or open later (the \c path of the
         write data providers of the Avro, Email, Excel, ICS, ODP, ODT, ODS, VCF, PowerPoint and Word modules, the
-        JasperReports output path, the Access database path, the Camel context) and the methods that give or use
-        them, or that take a creator's options, are private:internal or final, so that a subclass that restricted
-        code declares cannot change them, also of an object that the host lent
+        JasperReports output path, the Access database path) and the methods that give or use them, or that take a
+        creator's options, are private:internal or final, so that a subclass that restricted code declares cannot
+        change them, also of an object that the host lent
       - <b>Behavior change</b>, MqttDataProvider and BusyLightDataProvider: their connections declare the
         \c FILESYSTEM domain, and the keystore and truststore options are refused to such calling code
       - AccessDataProvider: the \c path option is refused to such calling code; a database given as data is

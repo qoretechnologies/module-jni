@@ -210,6 +210,8 @@ module AccessDataProvider {
     - the \c path option is refused to calling code that is restricted from the \c FILESYSTEM functional domain,
       also to the code that a lent object was lent to; the members and methods that hold and give the path are
       private:internal, so that a subclass cannot change them
+    - a deserialized data provider takes no temporary file and no iterator from the serialized data, and a database
+      path of the serialized data is refused to such code
       (<a href="https://github.com/qoretechnologies/qore/issues/7811">issue 7811</a>)
 */
 

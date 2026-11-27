@@ -115,7 +115,15 @@ public class AccessTableReadDataProvider inherits DataProvider::AbstractDataProv
         }
     }
 
-    #! Cleans up the temp file if one was created
+    #! Assigns the members of the object after deserialization (qore#7811)
+    /** No constructor runs for a deserialized object: the iterator, which holds the open database, and the temporary
+        file, which the object deletes, are never taken from serialized data
+    */
+    private:internal deserializeMembers(hash<auto> members) {
+        self += members - ("temp_path", "i");
+    }
+
+    #! Removes the temporary file, if one was created
     private:internal cleanupTempFile() {
         if (temp_path && is_file(temp_path)) {
             unlink(temp_path);

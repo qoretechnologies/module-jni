@@ -439,6 +439,11 @@ module OdsDataProvider {
     The app requires DataProvider 3.12 or later and declares <tt>external_io</tt> for its Java calls.
     Data provider consumers reject sandboxed callers with <tt>APP-SANDBOX-ACCESS-DENIED</tt>.
 
+    @par File system restrictions
+    With the \c jni module loaded, a restriction of the \c FILESYSTEM functional domain by parse options is only a
+    boundary together with \c PO_NO_UNCONTROLLED_APIS: code that may use uncontrolled APIs can import Java classes
+    such as those of \c java.io and \c java.nio itself.
+
     @par Request locations
     A request location of the file system, such as the \c path of the \c list-worksheets and \c profile
     actions, is refused to code that is restricted from the \c FILESYSTEM functional domain

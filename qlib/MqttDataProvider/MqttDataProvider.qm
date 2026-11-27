@@ -169,6 +169,11 @@ module MqttDataProvider {
     - <b>Connection lifecycle events</b>: \c connected and \c disconnected events
     - <b>Failover</b>: multiple server URIs for automatic failover
 
+    @par File system restrictions
+    With the \c jni module loaded, a restriction of the \c FILESYSTEM functional domain by parse options is only a
+    boundary together with \c PO_NO_UNCONTROLLED_APIS: code that may use uncontrolled APIs can import Java classes
+    such as those of \c java.io and \c java.nio itself.
+
     @section mqttdataprovider_examples MQTT Data Provider Examples
 
     These examples are with \c qdp, the command-line interface to the Data Provider API.
