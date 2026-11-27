@@ -42,7 +42,9 @@ public class CamelDataProvider inherits DataProvider::AbstractDataProvider {
         const ChildList = ("producer", "routes");
     }
 
-    private {
+    private:internal {
+        # private:internal: a subclass, which code restricted from the file system can declare, cannot read or
+        # change them (qore#7811)
         #! The Camel context object
         QoreCamelContext ctx;
 

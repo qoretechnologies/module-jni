@@ -78,7 +78,12 @@ public class AccessReadDataProvider inherits DataProvider::AbstractDataProvider 
         };
     }
 
-    private {
+    private:internal {
+        #! the members that are never taken from serialized data
+        const DeserializationOwnMembers = ("temp_path", "it");
+
+        # private:internal: a subclass, which code restricted from the file system can declare, cannot read or
+        # change them (qore#7811)
         #! The path to the database file (or temp file path)
         *string db_path;
 
@@ -111,6 +116,8 @@ public class AccessReadDataProvider inherits DataProvider::AbstractDataProvider 
         # Java I/O that the sandbox does not control: sandboxed code is refused (qore#5632)
         DataProviderActionCatalog::checkSandboxAccess(AccessDataProvider::AppName);
         *hash<auto> copts = checkOptions("ACCESS-READ-OPTION-ERROR", ConstructorOptions, opts);
+        # the path names a local file that Java opens (qore#7811)
+        Priv::check_path_option();
         db_path = path;
         name = path;
         table_name = copts.table_name;
@@ -130,6 +137,8 @@ public class AccessReadDataProvider inherits DataProvider::AbstractDataProvider 
                 error("ACCESS-READ-OPTION-ERROR", "cannot provide both \"data\" and \"path\" options; use either "
                     "one or the other");
             }
+            # the path names a local file that Java opens (qore#7811)
+            Priv::check_path_option();
             db_path = copts.path;
             name = copts.path;
         } else if (copts.data) {
@@ -149,8 +158,23 @@ public class AccessReadDataProvider inherits DataProvider::AbstractDataProvider 
         cleanupTempFile();
     }
 
-    #! Cleans up the temp file if one was created
-    private cleanupTempFile() {
+    #! Assigns the members of the object after deserialization (qore#7811)
+    /** No constructor runs for a deserialized object, so a database path of the serialized data is checked here as
+        the \c path option of the calling code is; the temporary file and the iterator are the object's own, which it
+        creates when it needs them, never the serialized data's, as the object deletes its temporary file
+
+        @throw PERMISSION-DENIED the serialized data names a database path, and the calling code is restricted from the
+        \c FILESYSTEM functional domain
+    */
+    private:internal deserializeMembers(hash<auto> members) {
+        if (exists members.db_path) {
+            Priv::check_path_option();
+        }
+        self += members - DeserializationOwnMembers;
+    }
+
+    #! Removes the temporary file, if one was created
+    private:internal cleanupTempFile() {
         if (temp_path && is_file(temp_path)) {
             unlink(temp_path);
             temp_path = NOTHING;
@@ -163,7 +187,7 @@ public class AccessReadDataProvider inherits DataProvider::AbstractDataProvider 
     }
 
     #! Returns the path to the database file, creating a temp file from binary data if needed
-    private string getDbPath() {
+    private:internal string getDbPath() {
         if (db_path) {
             return db_path;
         }
@@ -179,7 +203,7 @@ public class AccessReadDataProvider inherits DataProvider::AbstractDataProvider 
     }
 
     #! Common setup code
-    private checkIterator() {
+    private:internal checkIterator() {
         if (it) {
             return;
         }
@@ -228,7 +252,13 @@ public class AccessReadDataProvider inherits DataProvider::AbstractDataProvider 
         if (tables) {
             *hash<string, bool> table_map = map {$1: True}, tables;
             if (table_map{child_name}) {
-                return new AccessTableReadDataProvider(getDbPath(), name, child_name);
+                # a database from data is given to the child as data, as its path is the temporary file of this
+                # provider, which the path constructor would check as a path of the caller (qore#7811)
+                if (db_data) {
+                    return new AccessTableReadDataProvider({"data": db_data, "table_name": child_name});
+                }
+                # the path of this object's creator (qore#7811)
+                return new AccessTableReadDataProvider(getDbPath(), name, child_name, new Priv::CreatorOptions());
             }
         }
     }

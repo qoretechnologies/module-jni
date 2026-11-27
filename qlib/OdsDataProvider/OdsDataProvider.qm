@@ -439,6 +439,20 @@ module OdsDataProvider {
     The app requires DataProvider 3.12 or later and declares <tt>external_io</tt> for its Java calls.
     Data provider consumers reject sandboxed callers with <tt>APP-SANDBOX-ACCESS-DENIED</tt>.
 
+    @par File system restrictions
+    With the \c jni module loaded, a restriction of the \c FILESYSTEM functional domain by parse options is only a
+    boundary together with \c PO_NO_UNCONTROLLED_APIS: code that may use uncontrolled APIs can import Java classes
+    such as those of \c java.io and \c java.nio itself.
+
+    @par Request locations
+    A request location of the file system, such as the \c path of the \c list-worksheets and \c profile
+    actions, is refused to code that is restricted from the \c FILESYSTEM functional domain
+    (\c PERMISSION-DENIED), also when the provider was created by host code and lent to such code; see
+    @ref Qore::SandboxManager::isLentToRestricted() "SandboxManager::isLentToRestricted()".  Such code that was lent
+    the provider is also refused a location of another scheme with options in the location string, as options can
+    name local files that the location's handler reads,
+    and a location of a scheme without a handler.
+
     @section OdsDataProvider_writing_sheets Writing Several Worksheets
 
     The \c sheets option writes the records to several worksheets: each worksheet is a hash with its name in
@@ -518,6 +532,9 @@ module OdsDataProvider {
 
     @section OdsDataProvider_v1_0 OdsDataProvider Module Version 1.0
     - initial release
+    - request locations of the file system are refused to code that is restricted from the \c FILESYSTEM
+      functional domain, also when the provider was lent to it
+      (<a href="https://github.com/qoretechnologies/qore/issues/7811">issue 7811</a>)
 */
 
 #! contains all public definitions in the OdsDataProvider module
@@ -529,4 +546,66 @@ public const AppName = "ODS";
 namespace Priv {
 #! ODS logo
 const OdsWhiteLogo = File::readTextFile(get_script_dir() + "/ods-logo.svg");
+
+#! Refuses a request location of the file system to code that a provider was lent to and that is restricted from it
+/** FileLocationHandler refuses a location to calling code that is restricted from the functional domains of the
+    location's handler (@ref Qore::SandboxManager::isCallerRestricted() "SandboxManager::isCallerRestricted()"), but
+    inside a method of a provider that the host lent to such code, the code that the provider was lent to does not
+    count for it; a request location is given by that code, so it is checked here with
+    @ref Qore::SandboxManager::isLentToRestricted() "SandboxManager::isLentToRestricted()" before it is used
+    (qore#7811).  The location's handler is resolved as FileLocationHandler resolves it: the scheme (\c file if none
+    is given), and the options in the location string, which can name local files for other schemes.
+
+    The code of this function is the same in each module that has it (see test/jni-provider-path-restricted.qtest).
+
+    @param provider the name of the provider, for the error
+    @param field the name of the request field, for the error
+    @param location the location from the request
+
+    @throw PERMISSION-DENIED the code that the provider was lent to, or the calling code, is restricted from the
+    \c FILESYSTEM functional domain, and the location's handler uses the file system for the caller, the code that
+    the provider was lent to gave options in the location string, or the location's scheme has no handler
+*/
+sub check_request_location(string provider, string field, string location) {
+    if (!SandboxManager::isLentToRestricted(DOM_FILESYSTEM)) {
+        return;
+    }
+    string scheme = (location =~ x/^(\w+):\/\//)[0] ?? "file";
+    *hash<auto> opts;
+    if (*string opt_str = (location =~ x/((?:{).*(?:}))$/)[0]) {
+        try {
+            auto v = parse_to_qore_value(opt_str);
+            if (v.typeCode() == NT_HASH) {
+                opts = v;
+            } else if (v.strp()) {
+                opts = {v: True};
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # an option string that cannot be parsed is refused by FileLocationHandler when the location is used
+        }
+    }
+    AbstractFileLocationHandler handler;
+    try {
+        handler = FileLocationHandler::getHandler(scheme);
+    } catch (hash<ExceptionInfo> ex) {
+        if (ex.err != "SCHEME-ERROR") {
+            rethrow;
+        }
+        # a scheme without a handler now could have one when FileLocationHandler resolves the location, which would
+        # then not be judged here
+        throw "PERMISSION-DENIED", sprintf("the calling code may not use the %y location in the %s request field "
+            "%y, which has no handler, as it is restricted from the FILESYSTEM functional domain", scheme, provider,
+            field);
+    }
+    # options in the location string can name local files that a handler reads for the caller with FileLocationHandler
+    # (for example the swagger, certificate and key options of other schemes, or the options that the handler of a
+    # conn location gives to the handler of its connection), and FileLocationHandler judges the code that the
+    # provider was lent to as unrestricted, so a location with options is refused to such code; a calling code that
+    # is restricted itself is judged by FileLocationHandler
+    if ((handler.getCallerDomains(scheme, opts) & DOM_FILESYSTEM)
+        || (opts && !SandboxManager::isCallerRestricted(DOM_FILESYSTEM))) {
+        throw "PERMISSION-DENIED", sprintf("the calling code may not use this %y location in the %s request field "
+            "%y, as it is restricted from the FILESYSTEM functional domain", scheme, provider, field);
+    }
+}
 }

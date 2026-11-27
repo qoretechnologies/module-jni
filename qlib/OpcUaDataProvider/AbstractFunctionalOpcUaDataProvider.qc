@@ -1054,6 +1054,10 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
 
         @param location a \c FileLocationHandler location (e.g. a path, \c file://..., or \c resource://...)
 
+        @throw PERMISSION-DENIED the host lent the data provider to code that is restricted from the \c FILESYSTEM
+        functional domain, and the location is one of the file system, has options in the location string, or has a
+        scheme without a handler (qore#7811)
+
         @return an imported schema snapshot (\c source is \c "imported"); it carries the namespace table,
         the resolved variable/method endpoints, the \c required_models, and \c missing_dependencies (the
         required model namespaces not present in the imported model's namespace table)
@@ -1062,6 +1066,8 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
         the model hierarchy and how method argument properties are folded into method endpoints
     */
     hash<auto> importNodeSet2(string location) {
+        # a location of the code that the provider may have been lent to (qore#7811)
+        Priv::check_request_location("opcua", "location", location);
         string xml = FileLocationHandler::getTextFileFromLocation(location);
         return OpcUaDataProvider::nodeSet2ToAddressSpace(xml);
     }

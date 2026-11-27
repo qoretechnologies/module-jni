@@ -438,7 +438,27 @@ public class KafkaConnection inherits ConnectionProvider::AbstractConnectionWith
         @return a data provider object for this connection, if supported
     */
     AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
+        # the data provider takes its options from getDataProviderSource() (qore#7811)
         return new KafkaDataProvider(self, constructor_options);
+    }
+
+    #! Returns the object that a data provider of the connection is created from for the calling code (qore#7811)
+    /** The connection itself, or, for code that the host lent the connection to and that is restricted from a
+        domain of its clients, a private copy with the members that its creator set; such code may give the data
+        provider only the options that cannot change its target (see
+        \c ConnectionProvider::AbstractConnection::getLentDataProviderSource()).  The data providers of the module
+        that are created from a connection take their options from the object returned, also when the calling code
+        creates them itself or creates them with library code.
+
+        @param constructor_options the constructor options of the data provider
+
+        @return the object to take the options of the data provider from
+
+        @throw PERMISSION-DENIED the calling code is restricted from a domain of the connection's clients, and the
+        connection's members are not the ones that its creator set, or the options can change the target
+    */
+    KafkaConnection getDataProviderSource(*hash<auto> constructor_options) {
+        return cast<KafkaConnection>(getLentDataProviderSource(constructor_options));
     }
 
     #! Returns options that can be used to create Kafka data providers

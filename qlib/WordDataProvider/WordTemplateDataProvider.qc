@@ -62,6 +62,10 @@ public class WordTemplateFieldsDataProvider inherits AbstractDataProvider {
         if (exists req.template_data == exists req.template_path) {
             throw "WORD-TEMPLATE-ERROR", "provide exactly one of template_data and template_path";
         }
+        if (exists req.template_path) {
+            # a location of the code that the provider may have been lent to (qore#7811)
+            Priv::check_request_location(getName(), "template_path", req.template_path);
+        }
         binary data = exists req.template_data ? req.template_data : FileLocationHandler::getBinaryFileFromLocation(req.template_path);
         try {
             return new WordTemplate(data);
@@ -114,6 +118,8 @@ public class WordFillTemplateDataProvider inherits WordTemplateFieldsDataProvide
             throw "WORD-TEMPLATE-ERROR", ex.desc;
         }
         if (exists req.path) {
+            # a location of the code that the provider may have been lent to (qore#7811)
+            Priv::check_request_location("fill-template", "path", req.path);
             OutputStreamWrapper os = FileLocationHandler::getOutputStreamForLocation(req.path);
             on_exit os.waitForIo();
             on_exit os.close();

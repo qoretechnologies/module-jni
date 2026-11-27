@@ -196,7 +196,12 @@ public class JmsConnection inherits ConnectionProvider::AbstractConnectionWithIn
         @return a data provider object for this connection, if supported
     */
     AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
-        return new JmsDataProvider(orig_opts + {"url": url} + constructor_options);
+        # the data provider is created from the members that the connection's creator set and only with options that
+        # cannot change its target, for code that the host lent the connection to and that is restricted from a
+        # domain of its clients (ConnectionProvider's getLentDataProviderSource(); qore#7811)
+        JmsConnection src = cast<JmsConnection>(getLentDataProviderSource(constructor_options));
+        return new JmsDataProvider(src.orig_opts + {"url": src.url} + constructor_options,
+            new Priv::CreatorOptions());
     }
 
     #! Returns the ConnectionSchemeInfo hash for this object
@@ -222,8 +227,12 @@ public class JmsConnection inherits ConnectionProvider::AbstractConnectionWithIn
         @return the connection object
     */
     private JmsConnectionWrapper getImpl(bool connect = True, *hash<auto> rtopts) {
-        hash<auto> copts = orig_opts + {"url": url} + rtopts;
-        ConnectionFactory factory = JmsDataProviderBase::createConnectionFactory(copts);
+        # the members of the creator and only runtime options that cannot change the target for code that the host
+        # lent the connection to, also when a subclass calls this method directly (qore#7811)
+        JmsConnection src = cast<JmsConnection>(getLentTargetSource(rtopts));
+        hash<auto> copts = src.orig_opts + {"url": src.url} + rtopts;
+        # ConnectionProvider confines the members and runtime options for code that the host lent the connection to
+        ConnectionFactory factory = JmsDataProviderBase::createConnectionFactory(copts, new Priv::CreatorOptions());
         if (!connect) {
             return new JmsConnectionWrapper(factory);
         }

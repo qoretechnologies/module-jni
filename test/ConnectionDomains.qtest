@@ -70,13 +70,15 @@ class ConnectionDomainsTest inherits QUnit::Test {
                 "cls": "MqttDataProvider::MqttConnection",
                 "url": "mqtt://127.0.0.1:1",
                 "opts": NOTHING,
-                "domains": ("NETWORK",),
+                # the clients also read the keystore and truststore files of the options (qore#7811)
+                "domains": ("NETWORK", "FILESYSTEM",),
             },
             "BusyLightConnection": {
                 "cls": "BusyLightDataProvider::BusyLightConnection",
                 "url": "bltcp://127.0.0.1:1",
                 "opts": NOTHING,
-                "domains": ("NETWORK",),
+                # the clients also read the keystore and truststore files of the options (qore#7811)
+                "domains": ("NETWORK", "FILESYSTEM",),
             },
             "OpcUaConnection": {
                 "cls": "OpcUaDataProvider::OpcUaConnection",

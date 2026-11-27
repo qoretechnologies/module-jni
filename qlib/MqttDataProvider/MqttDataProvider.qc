@@ -70,6 +70,12 @@ public class MqttDataProvider inherits AbstractFunctionalMqttDataProvider {
         DataProviderActionCatalog::checkSandboxAccess(MqttDataProvider::AppName);
     }
 
+    #! Creates the object from a connection with the options of its creator (qore#7811)
+    constructor(MqttConnection conn, *hash<auto> options) : AbstractFunctionalMqttDataProvider(conn, options) {
+        # Java I/O that the sandbox does not control: sandboxed code is refused (qore#5632)
+        DataProviderActionCatalog::checkSandboxAccess(MqttDataProvider::AppName);
+    }
+
     string getName() {
         return "mqtt";
     }

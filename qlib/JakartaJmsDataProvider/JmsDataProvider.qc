@@ -198,11 +198,32 @@ public class JmsDataProvider inherits JmsDataProviderBase {
     constructor(*hash<auto> options) : JmsDataProviderBase(options ?? {}) {
         # Java I/O that the sandbox does not control: sandboxed code is refused (qore#5632)
         DataProviderActionCatalog::checkSandboxAccess(JakartaJmsDataProvider::AppName);
+        init(options, False);
+    }
+
+    #! Creates the object from the options of a connection's creator (qore#7811)
+    /** The connection is confined to the members and options that its creator gave it for code that it was lent to
+    */
+    constructor(*hash<auto> options, Priv::CreatorOptions token) : JmsDataProviderBase(options ?? {}) {
+        # Java I/O that the sandbox does not control: sandboxed code is refused (qore#5632)
+        DataProviderActionCatalog::checkSandboxAccess(JakartaJmsDataProvider::AppName);
+        init(options, True);
+    }
+
+    #! Creates the object from the options
+    /** @param options the options of the calling code, or of a connection's creator
+        @param creator_options if the options are those of a connection's creator
+    */
+    private:internal init(*hash<auto> options, bool creator_options) {
+        # private:internal: a subclass, which code restricted from the file system can declare, cannot call it
+        # (qore#7811)
         hash<auto> validated_opts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
         copts = validated_opts;
 
         # create connection factory
-        factory = JmsDataProviderBase::createConnectionFactory(copts);
+        factory = creator_options
+            ? JmsDataProviderBase::createConnectionFactory(copts, new Priv::CreatorOptions())
+            : JmsDataProviderBase::createConnectionFactory(copts);
 
         # create JMS connection
         jms_conn = JmsDataProviderBase::createJmsConnection(factory, copts);

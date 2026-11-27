@@ -216,6 +216,13 @@ module FlywayDataProvider {
     \c locations other than directories (ex: \c classpath:), and a \c url with driver properties, are refused to
       sandboxed code (\c JNI-SANDBOX-ERROR).
 
+    Code restricted from the \c DATABASE or \c FILESYSTEM functional domain cannot create a data provider from options
+    (\c PERMISSION-DENIED), as it cannot create a connection: the options (the URL, and the \c locations, whose
+    directories hold local SQL files that Flyway reads and executes) name what the data provider uses.  The data
+    providers of a connection that host code lent to such code are created only from the members and options that the
+    connection's creator gave it (FlywayConnection::getDataProviderSource()), also when such code creates them itself or
+    with library code.  Locations are trimmed as Flyway trims them before they are classified.
+
     @section flywaydataprovider_examples Flyway Data Provider Examples
 
     These examples are with \c qdp, the command-line interface to the Data Provider API.
@@ -237,6 +244,15 @@ module FlywayDataProvider {
 
     @section flywaydataprovider_v1_0 FlywayDataProvider Module Version 1.0
     - initial release
+    - <b>Behavior change</b>: code restricted from the \c DATABASE or \c FILESYSTEM functional domain cannot create a
+      FlywayDataProvider from options, as it cannot create a FlywayConnection: the options (the URL, and the
+      \c locations, whose directories hold local SQL files that Flyway reads and executes) name what it uses
+      (<a href="https://github.com/qoretechnologies/qore/issues/7811">issue 7811</a>)
+    - <b>Behavior change</b>: the data providers of a connection that host code lent to code restricted from a domain of
+      its clients are created only from the members and options that its creator gave it, also when that code creates
+      them itself from the connection or with library code: such code can give them no options (also none that name no
+      path, such as \c schemas or \c table) and change none of the connection's members
+      (<a href="https://github.com/qoretechnologies/qore/issues/7811">issue 7811</a>)
 */
 
 #! Contains all public definitions in the FlywayDataProvider module
@@ -249,6 +265,49 @@ namespace Priv {
 #! Flyway logo
 const FlywayLogo = File::readTextFile(get_script_dir() + "/flyway-logo.svg");
 
+#! Refuses a data provider that code restricted from the domains of its connections creates itself (qore#7811)
+/** A data provider of the module connects to a database, and its options (the URL, for example of a file database,
+    and the locations of the migrations) name what it uses, as the options of a FlywayConnection do: code restricted
+    from the domains of the connection (\c DATABASE and \c FILESYSTEM) cannot create the connection, and so it cannot
+    create the data provider itself either; such code uses the data provider of a connection that the host lent it
+    (FlywayConnection::getDataProvider()), which is created with the options of the connection's creator (see
+    FlywayConnection::getDataProviderSource())
+
+    @throw PERMISSION-DENIED the calling code is restricted from the \c DATABASE or \c FILESYSTEM functional domain
+*/
+sub check_creator() {
+    list<string> denied = ();
+    if (SandboxManager::isCallerRestricted(DOM_DATABASE)) {
+        denied += "DATABASE";
+    }
+    if (SandboxManager::isCallerRestricted(DOM_FILESYSTEM)) {
+        denied += "FILESYSTEM";
+    }
+    if (denied) {
+        throw "PERMISSION-DENIED", sprintf("code restricted from the %s functional domain%s cannot create a flyway "
+            "data provider itself; use the data provider of a connection that the host provides",
+            denied.join(" and "), denied.size() > 1 ? "s" : "");
+    }
+}
+
+#! Returns the locations with the \c filesystem: prefix added to a location without a prefix
+/** Flyway trims a location (Java's \c String.trim(): the characters up to U+0020) before it reads its prefix, so the
+    location is trimmed the same way here, and the trimmed value is what Flyway is given: a location is classified as
+    Flyway classifies it (qore#7811)
+
+    @param locations the locations as given in the options
+*/
+list<string> sub get_flyway_locations(*softlist<auto> locations) {
+    list<string> rv = ();
+    foreach auto location in (locations) {
+        string loc = location.toString();
+        loc =~ s/^[\x01-\x20]+//;
+        loc =~ s/[\x01-\x20]+$//;
+        rv += loc =~ /:/ ? loc : "filesystem:" + loc;
+    }
+    return rv;
+}
+
 #! Returns a Flyway runner for the given options
 /** @param copts the options: \c url, \c user and \c password, and the optional \c locations, \c schemas and
     \c table
@@ -257,7 +316,7 @@ const FlywayLogo = File::readTextFile(get_script_dir() + "/flyway-logo.svg");
 */
 QoreFlywayRunner sub get_flyway_runner(hash<auto> copts) {
     # prefix locations with "filesystem:" if no prefix is present
-    list<string> locations = map ($1 =~ /:/ ? $1 : "filesystem:" + $1), copts.locations ?? ();
+    list<string> locations = get_flyway_locations(copts.locations);
     # both checks are made before Flyway is configured (qore#5742)
     # driver properties in the JDBC URL ("?name=value", ";name=value", or key-value forms such as "(name=value)") can
     # name classes for the driver to load
