@@ -111,6 +111,8 @@ public class AccessReadDataProvider inherits DataProvider::AbstractDataProvider 
         # Java I/O that the sandbox does not control: sandboxed code is refused (qore#5632)
         DataProviderActionCatalog::checkSandboxAccess(AccessDataProvider::AppName);
         *hash<auto> copts = checkOptions("ACCESS-READ-OPTION-ERROR", ConstructorOptions, opts);
+        # the path names a local file that Java opens (qore#7811)
+        Priv::check_path_option();
         db_path = path;
         name = path;
         table_name = copts.table_name;
@@ -130,6 +132,8 @@ public class AccessReadDataProvider inherits DataProvider::AbstractDataProvider 
                 error("ACCESS-READ-OPTION-ERROR", "cannot provide both \"data\" and \"path\" options; use either "
                     "one or the other");
             }
+            # the path names a local file that Java opens (qore#7811)
+            Priv::check_path_option();
             db_path = copts.path;
             name = copts.path;
         } else if (copts.data) {
@@ -228,6 +232,11 @@ public class AccessReadDataProvider inherits DataProvider::AbstractDataProvider 
         if (tables) {
             *hash<string, bool> table_map = map {$1: True}, tables;
             if (table_map{child_name}) {
+                # a database from data is given to the child as data, as its path is the temporary file of this
+                # provider, which the path constructor would check as a path of the caller (qore#7811)
+                if (db_data) {
+                    return new AccessTableReadDataProvider({"data": db_data, "table_name": child_name});
+                }
                 return new AccessTableReadDataProvider(getDbPath(), name, child_name);
             }
         }

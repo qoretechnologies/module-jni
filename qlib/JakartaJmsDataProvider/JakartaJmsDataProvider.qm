@@ -195,6 +195,12 @@ module JakartaJmsDataProvider {
     The \c provider_classpath and \c connection_factory_class options are refused to sandboxed code
       (\c JNI-SANDBOX-ERROR).
 
+    The \c provider_classpath option names local files that Java loads as code, so it is refused to calling code
+    that is restricted from the \c FILESYSTEM functional domain (\c PERMISSION-DENIED); see
+    @ref Qore::SandboxManager::isCallerRestricted() "SandboxManager::isCallerRestricted()".
+    A connection that host code lent to such code creates its data provider only from the members and options that
+    its creator gave it (\c ConnectionProvider::AbstractConnection::getLentDataProviderSource()).
+
     @subsection jakartajmsdataprovider_usecases Business Use Cases
 
     JMS is the standard Java messaging API used across enterprise systems. Common use cases include:
@@ -417,6 +423,9 @@ module JakartaJmsDataProvider {
 
     @section JakartaJmsDataProvider_v1_0 JakartaJmsDataProvider Module Version 1.0
     - initial release
+    - the \c provider_classpath option is refused to calling code that is restricted from the \c FILESYSTEM
+      functional domain, and a lent connection creates its data provider only from the members and options that its
+      creator gave it (<a href="https://github.com/qoretechnologies/qore/issues/7811">issue 7811</a>)
 */
 
 #! contains all public definitions in the JakartaJmsDataProvider module
@@ -426,6 +435,24 @@ public const AppName = "JakartaJMS";
 }
 
 namespace Priv {
+#! Refuses an option that names local paths to calling code that is restricted from the file system (qore#7811)
+/** The module's code adds the paths to the classpath of its own %Program, so the restrictions of the calling code
+    are not applied by the \c add-classpath module command: they are checked here before the paths are used
+    (@ref Qore::SandboxManager::isCallerRestricted() "SandboxManager::isCallerRestricted()").  A connection that the
+    host lent creates its data provider from the options that its creator gave
+    (\c ConnectionProvider::AbstractConnection::getLentDataProviderSource()).
+
+    @param option the name of the option, for the error
+
+    @throw PERMISSION-DENIED the calling code is restricted from the \c FILESYSTEM functional domain
+*/
+sub check_path_option(string option) {
+    if (SandboxManager::isCallerRestricted(DOM_FILESYSTEM)) {
+        throw "PERMISSION-DENIED", sprintf("the calling code may not use the jakarta-jms option %y, which names "
+            "local files, as it is restricted from the FILESYSTEM functional domain", option);
+    }
+}
+
 #! JMS logo
 const JmsLogo = File::readTextFile(get_script_dir() + "/jms-logo.svg");
 }

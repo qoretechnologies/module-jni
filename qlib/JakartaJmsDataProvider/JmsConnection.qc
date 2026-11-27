@@ -196,7 +196,11 @@ public class JmsConnection inherits ConnectionProvider::AbstractConnectionWithIn
         @return a data provider object for this connection, if supported
     */
     AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
-        return new JmsDataProvider(orig_opts + {"url": url} + constructor_options);
+        # the data provider is created from the members that the connection's creator set and only with options that
+        # cannot change its target, for code that the host lent the connection to and that is restricted from a
+        # domain of its clients (ConnectionProvider's getLentDataProviderSource(); qore#7811)
+        JmsConnection src = cast<JmsConnection>(getLentDataProviderSource(constructor_options));
+        return new JmsDataProvider(src.orig_opts + {"url": src.url} + constructor_options);
     }
 
     #! Returns the ConnectionSchemeInfo hash for this object

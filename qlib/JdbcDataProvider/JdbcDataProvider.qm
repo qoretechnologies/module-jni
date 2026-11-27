@@ -164,6 +164,12 @@ module JdbcDataProvider {
     The \c classpath and \c driver_class options, and a \c url with driver properties, are refused to sandboxed
       code (\c JNI-SANDBOX-ERROR).
 
+    The \c classpath option names local files that Java loads as code, so it is refused to calling code that is
+    restricted from the \c FILESYSTEM functional domain (\c PERMISSION-DENIED); see
+    @ref Qore::SandboxManager::isCallerRestricted() "SandboxManager::isCallerRestricted()".
+    A connection that host code lent to such code creates its data provider only from the members and options that
+    its creator gave it (\c ConnectionProvider::AbstractConnection::getLentDataProviderSource()).
+
     @section jdbcdataprovider_examples JDBC Data Provider Examples
 
     These examples are with \c qdp, the command-line interface to the Data Provider API.
@@ -189,6 +195,9 @@ module JdbcDataProvider {
 
     @section jdbcdataprovider_v1_0 JdbcDataProvider Module Version 1.0
     - initial release
+    - the \c classpath option is refused to calling code that is restricted from the \c FILESYSTEM functional
+      domain, and a lent connection creates its data provider only from the members and options that its creator
+      gave it (<a href="https://github.com/qoretechnologies/qore/issues/7811">issue 7811</a>)
 */
 
 #! Contains all public definitions in the JdbcDataProvider module
@@ -198,6 +207,24 @@ public const AppName = "JdbcDP";
 }
 
 namespace Priv {
+
+#! Refuses an option that names local paths to calling code that is restricted from the file system (qore#7811)
+/** The module's code adds the paths to the classpath of its own %Program, so the restrictions of the calling code
+    are not applied by the \c add-classpath module command: they are checked here before the paths are used
+    (@ref Qore::SandboxManager::isCallerRestricted() "SandboxManager::isCallerRestricted()").  A connection that the
+    host lent creates its data provider from the options that its creator gave
+    (\c ConnectionProvider::AbstractConnection::getLentDataProviderSource()).
+
+    @param option the name of the option, for the error
+
+    @throw PERMISSION-DENIED the calling code is restricted from the \c FILESYSTEM functional domain
+*/
+sub check_path_option(string option) {
+    if (SandboxManager::isCallerRestricted(DOM_FILESYSTEM)) {
+        throw "PERMISSION-DENIED", sprintf("the calling code may not use the jdbc-dp option %y, which names local "
+            "files, as it is restricted from the FILESYSTEM functional domain", option);
+    }
+}
 
 #! Adds JDBC driver classpath entries and optionally instantiates the driver class
 /** @param copts connection options; supports optional \c classpath and \c driver_class keys
@@ -209,6 +236,9 @@ sub prepareJdbcDriver(hash<auto> copts) {
     # both options make Java load code that the sandbox does not control: before either is used (qore#5742)
     if (copts.classpath) {
         Jni::org::qore::jni::check_class_option("jdbc-dp", "classpath");
+        # the classpath names local files that Java loads as code: the module's own Program would add them, so the
+        # calling code's file system restriction is checked here (qore#7811)
+        check_path_option("classpath");
     }
     if (copts.driver_class) {
         Jni::org::qore::jni::check_class_option("jdbc-dp", "driver_class");

@@ -154,6 +154,9 @@ module KafkaDataProvider {
 /** @page kafkadataproviderreleasenotes KafkaDataProvider Release Notes
 
     @section kafkadataprovider_v2_1 KafkaDataProvider v2.1
+    - a connection that host code lent to code restricted from a domain of its clients creates its data provider
+      only from the members and options that its creator gave it, so such code cannot make it read the files that
+      its options name (<a href="https://github.com/qoretechnologies/qore/issues/7811">issue 7811</a>)
     - the consumer delivers records at least once: it commits a record only after every observer has accepted it,
       and a refused record is delivered again after a back-off instead of stopping the consumer and being lost, so
       an observer can see a record twice (see @ref kafkaconsumerdataprovider_delivery;

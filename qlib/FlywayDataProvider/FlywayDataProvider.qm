@@ -216,6 +216,15 @@ module FlywayDataProvider {
     \c locations other than directories (ex: \c classpath:), and a \c url with driver properties, are refused to
       sandboxed code (\c JNI-SANDBOX-ERROR).
 
+    \c locations other than \c classpath: locations are refused to calling code that is restricted from the
+    \c FILESYSTEM functional domain (\c PERMISSION-DENIED), as a directory location (\c filesystem:, the default
+    for a location without a prefix) names local files that Flyway reads and executes as SQL; see
+    @ref Qore::SandboxManager::isCallerRestricted() "SandboxManager::isCallerRestricted()".  \c classpath: locations
+    are not refused for this: they name resources of the classpath that the host set up, not paths of the file
+    system.
+    A connection that host code lent to such code creates its data provider only from the members and options that
+    its creator gave it (\c ConnectionProvider::AbstractConnection::getLentDataProviderSource()).
+
     @section flywaydataprovider_examples Flyway Data Provider Examples
 
     These examples are with \c qdp, the command-line interface to the Data Provider API.
@@ -237,6 +246,9 @@ module FlywayDataProvider {
 
     @section flywaydataprovider_v1_0 FlywayDataProvider Module Version 1.0
     - initial release
+    - \c locations other than \c classpath: locations are refused to calling code that is restricted from the
+      \c FILESYSTEM functional domain, and a lent connection creates its data provider only from the members and
+      options that its creator gave it (<a href="https://github.com/qoretechnologies/qore/issues/7811">issue 7811</a>)
 */
 
 #! Contains all public definitions in the FlywayDataProvider module
@@ -249,6 +261,48 @@ namespace Priv {
 #! Flyway logo
 const FlywayLogo = File::readTextFile(get_script_dir() + "/flyway-logo.svg");
 
+#! Returns the locations with the \c filesystem: prefix added to a location without a prefix
+/** Flyway trims a location (Java's \c String.trim(): the characters up to U+0020) before it reads its prefix, so the
+    location is trimmed the same way here, and the trimmed value is what Flyway is given: a location is classified as
+    Flyway classifies it (qore#7811)
+
+    @param locations the locations as given in the options
+*/
+list<string> sub get_flyway_locations(*softlist<auto> locations) {
+    list<string> rv = ();
+    foreach auto location in (locations) {
+        string loc = location.toString();
+        loc =~ s/^[\x01-\x20]+//;
+        loc =~ s/[\x01-\x20]+$//;
+        rv += loc =~ /:/ ? loc : "filesystem:" + loc;
+    }
+    return rv;
+}
+
+#! Refuses directory locations to calling code that is restricted from the file system (qore#7811)
+/** Flyway reads the SQL files of the directories and executes them, and the module's code runs with its own
+    %Program's options, so the restrictions of the calling code are checked here before Flyway is configured
+    (@ref Qore::SandboxManager::isCallerRestricted() "SandboxManager::isCallerRestricted()").  A location other than
+    a \c classpath: location is checked: a \c classpath: location names resources of the classpath that the host
+    set up, which Java resolves within its entries, not paths of the file system.  A connection that the host lent
+    creates its data provider from the options that its creator gave
+    (\c ConnectionProvider::AbstractConnection::getLentDataProviderSource()).
+
+    @param locations the locations with their prefixes (see get_flyway_locations())
+
+    @throw PERMISSION-DENIED the calling code is restricted from the \c FILESYSTEM functional domain
+*/
+sub check_locations(list<string> locations) {
+    if (!(map 1, locations, $1 !~ /^classpath:/i)) {
+        return;
+    }
+    if (SandboxManager::isCallerRestricted(DOM_FILESYSTEM)) {
+        throw "PERMISSION-DENIED", "the calling code may not use the flyway option \"locations\" with a location "
+            "other than a classpath: location, which names local files that Flyway reads and executes, as it is "
+            "restricted from the FILESYSTEM functional domain";
+    }
+}
+
 #! Returns a Flyway runner for the given options
 /** @param copts the options: \c url, \c user and \c password, and the optional \c locations, \c schemas and
     \c table
@@ -257,7 +311,9 @@ const FlywayLogo = File::readTextFile(get_script_dir() + "/flyway-logo.svg");
 */
 QoreFlywayRunner sub get_flyway_runner(hash<auto> copts) {
     # prefix locations with "filesystem:" if no prefix is present
-    list<string> locations = map ($1 =~ /:/ ? $1 : "filesystem:" + $1), copts.locations ?? ();
+    list<string> locations = get_flyway_locations(copts.locations);
+    # directory locations name local files that Flyway reads and executes: before they are used (qore#7811)
+    check_locations(locations);
     # both checks are made before Flyway is configured (qore#5742)
     # driver properties in the JDBC URL ("?name=value", ";name=value", or key-value forms such as "(name=value)") can
     # name classes for the driver to load

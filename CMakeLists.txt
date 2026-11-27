@@ -1407,6 +1407,16 @@ add_custom_target(jni-classpath-manifest-jars ALL
 )
 add_dependencies(jni-classpath-manifest-jars ${CPMAN_JARS})
 
+# the jar of the provider path tests (test/jni-provider-path-restricted.qtest): on no classpath, it is given to the
+# classpath options of the JDBC and JMS data providers; it is copied to test/jni-provider-path-jars
+set(PROVPATH_JAR_DIR ${CMAKE_CURRENT_BINARY_DIR}/jni-provider-path-jars)
+add_jar(jni-provider-path-marker test/java/provpath/src/org/qore/jni/test/provpath/PathMarker.java
+    OUTPUT_DIR ${PROVPATH_JAR_DIR})
+add_custom_target(jni-provider-path-jars ALL
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${PROVPATH_JAR_DIR} ${CMAKE_SOURCE_DIR}/test/jni-provider-path-jars
+)
+add_dependencies(jni-provider-path-jars jni-provider-path-marker)
+
 set(QPP_SRC
     src/ql_jni.qpp
     src/QC_JavaArray.qpp

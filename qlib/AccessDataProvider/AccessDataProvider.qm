@@ -141,6 +141,11 @@ module AccessDataProvider {
     The app requires DataProvider 3.12 or later and declares <tt>external_io</tt> for its Java calls.
     Data provider consumers reject sandboxed callers with <tt>APP-SANDBOX-ACCESS-DENIED</tt>.
 
+    The \c path option names a local file that Java opens for reading and writing, so it is refused to calling
+    code that is restricted from the \c FILESYSTEM functional domain (\c PERMISSION-DENIED); see
+    @ref Qore::SandboxManager::isCallerRestricted() "SandboxManager::isCallerRestricted()".  A provider that host
+    code created with a path, and lent to such code, keeps reading its own database.
+
     @section AccessDataProvider_reading Reading Access Databases
 
     @subsection AccessDataProvider_reading_basic Basic Reading
@@ -198,6 +203,8 @@ module AccessDataProvider {
 
     @section AccessDataProvider_v1_0 AccessDataProvider Module Version 1.0
     - initial release
+    - the \c path option is refused to calling code that is restricted from the \c FILESYSTEM functional domain
+      (<a href="https://github.com/qoretechnologies/qore/issues/7811">issue 7811</a>)
 */
 
 #! contains all public definitions in the AccessDataProvider module
@@ -209,4 +216,18 @@ public const AppName = "Access";
 namespace Priv {
 #! Access logo
 const AccessLogo = File::readTextFile(get_script_dir() + "/access-logo.svg");
+
+#! Refuses a database path to calling code that is restricted from the file system (qore#7811)
+/** Java opens the file, and the module's code runs with its own %Program's options, so the restrictions of the
+    calling code are checked here before the path is used
+    (@ref Qore::SandboxManager::isCallerRestricted() "SandboxManager::isCallerRestricted()").
+
+    @throw PERMISSION-DENIED the calling code is restricted from the \c FILESYSTEM functional domain
+*/
+sub check_path_option() {
+    if (SandboxManager::isCallerRestricted(DOM_FILESYSTEM)) {
+        throw "PERMISSION-DENIED", "the calling code may not use the access option \"path\", which names a local "
+            "file, as it is restricted from the FILESYSTEM functional domain";
+    }
+}
 }

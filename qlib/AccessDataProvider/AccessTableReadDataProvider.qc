@@ -59,6 +59,8 @@ public class AccessTableReadDataProvider inherits DataProvider::AbstractDataProv
     constructor(string db_path, string name, string table_name) {
         # Java I/O that the sandbox does not control: sandboxed code is refused (qore#5632)
         DataProviderActionCatalog::checkSandboxAccess(AccessDataProvider::AppName);
+        # the path names a local file that Java opens (qore#7811)
+        Priv::check_path_option();
         self.i = new AccessIterator(db_path, table_name);
         self.name = name;
         self.table_name = table_name;
@@ -80,6 +82,8 @@ public class AccessTableReadDataProvider inherits DataProvider::AbstractDataProv
             throw "ACCESS-READ-OPTION-ERROR", "table_name option is required for AccessTableReadDataProvider";
         }
         if (copts.path) {
+            # the path names a local file that Java opens (qore#7811)
+            Priv::check_path_option();
             i = new AccessIterator(copts.path, table_name);
             name = copts.path;
         } else if (copts.data) {

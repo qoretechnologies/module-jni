@@ -6,6 +6,17 @@
 
     @section jni_3_0_0 jni Module Version 3.0.0
 
+    - <b>Security</b> (qore#7811): the data provider options and request fields that name local paths are refused to
+      calling code that is restricted from the \c FILESYSTEM functional domain (\c PERMISSION-DENIED), as the data
+      provider modules use them with their own Program's options: the JDBC \c classpath, JMS
+      \c provider_classpath, Flyway \c locations other than \c classpath: locations, and Access \c path options
+      before they are used for a data provider or a connection's client (Qore::SandboxManager::isCallerRestricted()),
+      and the request
+      locations of the file system of the ODS and Excel \c list-worksheets and \c profile actions and the Word
+      template actions, also for a provider that the host lent (Qore::SandboxManager::isLentToRestricted()), which
+      is also refused a location with options in the location string; a JDBC,
+      JMS, Flyway or Kafka connection that the host lent creates its data provider only from the members and options
+      that its creator gave it (\c ConnectionProvider::AbstractConnection::getLentDataProviderSource())
     - <b>Behavior change</b> (qore#7738): \c org.qore.jni.QoreJavaDynamicApi.lookup(), which returned a lookup
       object for the class loader of the Program whose copy of the class it was called on, has been removed; nothing
       in the module used it

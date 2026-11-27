@@ -151,7 +151,11 @@ public class FlywayConnection inherits ConnectionProvider::AbstractConnectionWit
         @return a data provider object for this connection, if supported
     */
     AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
-        return new FlywayDataProvider(self, constructor_options);
+        # the data provider is created from the members that the connection's creator set and only with options that
+        # cannot change its target, for code that the host lent the connection to and that is restricted from a
+        # domain of its clients (ConnectionProvider's getLentDataProviderSource(); qore#7811)
+        return new FlywayDataProvider(cast<FlywayConnection>(getLentDataProviderSource(constructor_options)),
+            constructor_options);
     }
 
     #! Returns options that can be used to create Flyway data providers

@@ -90,6 +90,9 @@ public class JmsDataProviderBase inherits DataProvider::AbstractDataProvider {
         # the connection factory class is always named, so code that may not load arbitrary classes cannot use JMS
         if (copts.provider_classpath) {
             Jni::org::qore::jni::check_class_option("jakarta-jms", "provider_classpath");
+            # the classpath names local files that Java loads as code: the module's own Program would add them, so
+            # the calling code's file system restriction is checked here (qore#7811)
+            Priv::check_path_option("provider_classpath");
         }
         Jni::org::qore::jni::check_class_option("jakarta-jms", "connection_factory_class");
 

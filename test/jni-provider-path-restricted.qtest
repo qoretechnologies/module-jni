@@ -1,0 +1,580 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../build"
+%prepend-module-path "${SCRIPT_DIR}/../qlib"
+# the Access test helper creates the databases of the test
+%module-cmd(jni) add-relative-classpath ../qlib/AccessDataProvider/jar/jackcess-4.0.7.jar
+%module-cmd(jni) add-relative-classpath ../qlib/AccessDataProvider/jar/commons-lang3-3.10.jar
+%module-cmd(jni) add-relative-classpath ../qlib/AccessDataProvider/jar/commons-logging-1.2.jar
+%module-cmd(jni) add-relative-classpath ../qlib/AccessDataProvider/jar/qore-dataprovider-access.jar
+%requires jni
+%requires QUnit
+%requires Util
+%requires FsUtil
+%requires DataProvider
+%requires ConnectionProvider
+%requires FileLocationHandler
+%ifdef FLYWAY_TEST_DRIVER_CLASSPATH
+# Flyway's global loader must also see the test database driver.
+%module-cmd(jni) global-add-classpath $JDBC_DB_CLASSPATH
+%endif
+%requires JdbcDataProvider
+%requires JakartaJmsDataProvider
+%requires KafkaDataProvider
+%requires FlywayDataProvider
+%requires AccessDataProvider
+%requires OdsDataProvider
+%requires ExcelDataProvider
+%requires WordDataProvider
+%module-cmd(jni) import org.qore.dataprovider.access.AccessTestHelper
+%module-cmd(jni) import java.lang.System
+
+%exec-class JniProviderPathRestrictedTest
+
+#! A location handler that uses neither the file system nor the network for its caller: it reads one file
+class ProviderPathTestLocation inherits AbstractFileLocationHandler {
+    private {
+        string path;
+    }
+
+    constructor(string path) {
+        self.path = path;
+    }
+
+    private binary getBinaryFileImpl(string scheme, string location, *hash<auto> opts) {
+        return ReadOnlyFile::readBinaryFile(path);
+    }
+    private InputStream getBinaryStreamImpl(string scheme, string location, *hash<auto> opts) {
+        return new BinaryInputStream(getBinaryFileImpl(scheme, location, opts));
+    }
+    private string getTextFileImpl(string scheme, string location, *hash<auto> opts) {
+        throw "UNSUPPORTED", "text";
+    }
+    private StreamReader getStreamReaderImpl(string scheme, string location, *hash<auto> opts) {
+        throw "UNSUPPORTED", "text stream";
+    }
+    private OutputStreamWrapper getOutputStreamImpl(string scheme, string location, *hash<auto> opts) {
+        throw "UNSUPPORTED", "write";
+    }
+    private writeFileImpl(string scheme, string location, data contents, *hash<auto> opts) {
+        throw "UNSUPPORTED", "write";
+    }
+    private AbstractPollOperation getIoPollerForLocationImpl(string scheme, string location, *hash<auto> opts) {
+        throw "UNSUPPORTED", "poll";
+    }
+    private hash<string, hash<FileHandlerOptionInfo>> getReadOptionsImpl() {
+        return {};
+    }
+    private hash<string, hash<FileHandlerOptionInfo>> getWriteOptionsImpl() {
+        return {};
+    }
+}
+
+#! Provider options and request fields that name local paths are refused to code restricted from the file system
+/** The data provider modules run with their own %Program's parse options, so a calling %Program's restriction of
+    the \c FILESYSTEM domain is checked by the modules themselves (qore#7811):
+    - an option that names a path when the provider or connection is created (JDBC \c classpath, JMS
+      \c provider_classpath, Flyway directory \c locations, Access \c path):
+      SandboxManager::isCallerRestricted(DOM_FILESYSTEM), and SandboxManager::isLentToRestricted(DOM_FILESYSTEM) for
+      the options that a caller gives a connection that the host lent it
+    - a request location of the file system (the ODS and Excel \c list-worksheets and \c profile actions, the Word
+      template actions): SandboxManager::isLentToRestricted(DOM_FILESYSTEM), so that a provider that the host lent
+      to restricted code does not read or write the locations that the restricted code names
+
+    A class runs its static initializer once in each class loader, so the marker of the classpath jar counts only
+    its first load in each module's loader: the cases that refuse check that the count did not change, and the case
+    of unrestricted callers that it grows by one for each of the JDBC and JMS modules, which holds when it is the
+    first case that uses the jar successfully (it runs before the case of the host's paths).
+*/
+class JniProviderPathRestrictedTest inherits QUnit::Test {
+    public {
+        #! the modules that the restricted Programs use
+        const Modules = ("jni", "DataProvider", "ConnectionProvider", "FileLocationHandler", "JdbcDataProvider",
+            "JakartaJmsDataProvider", "KafkaDataProvider", "FlywayDataProvider", "AccessDataProvider",
+            "OdsDataProvider", "ExcelDataProvider", "WordDataProvider");
+
+        #! the parse options of the restricted Programs
+        const Restrictions = (
+            {"label": "PO_NO_FILESYSTEM", "opts": PO_NO_FILESYSTEM},
+            {"label": "PO_NO_FILESYSTEM|PO_NO_UNCONTROLLED_APIS",
+                "opts": PO_NO_FILESYSTEM | PO_NO_UNCONTROLLED_APIS},
+        );
+
+        #! the name of the worksheet of the spreadsheets of the test
+        const Sheet = "ProviderPathSheet";
+        #! the worksheets of the spreadsheets of the test
+        const SheetList = {"worksheets": ({"name": Sheet, "index": 0, "hidden": False},)};
+        #! the names of the users of the Access test database
+        const AccessNames = ("Alice Smith", "Bob Johnson", "Carol Williams");
+
+        #! the class of the marker jar
+        const MarkerClass = "org.qore.jni.test.provpath.PathMarker";
+        #! the system property that the marker class sets in its static initializer
+        const MarkerProperty = "org.qore.jni.test.provpath.loaded";
+
+        #! a Flyway configured with the locations: Flyway is configured if the database's driver is on its classpath
+        #! and otherwise reports that it has none
+        const FlywayConfigured = "^(ok: \"(created|connected)\"|JNI-ERROR: org.flywaydb.core.api.FlywayException: "
+            "No database found)";
+
+        #! the scheme of a location that uses no functional domain of the caller
+        const TestScheme = "provpathtest";
+
+        #! the schema of the Flyway migration
+        const FlywaySchema = "qore_provider_path_test";
+
+        #! the code of the restricted Programs; each function returns "ok: <value>" or "<err>: <desc>"
+        const RestrictedCode = "
+string sub res(code c) {
+    try {
+        return sprintf(\"ok: %y\", c());
+    } catch (hash<ExceptionInfo> ex) {
+        return sprintf(\"%s: %s\", ex.err, ex.desc);
+    }
+}
+
+string sub jdbc(string jar, string cls) {
+    return res(sub () { new JdbcDataProvider({\"url\": \"jdbc:qore-provider-path-none://x\", \"user\": \"u\",
+        \"password\": \"p\", \"classpath\": jar, \"driver_class\": cls}); });
+}
+
+string sub jdbc_conn(string jar, string cls) {
+    return res(sub () { JdbcConnection c(\"c\", \"c\", \"jdbc:qore-provider-path-none://x\", {},
+        {\"user\": \"u\", \"password\": \"p\", \"classpath\": jar, \"driver_class\": cls}); return c.get(); });
+}
+
+string sub jms(string jar, string cls) {
+    return res(sub () { return JmsDataProviderBase::createConnectionFactory({\"provider_classpath\": jar,
+        \"connection_factory_class\": cls, \"url\": \"x\"}); });
+}
+
+string sub flyway(string dir) {
+    return res(sub () { new FlywayDataProvider({\"url\": \"jdbc:postgresql://127.0.0.1:1/x\", \"user\": \"u\",
+        \"password\": \"p\", \"locations\": (dir,)}); return \"created\"; });
+}
+
+string sub access_opts(string path) {
+    return res(sub () { AccessTableReadDataProvider dp({\"path\": path, \"table_name\": \"Users\"});
+        return (map $1.name, dp.searchRecords()); });
+}
+
+string sub access_table(string path) {
+    return res(sub () { AccessTableReadDataProvider dp(path, \"n\", \"Users\");
+        return (map $1.name, dp.searchRecords()); });
+}
+
+string sub access_read(string path) {
+    return res(sub () { AccessReadDataProvider dp({\"path\": path, \"table_name\": \"Users\"});
+        return (map $1.name, dp.searchRecords()); });
+}
+
+string sub access_read_path(string path) {
+    return res(sub () { AccessReadDataProvider dp(path, {\"table_name\": \"Users\"});
+        return (map $1.name, dp.searchRecords()); });
+}
+
+string sub access_data(binary data) {
+    return res(sub () { AccessReadDataProvider dp({\"data\": data});
+        return (map $1.name, dp.getChildProviderEx(\"Users\").searchRecords()); });
+}
+
+string sub ods_list(string path) {
+    return res(sub () { OdsListWorksheetsDataProvider l(); return l.doRequest({\"path\": path}); });
+}
+
+string sub excel_list(string path) {
+    return res(sub () { ExcelListWorksheetsDataProvider l(); return l.doRequest({\"path\": path}); });
+}
+
+string sub request(object o, hash<auto> req) {
+    return res(sub () { return o.doRequest(req); });
+}
+
+string sub search(object o) {
+    return res(sub () { return (map $1.name, o.searchRecords()); });
+}
+
+string sub child_search(object o, string child) {
+    return res(sub () { return (map $1.name, o.getChildProviderEx(child).searchRecords()); });
+}
+
+string sub get_dp(object conn, hash<auto> opts) {
+    return res(sub () { conn.getDataProvider(opts); return \"created\"; });
+}
+
+string sub conn_get(object conn, *hash<auto> rtopts) {
+    return res(sub () { conn.get(True, rtopts); return \"connected\"; });
+}
+
+string sub member_dp(object conn, string member, string key, auto value) {
+    return res(sub () { hash<auto> h = conn{member} ?? {}; h{key} = value; conn{member} = h;
+        conn.getDataProvider(); return \"created\"; });
+}
+";
+    }
+
+    private {
+        #! the temporary directory of the test's files; the restricted Programs have no other access to it
+        TmpDir tmp("jni-provider-path-");
+        #! the marker jar, which is on no classpath
+        string jar;
+        #! the directory of the Flyway migration
+        string sql_dir;
+        #! an Access database
+        string accdb;
+        #! the spreadsheets
+        string ods;
+        string xlsx;
+        #! the Word template of the Word template tests
+        string docx;
+        #! the restricted Programs, by label
+        hash<string, Program> restricted;
+        #! the Flyway connection, if a database is configured
+        *hash<auto> flyway_db;
+    }
+
+    constructor() : QUnit::Test("JNI provider paths and restricted callers", "1.0", \ARGV) {
+        string script_dir = normalize_dir(getcwd() + "/" + get_script_dir());
+        jar = script_dir + "/jni-provider-path-jars/jni-provider-path-marker.jar";
+        docx = script_dir + "/word-template/shipment.docx";
+        sql_dir = tmp.path + "/sql";
+        accdb = tmp.path + "/users.accdb";
+        ods = tmp.path + "/book.ods";
+        xlsx = tmp.path + "/book.xlsx";
+
+        # the database of the Flyway migration, as for test/FlywayDataProvider.qtest
+        if (ENV.QORE_DB_CONNSTR_JDBC_PGSQL) {
+            hash<auto> ds = parse_datasource(ENV.QORE_DB_CONNSTR_JDBC_PGSQL);
+            string url = ds.options.url ?? ds.db;
+            flyway_db = {
+                "url": url =~ /^jdbc:/ ? url : "jdbc:" + url,
+                "user": ds.user,
+                "password": ds.pass,
+            };
+        }
+
+        makeFixtures();
+        addTestCase("setup", \setupTest());
+        addTestCase("restricted callers are refused creation-time paths", \creationRefusedTest());
+        addTestCase("restricted borrowers of lent providers are refused request locations", \lentRequestRefusedTest());
+        addTestCase("restricted borrowers of lent connections are refused path options", \lentConnectionRefusedTest());
+        addTestCase("restricted callers keep what does not name a path", \restrictedAllowedTest());
+        addTestCase("sandbox policy refuses the classpath and request files", \sandboxTest());
+        addTestCase("unrestricted callers use every path option", \unrestrictedTest());
+        addTestCase("lent providers and connections keep the host's paths", \lentHostPathTest());
+        addTestCase("flyway migration from a directory location", \flywayMigrateTest());
+        set_return_value(main());
+    }
+
+    setupTest() {
+        assertTrue(is_file(jar), "the marker jar is built: " + jar);
+        assertTrue(is_file(docx), "the Word template fixture exists");
+        assertTrue(is_file(accdb) && is_file(ods) && is_file(xlsx), "the databases and spreadsheets are created");
+        assertEq(Restrictions.size(), restricted.size(), "the restricted Programs are created");
+    }
+
+    #! Creates the files and Programs of the test, so that each test case can run alone
+    private makeFixtures() {
+        mkdir(sql_dir);
+        File f();
+        f.open2(sql_dir + "/V1__provider_path.sql", O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("create table provider_path_marker (id int);\n");
+        f.close();
+        AccessTestHelper::createSimpleAccdb(accdb);
+        {
+            OdsWriteDataProvider w(ods, {"worksheet": Sheet});
+            w.createRecord({"name": "row"});
+            w.commit();
+        }
+        {
+            ExcelWriteDataProvider w(xlsx, {"worksheet": Sheet});
+            w.createRecord({"name": "row"});
+            w.commit();
+        }
+        FileLocationHandler::registerHandler(TestScheme, new ProviderPathTestLocation(ods));
+        foreach hash<auto> r in (Restrictions) {
+            restricted{r.label} = getProgram(r.opts);
+        }
+    }
+
+    creationRefusedTest() {
+        int before = markerCount();
+        foreach hash<auto> r in (Restrictions) {
+            Program p = restricted{r.label};
+            string l = r.label + ": ";
+            assertDenied(p.callFunction("jdbc", jar, MarkerClass), "classpath", l + "jdbc classpath");
+            # ConnectionProvider refuses the connection itself to code restricted from the file system
+            assertRegex("^PERMISSION-DENIED: code restricted from the FILESYSTEM functional domain cannot create "
+                "connection", p.callFunction("jdbc_conn", jar, MarkerClass), l + "jdbc connection classpath");
+            assertDenied(p.callFunction("jms", jar, MarkerClass), "provider_classpath", l + "jms provider_classpath");
+            assertDenied(p.callFunction("flyway", sql_dir), "locations", l + "flyway location without prefix");
+            assertDenied(p.callFunction("flyway", "filesystem:" + sql_dir), "locations",
+                l + "flyway filesystem: location");
+            # Flyway trims a location before it reads its prefix
+            foreach string ws in ((" ", "\t", "\n", "\r\n ")) {
+                assertDenied(p.callFunction("flyway", ws + "filesystem:" + sql_dir), "locations",
+                    sprintf("%sflyway filesystem: location after %y", l, ws));
+                assertDenied(p.callFunction("flyway", ws + sql_dir), "locations",
+                    sprintf("%sflyway location without prefix after %y", l, ws));
+            }
+            assertDenied(p.callFunction("access_opts", accdb), "path", l + "access table path option");
+            assertDenied(p.callFunction("access_table", accdb), "path", l + "access table path argument");
+            assertDenied(p.callFunction("access_read", accdb), "path", l + "access read path option");
+            assertDenied(p.callFunction("access_read_path", accdb), "path", l + "access read path argument");
+            # already refused by FileLocationHandler to a direct caller
+            assertDenied(p.callFunction("ods_list", ods), "file", l + "ods list-worksheets path");
+            assertDenied(p.callFunction("excel_list", xlsx), "file", l + "excel list-worksheets path");
+        }
+        assertEq(before, markerCount(), "the marker class did not run for a restricted caller");
+    }
+
+    lentRequestRefusedTest() {
+        # the providers are created by trusted code and given to the restricted code
+        hash<string, object> lent = {
+            "ods list-worksheets": new OdsListWorksheetsDataProvider(),
+            "ods profile": new OdsProfileDataProvider(),
+            "excel list-worksheets": new ExcelListWorksheetsDataProvider(),
+            "excel profile": new ExcelProfileDataProvider(),
+            "word inspect-template": new WordTemplateFieldsDataProvider(),
+            "word fill-template": new WordFillTemplateDataProvider(),
+        };
+        string out = tmp.path + "/filled.docx";
+        foreach hash<auto> r in (Restrictions) {
+            Program p = restricted{r.label};
+            string l = r.label + ": lent ";
+            assertDenied(p.callFunction("request", lent."ods list-worksheets", {"path": ods}), "path",
+                l + "ods list-worksheets");
+            assertDenied(p.callFunction("request", lent."ods list-worksheets", {"path": "file://" + ods}), "path",
+                l + "ods list-worksheets file://");
+            assertDenied(p.callFunction("request", lent."ods profile", {"path": ods}), "path", l + "ods profile");
+            assertDenied(p.callFunction("request", lent."excel list-worksheets", {"path": xlsx}), "path",
+                l + "excel list-worksheets");
+            assertDenied(p.callFunction("request", lent."excel profile", {"path": xlsx}), "path",
+                l + "excel profile");
+            assertDenied(p.callFunction("request", lent."excel list-worksheets", {"path": "file://" + xlsx}), "path",
+                l + "excel list-worksheets file://");
+            # the options of a conn location are given to the handler of the connection, which is not judged here
+            assertDenied(p.callFunction("request", lent."ods list-worksheets",
+                {"path": "conn://provider-path-none/x{ssl_cert_path=" + ods + "}"}), "path",
+                l + "ods list-worksheets conn:// location with options");
+            # options that name local files that another scheme's handler reads
+            assertDenied(p.callFunction("request", lent."ods list-worksheets",
+                {"path": "rest://127.0.0.1:1/x{swagger=" + ods + "}"}), "path",
+                l + "ods list-worksheets rest:// location with a swagger file option");
+            # any options in the location string, which only the location's handler can judge
+            assertDenied(p.callFunction("request", lent."ods list-worksheets",
+                {"path": TestScheme + "://x{opt=1}"}), "path", l + "ods list-worksheets location with options");
+            assertDenied(p.callFunction("request", lent."word inspect-template", {"template_path": docx}),
+                "template_path", l + "word inspect-template");
+            assertDenied(p.callFunction("request", lent."word fill-template", {"template_data":
+                ReadOnlyFile::readBinaryFile(docx), "path": out, "mappings": {"customer": "c", "lines": ()}}),
+                "path", l + "word fill-template output");
+            assertDenied(p.callFunction("request", lent."word fill-template", {"template_path": docx,
+                "mappings": {"customer": "c", "lines": ()}}), "template_path", l + "word fill-template template");
+            assertFalse(is_file(out), l + "word fill-template: the output file was not written");
+        }
+    }
+
+    lentConnectionRefusedTest() {
+        int before = markerCount();
+        foreach hash<auto> r in (Restrictions) {
+            # new connections for each Program, as a borrower changes their members
+            JdbcConnection jdbc("c", "c", "jdbc:qore-provider-path-none://x", {}, {"user": "u", "password": "p"});
+            JmsConnection jms("c", "c", "jms://x", {}, {"connection_factory_class": MarkerClass});
+            FlywayConnection fw("c", "c", "flyway://127.0.0.1:1/x", {}, {"user": "u", "password": "p"});
+            KafkaConnection kafka("c", "c", "kafka://127.0.0.1:1");
+            Program p = restricted{r.label};
+            string l = r.label + ": lent ";
+            # the connection's data provider is created from the members that its creator set
+            assertDenied(p.callFunction("get_dp", kafka, {"validator": ods, "asyncapi_channel": "x"}), "validator",
+                l + "kafka connection data provider validator");
+            # members that the borrower changes (on connections of their own, as the change is kept)
+            assertDenied(p.callFunction("member_dp", new JdbcConnection("c", "c", "jdbc:qore-provider-path-none://x",
+                {}, {"user": "u", "password": "p"}), "opts", "classpath", jar), "(classpath|creator)",
+                l + "jdbc connection with a changed classpath member");
+            assertDenied(p.callFunction("member_dp", new JmsConnection("c", "c", "jms://x", {},
+                {"connection_factory_class": MarkerClass}), "orig_opts", "provider_classpath", jar),
+                "(provider_classpath|creator)", l + "jms connection with a changed provider_classpath member");
+            assertDenied(p.callFunction("member_dp", new FlywayConnection("c", "c", "flyway://127.0.0.1:1/x", {},
+                {"user": "u", "password": "p"}), "opts", "locations", (sql_dir,)), "(locations|creator)",
+                l + "flyway connection with a changed locations member");
+            assertDenied(p.callFunction("member_dp", new KafkaConnection("c", "c", "kafka://127.0.0.1:1"), "opts",
+                "ssl.truststore.location", ods), "(ssl.truststore.location|creator)",
+                l + "kafka connection with a changed truststore member");
+            assertDenied(p.callFunction("get_dp", jdbc, {"classpath": jar, "driver_class": MarkerClass}),
+                "classpath", l + "jdbc connection data provider");
+            # runtime options are refused by ConnectionProvider (getLentTargetSource())
+            assertDenied(p.callFunction("conn_get", jdbc, {"classpath": jar, "driver_class": MarkerClass}),
+                "classpath", l + "jdbc connection runtime options");
+            assertDenied(p.callFunction("get_dp", jms, {"provider_classpath": jar}), "provider_classpath",
+                l + "jms connection data provider");
+            assertDenied(p.callFunction("conn_get", jms, {"provider_classpath": jar}), "provider_classpath",
+                l + "jms connection runtime options");
+            assertDenied(p.callFunction("get_dp", fw, {"locations": (sql_dir,)}), "locations",
+                l + "flyway connection data provider");
+            assertDenied(p.callFunction("conn_get", fw, {"locations": (sql_dir,)}), "locations",
+                l + "flyway connection runtime options");
+        }
+        assertEq(before, markerCount(), "the marker class did not run for a restricted borrower");
+    }
+
+    restrictedAllowedTest() {
+        binary db = ReadOnlyFile::readBinaryFile(accdb);
+        OdsListWorksheetsDataProvider lister();
+        foreach hash<auto> r in (Restrictions) {
+            Program p = restricted{r.label};
+            string l = r.label + ": ";
+            # an Access database given as data is read through a temporary file of the module
+            assertEq(sprintf("ok: %y", AccessNames), p.callFunction("access_data", db), l + "access data");
+            # a location of a handler that uses no domain of the caller, and data in the request
+            assertEq(sprintf("ok: %y", SheetList), p.callFunction("request", lister, {"path": TestScheme + "://x"}),
+                l + "lent ods list-worksheets with another scheme");
+            assertEq(sprintf("ok: %y", SheetList), p.callFunction("request", lister,
+                {"data": ReadOnlyFile::readBinaryFile(ods)}), l + "lent ods list-worksheets with data");
+            # a classpath: location names no path of the file system; it is given to Flyway
+            assertRegex(FlywayConfigured, p.callFunction("flyway", "classpath:db/migration"),
+                l + "flyway classpath: location");
+            # a conn location without options is resolved by its connection's policy
+            assertRegex("^LOCATION-ERROR|^CONNECTION-ERROR|connection.*provider-path-none",
+                p.callFunction("request", lister, {"path": "conn://provider-path-none/x"}),
+                l + "lent ods list-worksheets conn:// location without options");
+        }
+    }
+
+    sandboxTest() {
+        # a sandbox that trusts the code with uncontrolled APIs and denies the file system by default
+        SandboxManager sm();
+        sm.setUncontrolledApiPolicy(True);
+        sm.setFilesystemDefaultPolicy(False);
+        foreach string dir in ((ENV.QORE_MODULE_DIR ?? "").split(PathSep)) {
+            if (dir.val()) {
+                sm.addFilesystemAllowedPath(dir, QSEC_READ);
+            }
+        }
+        sm.addFilesystemAllowedPath(normalize_dir(getcwd() + "/" + get_script_dir() + "/../qlib"), QSEC_READ);
+        sm.addFilesystemAllowedPath(normalize_dir(getcwd() + "/" + get_script_dir() + "/../build"), QSEC_READ);
+        Program p = getProgram(0, sm);
+        string rv = p.callFunction("jdbc", jar, MarkerClass);
+        assertRegex("^FILESYSTEM-ACCESS-DENIED: .*not allowed by the sandbox filesystem policy", rv,
+            "trusting sandbox: jdbc classpath");
+        rv = p.callFunction("jms", jar, MarkerClass);
+        assertRegex("^FILESYSTEM-ACCESS-DENIED: .*not allowed by the sandbox filesystem policy", rv,
+            "trusting sandbox: jms provider_classpath");
+        rv = p.callFunction("ods_list", ods);
+        assertRegex("^FILESYSTEM-ACCESS-DENIED: .*not permitted by security policy", rv,
+            "trusting sandbox: ods list-worksheets path");
+        assertEq(0, markerCount(), "the marker class did not run under the sandbox");
+    }
+
+    unrestrictedTest() {
+        Program p = getProgram(0);
+        int before = markerCount();
+        # the classpath option adds the jar: the driver class is loaded and instantiated, and the URL then has no
+        # driver
+        assertRegex("^JNI-ERROR: java.sql.SQLException: No suitable driver", p.callFunction("jdbc", jar, MarkerClass),
+            "jdbc classpath");
+        assertEq(before + 1, markerCount(), "jdbc: the marker class ran");
+        # the connection factory class is loaded from the jar and instantiated, and has no URL setter
+        assertRegex("^JMS-CONNECTION-ERROR: cannot set URL on connection factory class",
+            p.callFunction("jms", jar, MarkerClass), "jms provider_classpath");
+        assertEq(before + 2, markerCount(), "jms: the marker class ran");
+        # the locations are given to Flyway (the migration itself is tested with a database in flywayMigrateTest())
+        assertRegex(FlywayConfigured, p.callFunction("flyway", sql_dir), "flyway location without prefix");
+        assertRegex(FlywayConfigured, p.callFunction("flyway", "filesystem:" + sql_dir),
+            "flyway filesystem: location");
+        assertRegex(FlywayConfigured, p.callFunction("flyway", " filesystem:" + sql_dir),
+            "flyway filesystem: location after a space");
+        assertEq(sprintf("ok: %y", AccessNames), p.callFunction("access_opts", accdb), "access table path option");
+        assertEq(sprintf("ok: %y", AccessNames), p.callFunction("access_table", accdb), "access table path argument");
+        assertEq(sprintf("ok: %y", AccessNames), p.callFunction("access_read", accdb), "access read path option");
+        assertEq(sprintf("ok: %y", AccessNames), p.callFunction("access_read_path", accdb),
+            "access read path argument");
+        assertEq(sprintf("ok: %y", SheetList), p.callFunction("ods_list", ods), "ods list-worksheets path");
+        assertEq(sprintf("ok: %y", SheetList), p.callFunction("excel_list", xlsx), "excel list-worksheets path");
+        WordTemplateFieldsDataProvider inspect();
+        hash<auto> fields = inspect.doRequest({"template_path": docx});
+        assertEq("scalar", fields.fields.customer.type, "word inspect-template path");
+    }
+
+    lentHostPathTest() {
+        # the paths that the host gives the objects it lends are used for the restricted borrower
+        AccessReadDataProvider access(accdb);
+        JdbcConnection jdbc("c", "c", "jdbc:qore-provider-path-none://x", {},
+            {"user": "u", "password": "p", "classpath": jar, "driver_class": MarkerClass});
+        JmsConnection jms("c", "c", "jms://x", {},
+            {"provider_classpath": jar, "connection_factory_class": MarkerClass});
+        FlywayConnection fw("c", "c", "flyway://127.0.0.1:1/x", {},
+            {"user": "u", "password": "p", "locations": (sql_dir,)});
+        KafkaConnection kafka("c", "c", "kafka://127.0.0.1:1");
+        OdsProfileDataProvider prof();
+        foreach hash<auto> r in (Restrictions) {
+            Program p = restricted{r.label};
+            string l = r.label + ": lent ";
+            # the host's classpath is added and the connection factory class loaded, which has no URL setter
+            assertRegex("^JMS-CONNECTION-ERROR: cannot set URL on connection factory class",
+                p.callFunction("conn_get", jms), l + "jms connection with the host's classpath");
+            assertRegex("^JMS-CONNECTION-ERROR: cannot set URL on connection factory class",
+                p.callFunction("get_dp", jms, {}), l + "jms connection data provider with the host's classpath");
+            # the host's locations are given to Flyway
+            assertRegex(FlywayConfigured, p.callFunction("conn_get", fw), l + "flyway connection with the host's "
+                "locations");
+            assertRegex(FlywayConfigured, p.callFunction("get_dp", fw, {}), l + "flyway connection data provider "
+                "with the host's locations");
+            # the data providers of the connections are created from the host's members
+            assertRegex("^JNI-ERROR: java.sql.SQLException: No suitable driver", p.callFunction("get_dp", jdbc, {}),
+                l + "jdbc connection data provider with the host's classpath");
+            assertEq("ok: \"created\"", p.callFunction("get_dp", kafka, {}), l + "kafka connection data provider");
+            assertEq(sprintf("ok: %y", AccessNames), p.callFunction("child_search", access, "Users"),
+                l + "access provider with the host's path");
+            # the host's classpath is added and the driver class loaded, and the URL then has no driver
+            assertRegex("^JNI-ERROR: java.sql.SQLException: No suitable driver", p.callFunction("conn_get", jdbc),
+                l + "jdbc connection with the host's classpath");
+            # data in the request is not a location
+            string rv = p.callFunction("request", prof, {"data": ReadOnlyFile::readBinaryFile(ods)});
+            assertRegex("^ok: .*" + Sheet, rv, l + "ods profile with data");
+        }
+    }
+
+    flywayMigrateTest() {
+        if (!flyway_db) {
+            testSkip("no JDBC connection available (QORE_DB_CONNSTR_JDBC_PGSQL not set)");
+        }
+%ifndef FLYWAY_TEST_DRIVER_CLASSPATH
+        testSkip("the database driver is not on Flyway's global classpath (run with -DFLYWAY_TEST_DRIVER_CLASSPATH "
+            "and JDBC_DB_CLASSPATH set to the driver)");
+%endif
+        FlywayDataProvider dp(flyway_db + {"locations": (sql_dir,), "schemas": (FlywaySchema,)});
+        on_exit {
+            dp.getChildProviderEx("clean").doRequest();
+        }
+        auto rv = dp.getChildProviderEx("migrate").doRequest();
+        assertEq("1", rv[0].version, "the migration of the directory location ran");
+        assertEq(sql_dir + "/V1__provider_path.sql", rv[0].filepath, "the migration file of the location");
+    }
+
+    #! Returns the number of class loaders in which the marker class ran its static initializer
+    private static int markerCount() {
+        return (System::getProperty(MarkerProperty) ?? "0").toInt();
+    }
+
+    #! Returns a Program with the restricted code, restricted with the parse options and optionally sandboxed
+    private static Program getProgram(int opts, *SandboxManager sm) {
+        Program p(PO_NEW_STYLE | opts);
+        if (sm) {
+            p.setSandboxManager(sm);
+        }
+        map p.loadModule($1), Modules;
+        p.parse(RestrictedCode, "jni-provider-path-restricted");
+        return p;
+    }
+
+    #! Asserts that the result is the refusal of the option or location to code restricted from the file system
+    private assertDenied(string result, string name, string label) {
+        assertRegex("^PERMISSION-DENIED: .*the calling code (may not use .*" + name + ".*restricted from the "
+            "FILESYSTEM functional domain|is restricted from the FILESYSTEM functional domain .*" + name + ")",
+            result, label);
+    }
+}
