@@ -78,9 +78,13 @@ public class KafkaDataProviderBase inherits AbstractDataProvider {
             "(?:\\s+[A-Za-z_][A-Za-z0-9_.]*\\s*=\\s*(?:\"(?:[^\"\\\\]|\\\\.)*\"|[^\\s;\"=]+))*\\s*;\\s*$";
     }
 
-    private {
+    private:internal {
+        #! The connection: it can hold the host's credentials and key store and trust store settings, so subclasses,
+        #! which code restricted from them can declare, read it only with getConnectionIntern() (qore#7866)
         KafkaConnection conn;
+    }
 
+    private {
         #! Optional AsyncAPI validator
         *AsyncApi::AsyncApi3Schema asyncapi_validator;
 
@@ -93,6 +97,14 @@ public class KafkaDataProviderBase inherits AbstractDataProvider {
         # Java I/O that the sandbox does not control: sandboxed code is refused (qore#5632)
         DataProviderActionCatalog::checkSandboxAccess(KafkaDataProvider::AppName);
         self.conn = conn;
+    }
+
+    #! Returns the connection for the classes of this module
+    /** The token is a class of the module that code outside it cannot name or create, so only the module's own
+        classes can read the connection; a subclass that other code declares cannot (qore#7866)
+    */
+    final private KafkaConnection getConnectionIntern(Priv::CreatorOptions token) {
+        return conn;
     }
 
     #! Sets an AsyncAPI validator for Kafka value validation

@@ -320,7 +320,7 @@ public class KafkaConsumerDataProvider inherits DataProvider::Observer, KafkaDat
             LoggerWrapper::debug("KafkaConsumerDataProvider::constructor() options: %y", options);
         }
         *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, ctx + options)
-            + self.conn.getKafkaOptions();
+            + getConnectionIntern(new Priv::CreatorOptions()).getKafkaOptions();
         # before anything else is done with the options: they can name classes for the client to instantiate
         # (qore#5742)
         KafkaDataProviderBase::checkClassOptions(copts ?? {});

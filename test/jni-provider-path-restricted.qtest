@@ -916,9 +916,27 @@ string sub jms_get_impl(object c, hash<auto> h) { return XJms::f(c, h); }
 string sub kafka_subclass_config(object o) { return XKafka::f(o); }
 ");
             assertEq("PERMISSION-DENIED", sp.callFunction("kafka_subclass_config", dp), l + "subclass");
+            # nor can a subclass read the connection member itself: it is private:internal (qore#7866)
+            assertRegex("^PARSE-EXCEPTION: .*private member 'conn'", parseIn(r.opts, "class YKafka inherits KafkaDataProvider {
+    static auto f(KafkaDataProvider o) { return o.conn; }
+}
+"), l + "subclass reading the connection");
+            # and the module's accessor of the connection needs a token that code outside the module cannot name
+            assertRegex("^PARSE-EXCEPTION: ", parseIn(r.opts, "class ZKafka inherits KafkaDataProvider {
+    static auto f(KafkaDataProvider o) { return o.getConnectionIntern(new Priv::CreatorOptions()); }
+}
+"), l + "subclass calling the module's accessor");
         }
         # the host still reads them after the borrowers were refused
         assertEq(opts, dp.getClientConfig().options);
+        # trusted code cannot read the connection member through a subclass either: it uses getClientConfig()
+        # (qore#7866)
+        assertRegex("^PARSE-EXCEPTION: .*private member 'conn'", parseIn(0, "class TKafka inherits KafkaDataProvider {
+    static auto f(KafkaDataProvider o) { return o.conn; }
+}
+"), "trusted subclass reading the connection");
+        # the module's own child providers still get the connection (qore#7866)
+        assertEq("KafkaProducerDataProvider", dp.getChildProviderEx("producer").className());
     }
 
     #! Parses the code in a new Program with the parse options and the modules; returns the error or "parsed"
