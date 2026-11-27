@@ -171,6 +171,11 @@ module KafkaDataProvider {
       provider to, also a location with options in the location string or of a scheme without a handler; the
       producer and consumer of a KafkaDataProvider take the options that its creator gave it
       (<a href="https://github.com/qoretechnologies/qore/issues/7811">issue 7811</a>)
+    - <b>Behavior change</b>: the creator's options of a KafkaDataProvider are a \c private:internal member, which a
+      subclass cannot read; added KafkaDataProvider::getClientConfig(), which returns the provider's connection and
+      creator's options to trusted code and refuses them with \c PERMISSION-DENIED to code restricted from the
+      \c NETWORK or \c FILESYSTEM functional domain, also when the host lent it the provider
+      (<a href="https://github.com/qoretechnologies/qore/issues/7811">issue 7811</a>)
     - the consumer delivers records at least once: it commits a record only after every observer has accepted it,
       and a refused record is delivered again after a back-off instead of stopping the consumer and being lost, so
       an observer can see a record twice (see @ref kafkaconsumerdataprovider_delivery;

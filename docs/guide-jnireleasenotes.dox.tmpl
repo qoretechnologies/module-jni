@@ -49,6 +49,12 @@
         none that name no path (such as JMS \c destination, \c message_selector, \c client_id and
         \c session_mode, Kafka \c topics, Flyway \c schemas and \c table), and change none of the connection's
         members; the runtime options of lent MQTT, BusyLight and OPC UA connections are confined in the same way
+      - <b>Behavior change</b>, KafkaDataProvider: the creator's options of a KafkaDataProvider are a
+        \c private:internal member, which a subclass cannot read; the new
+        KafkaDataProvider::KafkaDataProvider::getClientConfig() returns the provider's connection and creator's
+        options to trusted code (for example to make a client of the same cluster), and refuses them with
+        \c PERMISSION-DENIED to code that is restricted from the \c NETWORK or \c FILESYSTEM functional domain, or
+        that the provider was lent to and that is restricted from those domains
     - <b>Behavior change</b> (qore#7738): \c org.qore.jni.QoreJavaDynamicApi.lookup(), which returned a lookup
       object for the class loader of the Program whose copy of the class it was called on, has been removed; nothing
       in the module used it
