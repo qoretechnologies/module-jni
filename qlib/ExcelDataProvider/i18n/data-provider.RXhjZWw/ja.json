@@ -59,6 +59,18 @@
           "source": "The spreadsheet content to profile",
           "message": "プロファイルするスプレッドシートの内容"
         },
+        "app.RXhjZWw.action.cHJvZmlsZQ.option.aGVhZGVyX3Jvdw.desc": {
+          "source": "The 1-based row holding the column names in every sheet, or `0` if the sheets have none; when not given, the header row is found from the sheet's content. Use it when the person who knows the file says where the column names are",
+          "message": "各シートで列名を含む行 (1 から数える)。シートにない場合は `0`。指定しない場合、ヘッダー行はシートの内容から判定されます。ファイルを知っている人が列名の位置を示した場合に使用します"
+        },
+        "app.RXhjZWw.action.cHJvZmlsZQ.option.aGVhZGVyX3Jvdw.display_name": {
+          "source": "Header Row",
+          "message": "ヘッダー行"
+        },
+        "app.RXhjZWw.action.cHJvZmlsZQ.option.aGVhZGVyX3Jvdw.short_desc": {
+          "source": "The row holding the column names, or 0 for none",
+          "message": "列名を含む行。ない場合は 0"
+        },
         "app.RXhjZWw.action.cHJvZmlsZQ.option.bWF4X3Jvd3M.desc": {
           "source": "The maximum number of rows read and profiled per sheet; the total row count is still reported, and a `partial_profile` finding notes that the sheet has more rows",
           "message": "シートごとに読み取ってプロファイルする最大行数。合計行数は引き続き報告され、`partial_profile` の検出結果によってシートにさらに行があることが示されます"

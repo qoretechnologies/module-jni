@@ -59,6 +59,18 @@
           "source": "The spreadsheet content to profile",
           "message": "Zawartość arkusza kalkulacyjnego do profilowania"
         },
+        "app.T0RT.action.cHJvZmlsZQ.option.aGVhZGVyX3Jvdw.desc": {
+          "source": "The 1-based row holding the column names in every sheet, or `0` if the sheets have none; when not given, the header row is found from the sheet's content. Use it when the person who knows the file says where the column names are",
+          "message": "Wiersz z nazwami kolumn w każdym arkuszu numerowany od 1 lub `0`, jeśli arkusze go nie mają; jeśli nie jest podany, wiersz nagłówka jest ustalany na podstawie zawartości arkusza. Użyj go, gdy osoba znająca plik wskaże, gdzie są nazwy kolumn"
+        },
+        "app.T0RT.action.cHJvZmlsZQ.option.aGVhZGVyX3Jvdw.display_name": {
+          "source": "Header Row",
+          "message": "Wiersz nagłówka"
+        },
+        "app.T0RT.action.cHJvZmlsZQ.option.aGVhZGVyX3Jvdw.short_desc": {
+          "source": "The row holding the column names, or 0 for none",
+          "message": "Wiersz z nazwami kolumn lub 0, jeśli go nie ma"
+        },
         "app.T0RT.action.cHJvZmlsZQ.option.bWF4X3Jvd3M.desc": {
           "source": "The maximum number of rows read and profiled per sheet; the total row count is still reported, and a `partial_profile` finding notes that the sheet has more rows",
           "message": "Maksymalna liczba odczytywanych i profilowanych wierszy na arkusz; łączna liczba wierszy jest i tak raportowana, a ustalenie `partial_profile` informuje, że arkusz ma więcej wierszy"

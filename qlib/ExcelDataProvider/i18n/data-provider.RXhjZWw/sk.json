@@ -59,6 +59,18 @@
           "source": "The spreadsheet content to profile",
           "message": "Obsah tabuľky na profilovanie"
         },
+        "app.RXhjZWw.action.cHJvZmlsZQ.option.aGVhZGVyX3Jvdw.desc": {
+          "source": "The 1-based row holding the column names in every sheet, or `0` if the sheets have none; when not given, the header row is found from the sheet's content. Use it when the person who knows the file says where the column names are",
+          "message": "Riadok s názvami stĺpcov v každom hárku číslovaný od 1, alebo `0`, ak hárky žiadny nemajú; ak nie je zadaný, riadok hlavičky sa zistí z obsahu hárka. Použite ho, keď osoba, ktorá súbor pozná, povie, kde sú názvy stĺpcov"
+        },
+        "app.RXhjZWw.action.cHJvZmlsZQ.option.aGVhZGVyX3Jvdw.display_name": {
+          "source": "Header Row",
+          "message": "Riadok hlavičky"
+        },
+        "app.RXhjZWw.action.cHJvZmlsZQ.option.aGVhZGVyX3Jvdw.short_desc": {
+          "source": "The row holding the column names, or 0 for none",
+          "message": "Riadok s názvami stĺpcov, alebo 0, ak žiadny nie je"
+        },
         "app.RXhjZWw.action.cHJvZmlsZQ.option.bWF4X3Jvd3M.desc": {
           "source": "The maximum number of rows read and profiled per sheet; the total row count is still reported, and a `partial_profile` finding notes that the sheet has more rows",
           "message": "Maximálny počet čítaných a profilovaných riadkov na hárok; celkový počet riadkov sa aj tak vykazuje a nález `partial_profile` upozorňuje, že hárok má viac riadkov"
