@@ -117,8 +117,46 @@ public class AbstractMqttDataProvider inherits DataProvider::AbstractDataProvide
         return message_format;
     }
 
+    #! The options that name local files that the client reads
+    const FileOptions = ("ssl.keystore.location", "ssl.truststore.location");
+
+    #! Refuses options that name local files to calling code that is restricted from the file system (qore#7811)
+    /** The Java client reads the keystore and truststore files, and the module's code runs with its own %Program's
+        options, so the restrictions of the calling code are checked here
+        (@ref Qore::SandboxManager::isCallerRestricted() "SandboxManager::isCallerRestricted()"); a connection that
+        the host lent creates its data provider from the options that its creator gave
+
+        @throw PERMISSION-DENIED the calling code is restricted from the \c FILESYSTEM functional domain, and the
+        options name a keystore or truststore file
+    */
+    static checkFileOptions(*hash<auto> copts) {
+        *list<string> names = map $1, FileOptions, exists copts{$1};
+        if (names && SandboxManager::isCallerRestricted(DOM_FILESYSTEM)) {
+            throw "PERMISSION-DENIED", sprintf("the calling code may not use the mqtt option(s) %y, which name local "
+                "files, as it is restricted from the FILESYSTEM functional domain", names);
+        }
+    }
+
     #! Returns a client for the given options
+    /** @throw PERMISSION-DENIED the calling code is restricted from the \c FILESYSTEM functional domain, and the
+        options name a keystore or truststore file
+    */
     static hash<auto> getClient(hash<auto> copts, *LoggerInterface logger) {
+        # the options of the calling code (qore#7811)
+        AbstractMqttDataProvider::checkFileOptions(copts);
+        return AbstractMqttDataProvider::getClientIntern(copts, logger);
+    }
+
+    #! Returns a client for the options of a connection's creator (qore#7811)
+    /** For the module's connections: the members and runtime options of a connection are confined for code that the
+        host lent it to (ConnectionProvider's getLentTargetSource())
+    */
+    static hash<auto> getClient(hash<auto> copts, *LoggerInterface logger, Priv::CreatorOptions token) {
+        return AbstractMqttDataProvider::getClientIntern(copts, logger);
+    }
+
+    #! Returns a client for the given options, which are checked or are the options of a connection's creator
+    static private hash<auto> getClientIntern(hash<auto> copts, *LoggerInterface logger) {
         @debug {
             if (logger) {
                 logger.debug("AbstractMqttDataProvider::getClient() url: %y client_id: %y", copts.url,

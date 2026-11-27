@@ -499,13 +499,34 @@ public class AbstractFunctionalMqttDataProvider inherits AbstractMqttDataProvide
     constructor(*hash<auto> options) {
         # Java I/O that the sandbox does not control: sandboxed code is refused (qore#5632)
         DataProviderActionCatalog::checkSandboxAccess(MqttDataProvider::AppName);
+        init(options, False);
+    }
+
+    #! Creates the object from the options of a connection's creator (qore#7811)
+    /** The connection is confined to the members and options that its creator gave it for code that it was lent to
+    */
+    constructor(*hash<auto> options, Priv::CreatorOptions token) {
+        # Java I/O that the sandbox does not control: sandboxed code is refused (qore#5632)
+        DataProviderActionCatalog::checkSandboxAccess(MqttDataProvider::AppName);
+        init(options, True);
+    }
+
+    #! Creates the object from the options
+    /** @param options the options of the calling code, or of a connection's creator
+        @param creator_options if the options are those of a connection's creator
+    */
+    private init(*hash<auto> options, bool creator_options) {
         @debug {
             LoggerWrapper::debug("AbstractFunctionalMqttDataProvider::constructor() url: %y client_id: %y",
                 options.url, options.client_id);
         }
         hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
+        # the options of the calling code (qore#7811)
+        if (!creator_options) {
+            AbstractMqttDataProvider::checkFileOptions(copts);
+        }
         configureAsyncApiOptions(copts);
-        hash<auto> cinfo = getClient(copts, logger);
+        hash<auto> cinfo = getClientIntern(copts, logger);
         client = cinfo.client;
         opts = cinfo.opts;
         topic = copts.subscription_topic;

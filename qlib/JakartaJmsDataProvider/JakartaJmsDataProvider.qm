@@ -424,8 +424,12 @@ module JakartaJmsDataProvider {
     @section JakartaJmsDataProvider_v1_0 JakartaJmsDataProvider Module Version 1.0
     - initial release
     - the \c provider_classpath option is refused to calling code that is restricted from the \c FILESYSTEM
-      functional domain, and a lent connection creates its data provider only from the members and options that its
-      creator gave it (<a href="https://github.com/qoretechnologies/qore/issues/7811">issue 7811</a>)
+      functional domain (<a href="https://github.com/qoretechnologies/qore/issues/7811">issue 7811</a>)
+    - <b>Behavior change</b>: a connection that host code lent to code restricted from a domain of its clients creates
+      its data provider only from the members and options that its creator gave it: such code can give it no data
+      provider options (also none that name no path, such as \c destination, \c message_selector, \c client_id or
+      \c session_mode) and change none of its members, so that it cannot make the data provider read the files that
+      the options name (<a href="https://github.com/qoretechnologies/qore/issues/7811">issue 7811</a>)
 */
 
 #! contains all public definitions in the JakartaJmsDataProvider module
@@ -455,4 +459,12 @@ sub check_path_option(string option) {
 
 #! JMS logo
 const JmsLogo = File::readTextFile(get_script_dir() + "/jms-logo.svg");
+
+#! A token of the module's own code: a factory created with one takes its options from its creator (qore#7811)
+/** Only the module's code can create an object of this class, as its namespace is not exported, so a variant that
+    takes one cannot be called by other code: such a variant is called by the module's code with the options that
+    the creator of a connection gave it, which are not checked again for the calling code
+*/
+class CreatorOptions {
+}
 }

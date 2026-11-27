@@ -6,17 +6,36 @@
 
     @section jni_3_0_0 jni Module Version 3.0.0
 
-    - <b>Security</b> (qore#7811): the data provider options and request fields that name local paths are refused to
-      calling code that is restricted from the \c FILESYSTEM functional domain (\c PERMISSION-DENIED), as the data
-      provider modules use them with their own Program's options: the JDBC \c classpath, JMS
-      \c provider_classpath, Flyway \c locations other than \c classpath: locations, and Access \c path options
-      before they are used for a data provider or a connection's client (Qore::SandboxManager::isCallerRestricted()),
-      and the request
-      locations of the file system of the ODS and Excel \c list-worksheets and \c profile actions and the Word
-      template actions, also for a provider that the host lent (Qore::SandboxManager::isLentToRestricted()), which
-      is also refused a location with options in the location string; a JDBC,
-      JMS, Flyway or Kafka connection that the host lent creates its data provider only from the members and options
-      that its creator gave it (\c ConnectionProvider::AbstractConnection::getLentDataProviderSource())
+    - <b>Security</b> (qore#7811): the data provider modules use the options and request fields that name local
+      paths with their own Program's options, so they now refuse them to code that is restricted from the
+      \c FILESYSTEM functional domain (\c PERMISSION-DENIED), as follows:
+      - <b>Behavior change</b>, JdbcDataProvider and FlywayDataProvider: code restricted from the \c DATABASE or
+        \c FILESYSTEM domain cannot create the data providers from options (the URL, for example of a file
+        database, the JDBC \c classpath and the Flyway \c locations name what they use), as it cannot create their
+        connections (Qore::SandboxManager::isCallerRestricted())
+      - JakartaJmsDataProvider: the \c provider_classpath option is refused to such calling code
+      - <b>Behavior change</b>, MqttDataProvider and BusyLightDataProvider: their connections declare the
+        \c FILESYSTEM domain, and the keystore and truststore options are refused to such calling code
+      - AccessDataProvider: the \c path option is refused to such calling code; a database given as data is
+        unaffected
+      - OdsDataProvider and ExcelDataProvider: request locations of the file system of the \c list-worksheets and
+        \c profile actions are refused also when the host lent the provider to such code
+        (Qore::SandboxManager::isLentToRestricted()), as is a location with options in the location string or of a
+        scheme without a handler
+      - WordDataProvider: the same for the \c template_path and \c path request fields of the
+        \c inspect-template and \c fill-template actions
+      - OpcUaDataProvider: the same for the location of importNodeSet2(); KafkaDataProvider: the same for the
+        \c validator and \c asyncapi locations of KafkaDataProviderBase::configureAsyncApiOptions()
+      - CamelDataProvider: a lent producer refuses an endpoint other than a plain endpoint of an in-memory
+        component
+      - <b>Behavior change</b>, the connections of JdbcDataProvider, JakartaJmsDataProvider, FlywayDataProvider,
+        KafkaDataProvider, MqttDataProvider, BusyLightDataProvider, OpcUaDataProvider and CamelDataProvider: the data
+        providers of a connection that the host lent to such code are created only from the members and options
+        that its creator gave it (\c ConnectionProvider::AbstractConnection::getLentDataProviderSource()), also when
+        such code creates them itself from the connection or with library code: it can give them no options, also
+        none that name no path (such as JMS \c destination, \c message_selector, \c client_id and
+        \c session_mode, Kafka \c topics, Flyway \c schemas and \c table), and change none of the connection's
+        members; the runtime options of lent MQTT, BusyLight and OPC UA connections are confined in the same way
     - <b>Behavior change</b> (qore#7738): \c org.qore.jni.QoreJavaDynamicApi.lookup(), which returned a lookup
       object for the class loader of the Program whose copy of the class it was called on, has been removed; nothing
       in the module used it

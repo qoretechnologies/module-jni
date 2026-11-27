@@ -1,0 +1,24 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+%modern
+
+#! A library module of test/jni-provider-path-restricted.qtest: library code that uses a connection for its caller
+module ProviderPathLibrary {
+    version = "1.0";
+    desc = "test library that creates data providers of connections for its caller";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+}
+
+#! Library code that acts on a connection for its caller, as DataProvider's symbol checks do
+public namespace ProviderPathLibrary {
+#! Returns "ok" if the connection's data provider is created for the caller, otherwise the error
+public string sub get_data_provider(object conn, *hash<auto> opts) {
+    try {
+        conn.getDataProvider(opts);
+        return "ok";
+    } catch (hash<ExceptionInfo> ex) {
+        return sprintf("%s: %s", ex.err, ex.desc);
+    }
+}
+}

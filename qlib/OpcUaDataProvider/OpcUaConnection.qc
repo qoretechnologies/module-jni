@@ -35,6 +35,14 @@ public class OpcUaConnection inherits ConnectionProvider::AbstractConnectionWith
         return DOM_NETWORK;
     }
 
+    #! Returns @ref True: the options of the connection and of its data providers name local files
+    /** The module's code reads them, so code restricted from the \c FILESYSTEM domain that the host lent the
+        connection to uses it only with the members and options that its creator gave (qore#7811)
+    */
+    private bool canUseFilePathsImpl() {
+        return True;
+    }
+
     public {
         #! Connection entry info
         const ConnectionScheme = ConnectionProvider::connection_scheme_presentation("OpcUaDataProvider",
@@ -113,8 +121,12 @@ public class OpcUaConnection inherits ConnectionProvider::AbstractConnectionWith
 
     #! Returns an @ref OpcUaDataProvider object for this connection
     AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
-        return new OpcUaDataProvider(orig_opts - ("monitored_nodes", "publishing_interval",
-            "sampling_interval", "queue_size", "discard_oldest") + {"url": real_url}
+        # the data provider is created from the members that the connection's creator set and only with options that
+        # cannot change its target, for code that the host lent the connection to and that is restricted from a
+        # domain of its clients (ConnectionProvider's getLentDataProviderSource(); qore#7811)
+        OpcUaConnection src = cast<OpcUaConnection>(getLentDataProviderSource(constructor_options));
+        return new OpcUaDataProvider(src.orig_opts - ("monitored_nodes", "publishing_interval",
+            "sampling_interval", "queue_size", "discard_oldest") + {"url": src.real_url}
             + constructor_options);
     }
 

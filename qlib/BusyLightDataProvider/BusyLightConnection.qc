@@ -92,7 +92,11 @@ public class BusyLightConnection inherits MqttDataProvider::MqttConnection {
         @debug {
             LoggerWrapper::debug("BusyLightConnection::getDataProvider() constructor_options: %y", constructor_options);
         }
-        return new BusyLightDataProvider(orig_opts - "disable_automatic_pings" + {"url": real_url} +
+        # the data provider is created from the members that the connection's creator set and only with options that
+        # cannot change its target, for code that the host lent the connection to and that is restricted from a
+        # domain of its clients (ConnectionProvider's getLentDataProviderSource(); qore#7811)
+        BusyLightConnection src = cast<BusyLightConnection>(getLentDataProviderSource(constructor_options));
+        return new BusyLightDataProvider(src.orig_opts - "disable_automatic_pings" + {"url": src.real_url} +
             constructor_options);
     }
 

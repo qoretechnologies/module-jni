@@ -445,7 +445,8 @@ module OdsDataProvider {
     (\c PERMISSION-DENIED), also when the provider was created by host code and lent to such code; see
     @ref Qore::SandboxManager::isLentToRestricted() "SandboxManager::isLentToRestricted()".  Such code that was lent
     the provider is also refused a location of another scheme with options in the location string, as options can
-    name local files that the location's handler reads.
+    name local files that the location's handler reads,
+    and a location of a scheme without a handler.
 
     @section OdsDataProvider_writing_sheets Writing Several Worksheets
 
@@ -550,13 +551,15 @@ const OdsWhiteLogo = File::readTextFile(get_script_dir() + "/ods-logo.svg");
     (qore#7811).  The location's handler is resolved as FileLocationHandler resolves it: the scheme (\c file if none
     is given), and the options in the location string, which can name local files for other schemes.
 
+    The code of this function is the same in each module that has it (see test/jni-provider-path-restricted.qtest).
+
     @param provider the name of the provider, for the error
     @param field the name of the request field, for the error
     @param location the location from the request
 
     @throw PERMISSION-DENIED the code that the provider was lent to, or the calling code, is restricted from the
-    \c FILESYSTEM functional domain, and the location's handler uses the file system for the caller, or the code
-    that the provider was lent to gave options in the location string
+    \c FILESYSTEM functional domain, and the location's handler uses the file system for the caller, the code that
+    the provider was lent to gave options in the location string, or the location's scheme has no handler
 */
 sub check_request_location(string provider, string field, string location) {
     if (!SandboxManager::isLentToRestricted(DOM_FILESYSTEM)) {
@@ -580,11 +583,14 @@ sub check_request_location(string provider, string field, string location) {
     try {
         handler = FileLocationHandler::getHandler(scheme);
     } catch (hash<ExceptionInfo> ex) {
-        # an unknown scheme is refused by FileLocationHandler when the location is used
         if (ex.err != "SCHEME-ERROR") {
             rethrow;
         }
-        return;
+        # a scheme without a handler now could have one when FileLocationHandler resolves the location, which would
+        # then not be judged here
+        throw "PERMISSION-DENIED", sprintf("the calling code may not use the %y location in the %s request field "
+            "%y, which has no handler, as it is restricted from the FILESYSTEM functional domain", scheme, provider,
+            field);
     }
     # options in the location string can name local files that a handler reads for the caller with FileLocationHandler
     # (for example the swagger, certificate and key options of other schemes, or the options that the handler of a

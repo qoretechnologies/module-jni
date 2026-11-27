@@ -129,7 +129,7 @@ public class KafkaDataProvider inherits KafkaDataProviderBase {
     }
 
     #! Creates the object from a connection object
-    constructor(KafkaConnection conn, *hash<auto> opts) : KafkaDataProviderBase(conn) {
+    constructor(KafkaConnection conn, *hash<auto> opts) : KafkaDataProviderBase(conn.getDataProviderSource(opts)) {
         # Java I/O that the sandbox does not control: sandboxed code is refused (qore#5632)
         DataProviderActionCatalog::checkSandboxAccess(KafkaDataProvider::AppName);
         self.opts = opts;
@@ -163,7 +163,8 @@ public class KafkaDataProvider inherits KafkaDataProviderBase {
     */
     private *DataProvider::AbstractDataProvider getChildProviderImpl(string name) {
         if (*Class cls = ChildMap{name}) {
-            return cls.newObject(conn, opts);
+            # the options of this object's creator (qore#7811)
+            return cls.newObject(conn, opts, new Priv::CreatorOptions());
         }
     }
 }

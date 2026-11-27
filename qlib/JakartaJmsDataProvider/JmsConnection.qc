@@ -200,7 +200,8 @@ public class JmsConnection inherits ConnectionProvider::AbstractConnectionWithIn
         # cannot change its target, for code that the host lent the connection to and that is restricted from a
         # domain of its clients (ConnectionProvider's getLentDataProviderSource(); qore#7811)
         JmsConnection src = cast<JmsConnection>(getLentDataProviderSource(constructor_options));
-        return new JmsDataProvider(src.orig_opts + {"url": src.url} + constructor_options);
+        return new JmsDataProvider(src.orig_opts + {"url": src.url} + constructor_options,
+            new Priv::CreatorOptions());
     }
 
     #! Returns the ConnectionSchemeInfo hash for this object
@@ -227,7 +228,8 @@ public class JmsConnection inherits ConnectionProvider::AbstractConnectionWithIn
     */
     private JmsConnectionWrapper getImpl(bool connect = True, *hash<auto> rtopts) {
         hash<auto> copts = orig_opts + {"url": url} + rtopts;
-        ConnectionFactory factory = JmsDataProviderBase::createConnectionFactory(copts);
+        # ConnectionProvider confines the members and runtime options for code that the host lent the connection to
+        ConnectionFactory factory = JmsDataProviderBase::createConnectionFactory(copts, new Priv::CreatorOptions());
         if (!connect) {
             return new JmsConnectionWrapper(factory);
         }

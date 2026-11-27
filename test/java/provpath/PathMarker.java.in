@@ -1,4 +1,4 @@
-/*  PathMarker.java Copyright 2026 Qore Technologies, s.r.o.
+/*  @PROVPATH_CLASS@.java Copyright 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -23,17 +23,18 @@
 
 package org.qore.jni.test.provpath;
 
-//! the class of the jar that test/jni-provider-path-restricted.qtest gives provider classpath options
-/** The jar is on no classpath, so the class can only be loaded through an option that adds the jar; its static
-    initializer records each class loader that ran it in a system property, so that the test sees whether the option
-    made Java load and run the jar's code.
+//! a class of a jar that test/jni-provider-path-restricted.qtest gives provider classpath options
+/** Each jar of the test has a class of its own (generated from test/java/provpath/PathMarker.java.in), and is on no
+    classpath, so the class can only be loaded through an option that adds that jar; its static initializer records
+    each class loader that ran it in a system property of its own, so that a test case sees whether the option that
+    it gave made Java load and run the jar's code, whatever the other test cases did.
 */
-public class PathMarker {
+public class @PROVPATH_CLASS@ {
     //! the system property that counts the class loaders that ran the static initializer
-    public static final String PROPERTY = "org.qore.jni.test.provpath.loaded";
+    public static final String PROPERTY = "org.qore.jni.test.provpath.@PROVPATH_CLASS@.loaded";
 
     static {
-        // the system properties are shared by the class loaders, each of which has its own PathMarker class
+        // the system properties are shared by the class loaders, each of which has its own copy of the class
         synchronized (System.getProperties()) {
             int count = Integer.getInteger(PROPERTY, 0);
             System.setProperty(PROPERTY, Integer.toString(count + 1));
@@ -41,10 +42,10 @@ public class PathMarker {
     }
 
     //! creates the object, as a JDBC driver class is instantiated
-    public PathMarker() {
+    public @PROVPATH_CLASS@() {
     }
 
     //! creates the object, as a JMS connection factory class is instantiated with its URL
-    public PathMarker(String url) {
+    public @PROVPATH_CLASS@(String url) {
     }
 }

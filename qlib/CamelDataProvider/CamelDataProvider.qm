@@ -221,6 +221,10 @@ module CamelDataProvider {
 
     @section cameldataprovider_v1_0 CamelDataProvider Module Version 1.0
     - initial release
+    - <b>Behavior change</b>: a producer that the host lent to code restricted from the \c FILESYSTEM functional domain
+      refuses an endpoint other than a plain endpoint name of an in-memory component, as a component can access local
+      files; a lent CamelConnection refuses the data provider options of such code (its data provider uses none)
+      (<a href="https://github.com/qoretechnologies/qore/issues/7811">issue 7811</a>)
 */
 
 #! Contains all public definitions in the CamelDataProvider module

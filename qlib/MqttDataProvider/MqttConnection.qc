@@ -32,7 +32,8 @@ public class MqttConnection inherits ConnectionProvider::AbstractConnectionWithI
     /** The clients connect to an MQTT broker, also those of BusyLightConnection
     */
     private final int getConnectionDomainsImpl() {
-        return DOM_NETWORK;
+        # the clients also read the keystore and truststore files of the options (qore#7811)
+        return DOM_NETWORK | DOM_FILESYSTEM;
     }
 
     public {
@@ -130,7 +131,12 @@ public class MqttConnection inherits ConnectionProvider::AbstractConnectionWithI
         @return a data provider object for this connection, if supported
     */
     AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
-        return new MqttDataProvider(orig_opts - "disable_automatic_pings" + {"url": real_url} + constructor_options);
+        # the data provider is created from the members that the connection's creator set and only with options that
+        # cannot change its target, for code that the host lent the connection to and that is restricted from a
+        # domain of its clients (ConnectionProvider's getLentDataProviderSource(); qore#7811)
+        MqttConnection src = cast<MqttConnection>(getLentDataProviderSource(constructor_options));
+        return new MqttDataProvider(src.orig_opts - "disable_automatic_pings" + {"url": src.real_url}
+            + constructor_options, new Priv::CreatorOptions());
     }
 
     #! Returns the string type for the first data provider type
@@ -181,7 +187,9 @@ public class MqttConnection inherits ConnectionProvider::AbstractConnectionWithI
         @debug {
             LoggerWrapper::debug("MqttConnection::getImpl() connect: %y rtopts: %y", connect, rtopts);
         }
-        hash<auto> copts = MqttDataProvider::getClient(orig_opts + {"url": real_url} + rtopts, logger);
+        # ConnectionProvider confines the members and runtime options for code that the host lent the connection to
+        hash<auto> copts = MqttDataProvider::getClient(orig_opts + {"url": real_url} + rtopts, logger,
+            new Priv::CreatorOptions());
         if (connect) {
             copts.client.connect(copts.opts);
         }

@@ -287,18 +287,42 @@ public class KafkaConsumerDataProvider inherits DataProvider::Observer, KafkaDat
     }
 
     #! Creates the object from a connection object
-    constructor(KafkaConnection conn, *hash<auto> options) : KafkaDataProviderBase(conn) {
+    constructor(KafkaConnection conn, *hash<auto> options)
+            : KafkaDataProviderBase(conn.getDataProviderSource(options)) {
         # Java I/O that the sandbox does not control: sandboxed code is refused (qore#5632)
         DataProviderActionCatalog::checkSandboxAccess(KafkaDataProvider::AppName);
+        init(options, False);
+    }
+
+    #! Creates the object for a KafkaDataProvider with the options of its creator (qore#7811)
+    /** The parent's connection is confined to the members that its creator set for code that it was lent to, and
+        the options are those that the parent's creator gave it
+    */
+    constructor(KafkaConnection conn, *hash<auto> options, Priv::CreatorOptions token)
+            : KafkaDataProviderBase(conn.getDataProviderSource()) {
+        # Java I/O that the sandbox does not control: sandboxed code is refused (qore#5632)
+        DataProviderActionCatalog::checkSandboxAccess(KafkaDataProvider::AppName);
+        init(options, True);
+    }
+
+    #! Creates the consumer from the options
+    /** @param options the options of the calling code, or of the parent's creator
+        @param creator_options if the options are those of the parent's creator
+    */
+    private init(*hash<auto> options, bool creator_options) {
+        # the AsyncAPI locations of the code that the provider may have been lent to, also those of the data context
+        # of the thread, which any code can set (qore#7811)
+        *hash<auto> ctx = DataProviderDataContextHelper::getHash(){keys ConstructorOptions};
+        KafkaDataProviderBase::checkAsyncApiLocations(creator_options ? ctx : ctx + options);
         @debug {
             LoggerWrapper::debug("KafkaConsumerDataProvider::constructor() options: %y", options);
         }
-        *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions,
-            DataProviderDataContextHelper::getHash(){keys ConstructorOptions} + options) + conn.getKafkaOptions();
+        *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, ctx + options)
+            + self.conn.getKafkaOptions();
         # before anything else is done with the options: they can name classes for the client to instantiate
         # (qore#5742)
         KafkaDataProviderBase::checkClassOptions(copts ?? {});
-        configureAsyncApiOptions(copts);
+        configureAsyncApiOptionsIntern(copts);
         removeAsyncApiOptions(\copts);
         # add default values automatically
         map copts{$1.key} = $1.value.default_value, ConstructorOptions.pairIterator(),

@@ -133,6 +133,28 @@ public class KafkaDataProviderBase inherits AbstractDataProvider {
             a \c validator location fails
     */
     configureAsyncApiOptions(hash<auto> opts) {
+        # the locations of a caller that the provider may have been lent to (qore#7811)
+        KafkaDataProviderBase::checkAsyncApiLocations(opts);
+        configureAsyncApiOptionsIntern(opts);
+    }
+
+    #! Refuses AsyncAPI locations of the file system to code restricted from it that the provider was lent to
+    /** @param opts options that may contain \c validator and \c asyncapi
+
+        @throw PERMISSION-DENIED see check_request_location() (qore#7811)
+    */
+    private static checkAsyncApiLocations(*hash<auto> opts) {
+        if (exists opts.validator && opts.validator.typeCode() == NT_STRING
+            && !KafkaDataProviderBase::isAsyncApiSchemaData(opts.validator)) {
+            Priv::check_request_location("kafka", "validator", opts.validator);
+        }
+        if (exists opts.asyncapi && opts.asyncapi.typeCode() == NT_STRING) {
+            Priv::check_request_location("kafka", "asyncapi", opts.asyncapi);
+        }
+    }
+
+    #! Configures AsyncAPI validation from the options that the provider was created with
+    private configureAsyncApiOptionsIntern(hash<auto> opts) {
         *AsyncApi::AsyncApi3Schema new_validator = asyncapi_validator;
         *string new_channel = asyncapi_channel;
         *string asyncapi_url;
