@@ -101,7 +101,9 @@ public class JmsDataProviderBase inherits DataProvider::AbstractDataProvider {
     /** @param copts the connection options
         @param check_caller if the options are the calling code's, so that a \c provider_classpath is checked
     */
-    private static ConnectionFactory createConnectionFactoryIntern(hash<auto> copts, bool check_caller) {
+    private:internal static ConnectionFactory createConnectionFactoryIntern(hash<auto> copts, bool check_caller) {
+        # private:internal: a subclass, which code restricted from the file system can declare, cannot call it
+        # (qore#7811)
         # both options make Java load code that the sandbox does not control: before either is used (qore#5742);
         # the connection factory class is always named, so code that may not load arbitrary classes cannot use JMS
         if (copts.provider_classpath) {

@@ -188,7 +188,10 @@ public class MqttConnection inherits ConnectionProvider::AbstractConnectionWithI
             LoggerWrapper::debug("MqttConnection::getImpl() connect: %y rtopts: %y", connect, rtopts);
         }
         # ConnectionProvider confines the members and runtime options for code that the host lent the connection to
-        hash<auto> copts = MqttDataProvider::getClient(orig_opts + {"url": real_url} + rtopts, logger,
+        # the members of the creator and only runtime options that cannot change the target for code that the host
+        # lent the connection to, also when a subclass calls this method directly (qore#7811)
+        MqttConnection src = cast<MqttConnection>(getLentTargetSource(rtopts));
+        hash<auto> copts = MqttDataProvider::getClient(src.orig_opts + {"url": src.real_url} + rtopts, logger,
             new Priv::CreatorOptions());
         if (connect) {
             copts.client.connect(copts.opts);

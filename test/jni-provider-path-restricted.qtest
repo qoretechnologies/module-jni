@@ -148,6 +148,10 @@ class JniProviderPathRestrictedTest inherits QUnit::Test {
             "it the data provider option|use a connection that unrestricted code created and lent to it only with "
             "the target that its creator gave it)";
 
+        #! the refusal of a lent connection's runtime options by ConnectionProvider
+        const RuntimeRefused = "^PERMISSION-DENIED: connection \"c\": the calling code is restricted from the "
+            "FILESYSTEM functional domain and may not give .* the runtime option";
+
         #! the code of the restricted Programs; each function returns "ok: <value>" or "<err>: <desc>"
         const RestrictedCode = "
 string sub res(code c) {
@@ -345,6 +349,8 @@ string sub member_dp(object conn, string member, string key, auto value) {
             \databaseRestrictedTest());
         addTestCase("library code creates the data providers of the host's connections for restricted callers",
             \libraryTest());
+        addTestCase("subclasses of restricted code cannot reach the paths of a creator's options",
+            \subclassTest());
         addTestCase("restricted callers keep what does not name a path", \restrictedAllowedTest());
         addTestCase("sandbox policy refuses the classpath and request files", \sandboxTest());
         addTestCase("unrestricted callers use every path option and request location", \unrestrictedTest());
@@ -646,6 +652,70 @@ string sub member_dp(object conn, string member, string key, auto value) {
         assertEq(1, markerCount("JmsLibrary"), "jms: the host's jar's class ran");
     }
 
+    #! Code restricted from the file system can declare subclasses of the modules' classes, whose methods can call
+    #! the private methods of the classes; the variants that take a creator's options are not reachable that way
+    subclassTest() {
+        # private:internal methods and members, and a token of the module's own code, are not reachable
+        hash<string, string> parse_refused = {
+            "jms createConnectionFactoryIntern()": "class X inherits JmsDataProviderBase {
+    static auto f(hash<auto> h) { return JmsDataProviderBase::createConnectionFactoryIntern(h, False); }
+}",
+            "jms init()": "class X inherits JmsDataProvider {
+    constructor() : JmsDataProvider({}) {}
+    g() { init({}, True); }
+}",
+            "mqtt getClientIntern()": "class X inherits AbstractMqttDataProvider {
+    static auto f(hash<auto> h) { return AbstractMqttDataProvider::getClientIntern(h); }
+}",
+            "kafka opts": "class X inherits KafkaDataProvider {
+    static f(KafkaDataProvider o) { o.opts = {}; }
+}",
+            "kafka configureAsyncApiOptionsIntern()": "class X inherits KafkaDataProviderBase {
+    constructor(KafkaConnection c) : KafkaDataProviderBase(c) {}
+    static f(KafkaDataProviderBase o, hash<auto> h) { o.configureAsyncApiOptionsIntern(h); }
+}",
+        };
+        foreach hash<auto> r in (Restrictions) {
+            foreach hash<auto> i in (parse_refused.pairIterator()) {
+                string rv = parseIn(r.opts, i.value);
+                assertRegex("^PARSE-", rv, sprintf("%s: subclass: %s: %s", r.label, i.key, rv));
+            }
+            # a subclass's static method calls the connection's private getImpl() on a lent connection
+            Program p = getProgram(r.opts, NOTHING, "class XMqtt inherits MqttConnection {
+    static string f(MqttConnection c, hash<auto> h) {
+        try { c.getImpl(False, h); return \"ok\"; } catch (hash<ExceptionInfo> ex) { return ex.err + \": \" + ex.desc; }
+    }
+}
+class XJms inherits JmsConnection {
+    static string f(JmsConnection c, hash<auto> h) {
+        try { c.getImpl(False, h); return \"ok\"; } catch (hash<ExceptionInfo> ex) { return ex.err + \": \" + ex.desc; }
+    }
+}
+string sub mqtt_get_impl(object c, hash<auto> h) { return XMqtt::f(c, h); }
+string sub jms_get_impl(object c, hash<auto> h) { return XJms::f(c, h); }
+");
+            string l = r.label + ": subclass: lent ";
+            assertRegex(RuntimeRefused, p.callFunction("mqtt_get_impl", new MqttConnection("c", "c",
+                "mqtt://127.0.0.1:1"), {"ssl.keystore.location": ods}), l + "mqtt getImpl() runtime options");
+            assertRegex(RuntimeRefused, p.callFunction("jms_get_impl", new JmsConnection("c", "c", "jms://x", {},
+                {"connection_factory_class": classOf("Refused")}), {"provider_classpath": jarOf("Refused")}),
+                l + "jms getImpl() runtime options");
+        }
+        assertEq(0, markerCount("Refused"), "the jar's class did not run for a subclass");
+    }
+
+    #! Parses the code in a new Program with the parse options and the modules; returns the error or "parsed"
+    private static string parseIn(int opts, string code) {
+        Program p(PO_NEW_STYLE | opts);
+        map p.loadModule($1), Modules;
+        try {
+            p.parse(code, "jni-provider-path-subclass");
+            return "parsed";
+        } catch (hash<ExceptionInfo> ex) {
+            return sprintf("%s: %s", ex.err, ex.desc);
+        }
+    }
+
     restrictedAllowedTest() {
         binary db = ReadOnlyFile::readBinaryFile(accdb);
         OdsListWorksheetsDataProvider lister();
@@ -871,13 +941,13 @@ string sub member_dp(object conn, string member, string key, auto value) {
     }
 
     #! Returns a Program with the restricted code, restricted with the parse options and optionally sandboxed
-    private static Program getProgram(int opts, *SandboxManager sm) {
+    private static Program getProgram(int opts, *SandboxManager sm, *string extra_code) {
         Program p(PO_NEW_STYLE | opts);
         if (sm) {
             p.setSandboxManager(sm);
         }
         map p.loadModule($1), Modules;
-        p.parse(RestrictedCode, "jni-provider-path-restricted");
+        p.parse(RestrictedCode + extra_code, "jni-provider-path-restricted");
         return p;
     }
 

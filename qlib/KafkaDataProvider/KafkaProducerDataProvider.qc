@@ -185,7 +185,9 @@ public class KafkaProducerDataProvider inherits KafkaDataProviderBase {
     /** @param options the options of the calling code, or of the parent's creator
         @param creator_options if the options are those of the parent's creator
     */
-    private init(*hash<auto> options, bool creator_options) {
+    private:internal init(*hash<auto> options, bool creator_options) {
+        # private:internal: a subclass, which code restricted from the file system can declare, cannot call it
+        # (qore#7811)
         # the AsyncAPI locations of the code that the provider may have been lent to, also those of the data context
         # of the thread, which any code can set (qore#7811)
         *hash<auto> ctx = DataProviderDataContextHelper::getHash(){keys ConstructorOptions};
@@ -198,7 +200,7 @@ public class KafkaProducerDataProvider inherits KafkaDataProviderBase {
         # before anything else is done with the options: they can name classes for the client to instantiate
         # (qore#5742)
         KafkaDataProviderBase::checkClassOptions(copts ?? {});
-        configureAsyncApiOptionsIntern(copts);
+        configureAsyncApiOptionsIntern(copts, new Priv::CreatorOptions());
         removeAsyncApiOptions(\copts);
         # add default values automatically
         map copts{$1.key} = $1.value.default_value, ConstructorOptions.pairIterator(),

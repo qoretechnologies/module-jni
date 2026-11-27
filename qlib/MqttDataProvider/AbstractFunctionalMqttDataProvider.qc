@@ -515,7 +515,9 @@ public class AbstractFunctionalMqttDataProvider inherits AbstractMqttDataProvide
     /** @param options the options of the calling code, or of a connection's creator
         @param creator_options if the options are those of a connection's creator
     */
-    private init(*hash<auto> options, bool creator_options) {
+    private:internal init(*hash<auto> options, bool creator_options) {
+        # private:internal: a subclass, which code restricted from the file system can declare, cannot call it
+        # (qore#7811)
         @debug {
             LoggerWrapper::debug("AbstractFunctionalMqttDataProvider::constructor() url: %y client_id: %y",
                 options.url, options.client_id);
@@ -526,7 +528,9 @@ public class AbstractFunctionalMqttDataProvider inherits AbstractMqttDataProvide
             AbstractMqttDataProvider::checkFileOptions(copts);
         }
         configureAsyncApiOptions(copts);
-        hash<auto> cinfo = getClientIntern(copts, logger);
+        hash<auto> cinfo = creator_options
+            ? getClient(copts, logger, new Priv::CreatorOptions())
+            : getClient(copts, logger);
         client = cinfo.client;
         opts = cinfo.opts;
         topic = copts.subscription_topic;
@@ -977,7 +981,9 @@ public class AbstractFunctionalMqttDataProvider inherits AbstractMqttDataProvide
         }
     }
 
-    private configureAsyncApiOptions(hash<auto> opts) {
+    private:internal configureAsyncApiOptions(hash<auto> opts) {
+        # private:internal: a subclass, which code restricted from the file system can declare, cannot call it
+        # (qore#7811)
         *AsyncApi::AsyncApi3Schema new_validator = asyncapi_validator;
         *string new_channel = asyncapi_channel;
         *string asyncapi_url;

@@ -214,7 +214,9 @@ public class JmsDataProvider inherits JmsDataProviderBase {
     /** @param options the options of the calling code, or of a connection's creator
         @param creator_options if the options are those of a connection's creator
     */
-    private init(*hash<auto> options, bool creator_options) {
+    private:internal init(*hash<auto> options, bool creator_options) {
+        # private:internal: a subclass, which code restricted from the file system can declare, cannot call it
+        # (qore#7811)
         hash<auto> validated_opts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
         copts = validated_opts;
 

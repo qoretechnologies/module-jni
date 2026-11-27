@@ -105,7 +105,8 @@ public class KafkaDataProvider inherits KafkaDataProviderBase {
         };
     }
 
-    private {
+    private:internal {
+        #! the options of the creator, which a subclass cannot change (qore#7811)
         *hash<auto> opts;
     }
 

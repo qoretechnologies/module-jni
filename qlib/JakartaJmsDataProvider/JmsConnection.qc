@@ -227,7 +227,10 @@ public class JmsConnection inherits ConnectionProvider::AbstractConnectionWithIn
         @return the connection object
     */
     private JmsConnectionWrapper getImpl(bool connect = True, *hash<auto> rtopts) {
-        hash<auto> copts = orig_opts + {"url": url} + rtopts;
+        # the members of the creator and only runtime options that cannot change the target for code that the host
+        # lent the connection to, also when a subclass calls this method directly (qore#7811)
+        JmsConnection src = cast<JmsConnection>(getLentTargetSource(rtopts));
+        hash<auto> copts = src.orig_opts + {"url": src.url} + rtopts;
         # ConnectionProvider confines the members and runtime options for code that the host lent the connection to
         ConnectionFactory factory = JmsDataProviderBase::createConnectionFactory(copts, new Priv::CreatorOptions());
         if (!connect) {

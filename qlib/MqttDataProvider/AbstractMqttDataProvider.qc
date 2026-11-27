@@ -156,7 +156,9 @@ public class AbstractMqttDataProvider inherits DataProvider::AbstractDataProvide
     }
 
     #! Returns a client for the given options, which are checked or are the options of a connection's creator
-    static private hash<auto> getClientIntern(hash<auto> copts, *LoggerInterface logger) {
+    static private:internal hash<auto> getClientIntern(hash<auto> copts, *LoggerInterface logger) {
+        # private:internal: a subclass, which code restricted from the file system can declare, cannot call it
+        # (qore#7811)
         @debug {
             if (logger) {
                 logger.debug("AbstractMqttDataProvider::getClient() url: %y client_id: %y", copts.url,
