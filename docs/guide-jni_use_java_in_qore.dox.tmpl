@@ -379,6 +379,8 @@ JNI-SANDBOX-ERROR: a Java object or closure whose origin cannot be determined ca
       module), into such a Program or by such code
     - a Java call that creates a %Qore object (\c QoreJavaApi.newObjectSave()) of a class that such a Program is
       refused
+    - the \c classpath option of the \c jdbc driver, which loads jars whose Java code the driver runs, set by such
+      code, also when trusted code opens the connection (the restrictions recorded for the code that set the option)
 
     \c PO_NO_PROCESS_CONTROL and \c PO_NO_THREAD_CONTROL are not such classes: code with them (the trusted interface
     Programs of Qorus, for example) can still use Java code, which they do not restrict (a known gap).  A library

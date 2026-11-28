@@ -14,8 +14,9 @@
       \c define-class, \c define-pending-class, \c kotlin-eval, ...) are refused to such code.  The module's own checks
       of the Program that a command is issued into (\c define-class, \c define-pending-class, \c kotlin-eval,
       \c set-property, \c register-shared-class, \c set-java-thread-policy, the \c global-* classpath commands), of the
-      Program of its exported import functions, of a Java call that creates a %Qore object, and the class handler of
-      wildcard imports, which loads no Java class for such a Program, refuse such Programs too (a library module's
+      Program of its exported import functions, of a Java call that creates a %Qore object, of the code that set the
+      \c classpath option of the \c jdbc driver, and the class handler of wildcard imports, which loads no Java class
+      for such a Program, refuse such Programs too (a library module's
       Program that its header trusts with uncontrolled APIs is not refused).  Every Java class declares that it
       enforces none of the classes (\c QoreClass::setEnforcedDomains(0)).  \c PO_NO_PROCESS_CONTROL and
       \c PO_NO_THREAD_CONTROL do not refuse Java code.  The module reports the feature with the

@@ -919,11 +919,25 @@ int QoreJdbcConnection::setOption(const char* opt, const QoreValue val, Exceptio
                     "which sandboxed code cannot use", JDBC_OPT_CLASSPATH);
                 return -1;
             }
+#ifdef QORE_HAVE_UNCONTROLLED_API_ENFORCEMENT
+            // the jars run Java code, which does not respect the restriction classes: a setter restricted from one of
+            // them is refused as one with PO_NO_UNCONTROLLED_APIS (qore#7832), whether the restrictions were recorded
+            // when the option was set or are those of the running code
+            if (setter.hasAny(QoreParseOptions(PO_NO_FILESYSTEM))
+                    || qore_uncontrolled_api_refused_options(setter.getParseOptions().getLo(),
+                        QORE_JNI_ENFORCED_DOMAINS)) {
+                xsink->raiseException("JNI-SANDBOX-ERROR", "the jdbc '%s' option adds to the Program's classpath, "
+                    "which code that does not allow uncontrolled APIs or the filesystem, or that restricts the network "
+                    "or external processes, cannot use", JDBC_OPT_CLASSPATH);
+                return -1;
+            }
+#else
             if (setter.hasAny(QoreParseOptions(PO_NO_UNCONTROLLED_APIS | PO_NO_FILESYSTEM))) {
                 xsink->raiseException("JNI-SANDBOX-ERROR", "the jdbc '%s' option adds to the Program's classpath, "
                     "which code that does not allow uncontrolled APIs or the filesystem cannot use", JDBC_OPT_CLASSPATH);
                 return -1;
             }
+#endif
         }
 #else
         // before module API 2.3: the parse options of the calling code and the sandbox that governs it
