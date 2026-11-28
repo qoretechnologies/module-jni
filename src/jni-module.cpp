@@ -495,6 +495,16 @@ void jni_qore_module_desc(QoreModuleInfo& mod_info) {
     }
     info->setKeyValue("uncontrolled_api_enforcement", true, nullptr);
 #endif
+#ifdef QORE_HAVE_SANDBOX_UNCONTROLLED_API_CLASSES
+    // "sandbox_uncontrolled_api_classes": a sandbox that allows uncontrolled APIs but restricts the filesystem or the
+    // network refuses Java code as one that refuses uncontrolled APIs does, in the Qore library (the builtins, the
+    // module commands of an issuer that such a sandbox governs) and in the module's own sandbox checks
+    // (jni_sandbox_restricts_caller(), jni_sandbox_refuses_uncontrolled_code(), qore#7832)
+    if (!info) {
+        info = new QoreHashNode(autoTypeInfo);
+    }
+    info->setKeyValue("sandbox_uncontrolled_api_classes", true, nullptr);
+#endif
     mod_info.info = info;
 }
 
@@ -1354,6 +1364,22 @@ static void qore_jni_mc_import(const QoreString& cmd_arg, QoreProgram* pgm, JniE
 
     @throw JNI-SANDBOX-ERROR the command is issued in a restricted Program or under a sandbox
 */
+//! Returns true if a sandbox that governs the issuer of the module command being handled restricts it
+/** As jni_sandbox_restricts_caller(QoreSandboxManagerHelper::All), and, with a %Qore library that has the restriction
+    classes of sandboxes (qore#7832), also if the issuer's sandbox allows uncontrolled APIs but restricts a class that
+    the Java code does not enforce (QoreModuleCommandContext::getSandboxRestrictedClasses(), which %Qore keeps for a
+    command that a handler issues while it handles another)
+*/
+static bool jni_cmd_sandbox_restricts() {
+#if defined(QORE_HAVE_SANDBOX_UNCONTROLLED_API_CLASSES) && defined(QORE_JNI_HAS_COMMAND_CONTEXT)
+    const QoreModuleCommandContext* ctx = QoreModuleCommandContext::get();
+    if (ctx && (ctx->getSandboxRestrictedClasses() & ~static_cast<int64>(QORE_JNI_ENFORCED_DOMAINS))) {
+        return true;
+    }
+#endif
+    return jni_sandbox_restricts_caller(QoreSandboxManagerHelper::All);
+}
+
 static void jni_check_uncontrolled_cmd(const char* cmd, const QoreProgram* pgm, const char* what) {
     if (pgm && jni_check_target_options()) {
         std::string why = jni_program_java_refusal(pgm);
@@ -1362,10 +1388,11 @@ static void jni_check_uncontrolled_cmd(const char* cmd, const QoreProgram* pgm, 
                 cmd, what, why.c_str());
         }
     }
-    // trust only, as for the jdbc driver and check_class_option(): the module command is a direct use of an
-    // uncontrolled API, which the core refuses on trust alone (qore#5741), so a sandbox that restricts nothing but does
-    // not trust the code still refuses it
-    if (jni_sandbox_restricts_caller(QoreSandboxManagerHelper::All)) {
+    // trust, as for the jdbc driver and check_class_option(): the module command is a direct use of an uncontrolled
+    // API, which the core refuses on trust alone (qore#5741), so a sandbox that restricts nothing but does not trust the
+    // code still refuses it; with the restriction classes of sandboxes, a trusting sandbox of the issuer that
+    // restricts the filesystem or the network does too (qore#7832)
+    if (jni_cmd_sandbox_restricts()) {
         throw QoreJniException("JNI-SANDBOX-ERROR", "sandboxed code cannot use the \"%s\" module command, which %s",
             cmd, what);
     }
@@ -1754,10 +1781,11 @@ static void qore_jni_mc_define_class(const QoreString& arg, QoreProgram* pgm, Jn
     // a sandboxed Program defines classes only in its own loader: in the loader of another Program, its byte code
     // would become the class that the other Program, and every Program that it serves, loads under that name
     if (!env.isSameObject(define_loader, jpc->getClassLoader())) {
-        // trust only, as for the jdbc driver and check_class_option(): defining a class in another Program's loader is
-        // a direct use of an uncontrolled API, which the core refuses on trust alone (qore#5741), so a sandbox that
-        // restricts nothing but does not trust the code still refuses it
-        if (jni_sandbox_restricts_caller(QoreSandboxManagerHelper::All)) {
+        // trust, as for the jdbc driver and check_class_option(): defining a class in another Program's loader is a
+        // direct use of an uncontrolled API, which the core refuses on trust alone (qore#5741), so a sandbox that
+        // restricts nothing but does not trust the code still refuses it; with the restriction classes of sandboxes, a
+        // trusting sandbox of the issuer that restricts the filesystem or the network does too (qore#7832)
+        if (jni_cmd_sandbox_restricts()) {
             // the class name of the module command is UTF-8; the text of the error is in the default encoding
             throw QoreJniException("JNI-SANDBOX-ERROR", "sandboxed code cannot use the \"define-class\" module "
                 "command to define class '%s', which belongs to another Program",

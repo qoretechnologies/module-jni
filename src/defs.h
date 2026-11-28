@@ -41,16 +41,33 @@
 #include <memory>
 #include <mutex>
 
+#if defined(QORE_HAVE_UNCONTROLLED_API_ENFORCEMENT) || defined(QORE_HAVE_SANDBOX_UNCONTROLLED_API_CLASSES)
+//! The restriction classes (bits of QORE_UNCONTROLLED_API_RESTRICTION_DOMAINS) that the Java code jni runs enforces
+/** None (qore#7832): Java code does its own file, network and process I/O, which no Qore restriction reaches, so code
+    with \c PO_NO_FILESYSTEM, \c PO_NO_NETWORK or \c PO_NO_EXTERNAL_PROCESS is refused Java as code with
+    \c PO_NO_UNCONTROLLED_APIS is, and so is code whose sandbox allows uncontrolled APIs but restricts the filesystem
+    or the network.  The module declares nothing (qore_module_declare_enforced_domains() is not called), and every
+    Java class sets this value explicitly (JniQoreClass), so the builtins of the module and the Java classes all have
+    it.
+*/
+#define QORE_JNI_ENFORCED_DOMAINS 0
+#endif
+
 //! Returns true if a sandbox that does not trust the calling code governs it
 /** With a %Qore that has the uncontrolled-API policy of sandboxes (\c SandboxManager::setUncontrolledApiPolicy()),
     code counts as restricted only if a governing sandbox refuses uncontrolled APIs (the default), so that code that a
     host governs with a sandbox only for its interrupts or limits, and trusts, is not refused; without it, any
-    governing sandbox restricts the code.
+    governing sandbox restricts the code.  With a %Qore that has the restriction classes of sandboxes
+    (\c QORE_HAVE_SANDBOX_UNCONTROLLED_API_CLASSES, qore#7832), a governing sandbox that allows uncontrolled APIs but
+    restricts the filesystem or the network restricts the code as well: the Java code that the module runs for it does
+    its file and network I/O itself, where the sandbox's policies do not apply.
 
     @param purpose how the governing sandboxes are resolved (see QoreSandboxManagerHelper)
 */
 static inline bool jni_sandbox_restricts_caller(QoreSandboxManagerHelper::Purpose purpose) {
-#ifdef _QORE_HAS_SANDBOX_UNCONTROLLED_API_POLICY
+#if defined(QORE_HAVE_SANDBOX_UNCONTROLLED_API_CLASSES)
+    return qore_sandbox_refuses_uncontrolled_api_classes(QORE_JNI_ENFORCED_DOMAINS, purpose);
+#elif defined(_QORE_HAS_SANDBOX_UNCONTROLLED_API_POLICY)
     return !qore_sandbox_allows_uncontrolled_apis(purpose);
 #else
     QoreSandboxManagerHelper governing(purpose);
@@ -77,27 +94,27 @@ static inline bool jni_sandbox_restricts_caller(QoreSandboxManagerHelper::Purpos
     governing manager for all sandboxed code, so code that is restricted (jni_sandbox_restricts_caller()) without
     one is not expected; such code would be refused (defence in depth).
 
+    With a %Qore that has the restriction classes of sandboxes (\c QORE_HAVE_SANDBOX_UNCONTROLLED_API_CLASSES,
+    qore#7832), a governing sandbox that trusts the code but restricts the filesystem or the network refuses it as well
+    (qore_sandbox_refuses_uncontrolled_api_classes()): the uncontrolled code does its file and network I/O itself.
+
     @param purpose how the governing sandbox is resolved (see QoreSandboxManagerHelper); QoreSandboxManagerHelper::Policy
     honours a policy barrier and a system-policy capability of trusted code
 */
 static inline bool jni_sandbox_refuses_uncontrolled_code(QoreSandboxManagerHelper::Purpose purpose) {
+#ifdef QORE_HAVE_SANDBOX_UNCONTROLLED_API_CLASSES
+    // the trust of the sandboxes, and the classes that a trusting sandbox restricts (fails closed on a thread that
+    // Qore does not know)
+    if (qore_sandbox_refuses_uncontrolled_api_classes(QORE_JNI_ENFORCED_DOMAINS, purpose)) {
+        return true;
+    }
+#endif
     QoreSandboxManagerHelper governing(purpose);
     if (!governing) {
         return jni_sandbox_restricts_caller(purpose);
     }
     return !governing->trustsUncontrolledApis();
 }
-#endif
-
-#ifdef QORE_HAVE_UNCONTROLLED_API_ENFORCEMENT
-//! The restriction classes (bits of QORE_UNCONTROLLED_API_RESTRICTION_DOMAINS) that the Java code jni runs enforces
-/** None (qore#7832): Java code does its own file, network and process I/O, which no Qore restriction reaches, so code
-    with \c PO_NO_FILESYSTEM, \c PO_NO_NETWORK or \c PO_NO_EXTERNAL_PROCESS is refused Java as code with
-    \c PO_NO_UNCONTROLLED_APIS is.  The module declares nothing (qore_module_declare_enforced_domains() is not called),
-    and every Java class sets this value explicitly (JniQoreClass), so the builtins of the module and the Java classes
-    all have it.
-*/
-#define QORE_JNI_ENFORCED_DOMAINS 0
 #endif
 
 // module API 2.3 (qore#5699): module commands are judged by the restrictions of the code that issues them, and module

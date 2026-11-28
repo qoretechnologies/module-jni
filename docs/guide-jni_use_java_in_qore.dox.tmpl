@@ -390,10 +390,19 @@ JNI-SANDBOX-ERROR: a Java object or closure whose origin cannot be determined ca
     relieved for its own code, at parse time and at run time; a restriction that a restricted caller imposes on the
     module's code (for example \c PO_NO_EXTERNAL_PROCESS of a sandboxed caller) is not.  A library module that does
     not declare the domain is refused, as when a Program with \c PO_NO_UNCONTROLLED_APIS loads it first.  The jni module reports the feature with the \c uncontrolled_api_enforcement key of its \c info
-    hash in \c get_module_hash(); without it, these restrictions do not refuse Java code.  The sandbox of a Program is
-    not one of these restrictions: a sandbox that trusts its code with uncontrolled APIs
-    (\c SandboxManager::setUncontrolledApiPolicy()) allows Java code, whose file and network access its policy then
-    reaches only where this module checks it (see below).
+    hash in \c get_module_hash(); without it, these restrictions do not refuse Java code.
+
+    <b>Sandboxes that restrict a class</b> (qore#7832): with a %Qore library that has
+    \c QORE_HAVE_SANDBOX_UNCONTROLLED_API_CLASSES, a sandbox that trusts its code with uncontrolled APIs
+    (\c SandboxManager::setUncontrolledApiPolicy()) but restricts the filesystem or the network (its file-system or
+    network policy restricts anything: a new \c SandboxManager restricts both until its default policies are set to
+    allow) refuses Java code as a sandbox that refuses uncontrolled APIs does: the %Qore library refuses the Java
+    classes and the module's functions to such code, and the module commands of such an issuer, and the module's own
+    sandbox checks refuse it the same way (the \c jdbc driver and its choosers, \c check_class_option(), the commands
+    that change the JVM or the classpath of every Program, a class definition in another Program's class loader), so
+    a sandbox only trusts code with Java when it opens both the filesystem and the network.  The module reports it with
+    the \c sandbox_uncontrolled_api_classes key of its \c info hash.  Without it, a trusting sandbox allows Java code,
+    whose file and network access its policy then reaches only where this module checks it (see below).
 
     Java code that sandboxed %Qore code may call - for example the actions of a data provider implemented in Java,
     which connect to destinations taken from a tenant's connection - checks every network destination and every

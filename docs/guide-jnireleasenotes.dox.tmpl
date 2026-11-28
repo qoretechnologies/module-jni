@@ -24,6 +24,14 @@
       \c PO_NO_THREAD_CONTROL do not refuse Java code.  The module reports the feature with the
       \c uncontrolled_api_enforcement key of its \c info hash in \c get_module_hash()
 
+    - <b>Security</b>, <b>behavior change</b> (qore#7832): with a %Qore library that has
+      \c QORE_HAVE_SANDBOX_UNCONTROLLED_API_CLASSES, a sandbox that trusts its code with uncontrolled APIs but
+      restricts the filesystem or the network refuses Java code as a sandbox that refuses uncontrolled APIs does:
+      the Java classes and functions, the module commands of an issuer that it governs, and the module's own sandbox
+      checks (the \c jdbc driver and its choosers, \c check_class_option(), the commands that change the JVM or the
+      shared classpath, a class definition in another Program's class loader), so such code no longer reaches the
+      file-system policy checks of classpath entries and lookups.  The module reports it with the
+      \c sandbox_uncontrolled_api_classes key of its \c info hash in \c get_module_hash()
     - <b>Security</b> (qore#7867): code restricted from the filesystem, the network, external processes,
       uncontrolled APIs or embedded logic by parse options that chooses a \c jdbc connection can only use the
       allow-listed client/server drivers, URL forms and parameters (see @ref jdbc_restricted_choosers)
