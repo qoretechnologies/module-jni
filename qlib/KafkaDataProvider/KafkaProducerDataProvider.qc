@@ -158,7 +158,9 @@ public class KafkaProducerDataProvider inherits KafkaDataProviderBase {
         };
     }
 
-    private {
+    private:internal {
+        #! The producer: QoreKafkaProducer.getProducer() gives the Kafka client, authenticated with the host's
+        #! credentials, so subclasses, which restricted code can declare, cannot read it (qore#7866)
         QoreKafkaProducer prod;
     }
 
@@ -196,7 +198,7 @@ public class KafkaProducerDataProvider inherits KafkaDataProviderBase {
             LoggerWrapper::debug("KafkaProducerDataProvider::constructor() options: %y", options);
         }
         *hash<auto> copts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, ctx + options)
-            + self.conn.getKafkaOptions();
+            + getConnectionIntern(new Priv::CreatorOptions()).getKafkaOptions();
         # before anything else is done with the options: they can name classes for the client to instantiate
         # (qore#5742)
         KafkaDataProviderBase::checkClassOptions(copts ?? {});

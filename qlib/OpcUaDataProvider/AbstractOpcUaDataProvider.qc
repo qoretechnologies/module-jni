@@ -28,15 +28,56 @@ public namespace OpcUaDataProvider {
 /**
 */
 public class AbstractOpcUaDataProvider inherits DataProvider::AbstractDataProvider {
-    private {
+    private:internal {
         #! The OPC UA client
+        /** It and the constructor options hold the host's credentials and key store passwords, so subclasses, which
+            restricted code can declare, use them only through the token-gated methods of this class (qore#7866)
+        */
         OpcUaClient client;
-
-        #! The endpoint URL
-        string url;
 
         #! Constructor options for the client
         hash<auto> copts;
+    }
+
+    private {
+        #! The endpoint URL
+        string url;
+    }
+
+    #! Returns the OPC UA client for the classes of this module (qore#7866)
+    /** The token is a class of the module that code outside it cannot name or create, so only the module's own
+        classes can call it; a subclass that other code declares cannot
+    */
+    final private *OpcUaClient getOpcUaClientIntern(Priv::ModuleToken token) {
+        return client;
+    }
+
+    #! Sets the OPC UA client for the classes of this module (qore#7866)
+    /** @see getOpcUaClientIntern()
+    */
+    final private setOpcUaClientIntern(OpcUaClient c, Priv::ModuleToken token) {
+        client = c;
+    }
+
+    #! Releases the OPC UA client for the classes of this module (qore#7866)
+    /** @see getOpcUaClientIntern()
+    */
+    final private clearOpcUaClientIntern(Priv::ModuleToken token) {
+        delete client;
+    }
+
+    #! Returns the constructor options of the client for the classes of this module (qore#7866)
+    /** @see getOpcUaClientIntern()
+    */
+    final private hash<auto> getOpcUaOptionsIntern(Priv::ModuleToken token) {
+        return copts;
+    }
+
+    #! Sets the constructor options of the client for the classes of this module (qore#7866)
+    /** @see getOpcUaClientIntern()
+    */
+    final private setOpcUaOptionsIntern(hash<auto> opts, Priv::ModuleToken token) {
+        copts = opts;
     }
 
     #! Creates the object without any arguments for child classes

@@ -173,7 +173,7 @@ KafkaProducerDataProvider producer(config.connection, config.options);
                 "provider, as sandboxed code receives no host credentials";
         }
         return {
-            "connection": conn,
+            "connection": getConnectionIntern(new Priv::CreatorOptions()),
             "options": opts,
         };
     }
@@ -207,7 +207,8 @@ KafkaProducerDataProvider producer(config.connection, config.options);
     private *DataProvider::AbstractDataProvider getChildProviderImpl(string name) {
         if (*Class cls = ChildMap{name}) {
             # the options of this object's creator (qore#7811)
-            return cls.newObject(conn, opts, new Priv::CreatorOptions());
+            Priv::CreatorOptions token();
+            return cls.newObject(getConnectionIntern(token), opts, token);
         }
     }
 }

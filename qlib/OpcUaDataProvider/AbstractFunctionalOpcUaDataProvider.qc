@@ -29,6 +29,20 @@ public namespace OpcUaDataProvider {
 */
 public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvider,
         DataProvider::DelayedObservable {
+    #! Returns the OPC UA client (qore#7866)
+    /** private:internal: a subclass, which restricted code can declare, cannot call it
+    */
+    private:internal *OpcUaClient opcClient() {
+        return getOpcUaClientIntern(new Priv::ModuleToken());
+    }
+
+    #! Returns the constructor options of the client (qore#7866)
+    /** private:internal: a subclass, which restricted code can declare, cannot call it
+    */
+    private:internal hash<auto> opcOpts() {
+        return getOpcUaOptionsIntern(new Priv::ModuleToken());
+    }
+
     public {
         #! Provider info
         const ProviderInfo = <DataProviderInfo>{
@@ -534,6 +548,17 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
         };
     }
 
+    private:internal {
+        #! OPC UA subscription (prevent GC)
+        /** It gives the client (OpcUaSubscription.getClient()), so subclasses, which restricted code can declare,
+            cannot read it (qore#7866)
+        */
+        *OpcUaSubscription subscription;
+
+        #! Per-monitored-item data value listener callbacks (prevent GC), which give the subscription
+        list<auto> monitored_item_listeners;
+    }
+
     private {
         #! Monitored node IDs
         list<string> monitored_nodes;
@@ -550,11 +575,6 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
         #! Discard oldest flag
         bool discard_oldest;
 
-        #! OPC UA subscription (prevent GC)
-        *OpcUaSubscription subscription;
-
-        #! Per-monitored-item data value listener callbacks (prevent GC)
-        list<auto> monitored_item_listeners;
 
         #! Mutex serializing access to the node metadata cache
         Qore::Thread::Mutex schema_cache_lock();
@@ -585,7 +605,7 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
                 options.url);
         }
         hash<auto> checked_opts = checkOptions("CONSTRUCTOR-ERROR", ConstructorOptions, options);
-        copts = checked_opts;
+        setOpcUaOptionsIntern(checked_opts, new Priv::ModuleToken());
         api_schema_snapshot = resolveApiManagementSchema(checked_opts);
         if (!checked_opts.url && !api_schema_snapshot) {
             throw "CONSTRUCTOR-ERROR", "OPC UA data provider requires `url` for client operations or a schema "
@@ -615,10 +635,10 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
 
     #! Disconnects the client and stops generating events
     private stop() {
-        if (client) {
+        if (opcClient()) {
             try {
                 # bounded so a dead server cannot hang stop()/teardown
-                awaitFutureWithDeadline(client.disconnectAsync(), copts.connect_timeout ?? 10000,
+                awaitFutureWithDeadline(opcClient().disconnectAsync(), opcOpts().connect_timeout ?? 10000,
                     sprintf("OPC UA disconnect from %y", url));
                 debug("OPC UA: Disconnected from %y", url);
             } catch () {
@@ -628,22 +648,22 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
         delete subscription;
         # clear to an empty list (not NOTHING) so a restart can append listeners again
         monitored_item_listeners = ();
-        delete client;
+        clearOpcUaClientIntern(new Priv::ModuleToken());
     }
 
     #! Connects, creates subscription, and starts monitoring
     private start() {
         try {
-            client = getClient(copts, logger);
-            awaitFuture(client.connectAsync(), "connect");
+            setOpcUaClientIntern(getClient(opcOpts(), logger), new Priv::ModuleToken());
+            awaitFuture(opcClient().connectAsync(), "connect");
             debug("OPC UA: Connected to %y", url);
 
             # notify connected event
             notifyObservers(EVENT_OPCUA_CONNECTED, {
                 "reconnect": False,
                 "endpoint_url": url,
-                "security_policy": copts.security_policy ?? "None",
-                "security_mode": copts.message_security_mode ?? "None",
+                "security_policy": opcOpts().security_policy ?? "None",
+                "security_mode": opcOpts().message_security_mode ?? "None",
             });
 
             # create subscription if we have monitored nodes
@@ -662,7 +682,7 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
 
     #! Creates a subscription and adds monitored items (Milo 1.1.x OpcUaSubscription API)
     private createSubscription() {
-        subscription = new OpcUaSubscription(client);
+        subscription = new OpcUaSubscription(opcClient());
         subscription.setPublishingInterval(publishing_interval * 1.0);
         awaitFuture(subscription.createAsync(), "create subscription");
 
@@ -975,7 +995,7 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
                     ArrayList write_values();
                     write_values.add(new WriteValue(node_id, AttributeId::Value.uid(), NOTHING,
                         data_value));
-                    auto response = awaitFuture(client.writeAsync(write_values), "write value");
+                    auto response = awaitFuture(opcClient().writeAsync(write_values), "write value");
                     auto result = response.getResults()[0];
                     if (result.isBad()) {
                         throw "OPCUA-WRITE-ERROR", sprintf("failed to write value to node %y: "
@@ -1003,7 +1023,7 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
                         ));
                     }
                     auto response = awaitFuture(
-                        client.writeAsync(write_values), "write values");
+                        opcClient().writeAsync(write_values), "write values");
                     auto results = response.getResults();
                     for (int i = 0; i < results.size(); ++i) {
                         if (results[i].isBad()) {
@@ -1044,7 +1064,7 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
     */
     hash<auto> getSchemaSnapshot(*string root_node_id) {
         ensureConnected();
-        return SchemaResolver::resolve(client, root_node_id ?? "ns=0;i=85");
+        return SchemaResolver::resolve(opcClient(), root_node_id ?? "ns=0;i=85");
     }
 
     #! Imports an offline OPC UA NodeSet2 model into a generic schema snapshot
@@ -1244,7 +1264,7 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
     #! Processes API requests with auto-reconnect on connection failure
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
         ensureConnected();
-        bool auto_reconnect = copts.auto_reconnect ?? True;
+        bool auto_reconnect = opcOpts().auto_reconnect ?? True;
         int attempts = auto_reconnect ? 2 : 1;
         for (int attempt = 0; attempt < attempts; ++attempt) {
             try {
@@ -1305,7 +1325,7 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
         ArrayList read_nodes();
         read_nodes.add(node_id);
         auto values = awaitFuture(
-            client.readValuesAsync(0.0, TimestampsToReturn::Both, read_nodes), "read value");
+            opcClient().readValuesAsync(0.0, TimestampsToReturn::Both, read_nodes), "read value");
         auto data_value = values[0];
 
         auto status = data_value.getStatusCode();
@@ -1349,7 +1369,7 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
         # use server-side pagination via maxReferencesPerNode
         ArrayList browse_descs();
         browse_descs.add(browse_desc);
-        auto response = awaitFuture(client.browseAsync(
+        auto response = awaitFuture(opcClient().browseAsync(
             new ViewDescription(NodeId::NULL_VALUE, DateTime::MIN_VALUE, UInteger::valueOf(0)),
             UInteger::valueOf(max_results),
             browse_descs
@@ -1423,7 +1443,7 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
         # Milo 1.1.x: call() takes a list of requests and returns a CallResponse
         ArrayList call_requests();
         call_requests.add(new CallMethodRequest(object_id, method_id, input_args));
-        auto response = awaitFuture(client.callAsync(call_requests), "call method");
+        auto response = awaitFuture(opcClient().callAsync(call_requests), "call method");
         auto result = response.getResults()[0];
 
         auto status = result.getStatusCode();
@@ -1465,12 +1485,12 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
                 UInteger::valueOf(0), UInteger::valueOf(63));
             ArrayList bds();
             bds.add(bd);
-            auto resp = awaitFuture(client.browseAsync(new ViewDescription(NodeId::NULL_VALUE, DateTime::MIN_VALUE, UInteger::valueOf(0)),
+            auto resp = awaitFuture(opcClient().browseAsync(new ViewDescription(NodeId::NULL_VALUE, DateTime::MIN_VALUE, UInteger::valueOf(0)),
                 UInteger::valueOf(0), bds), "browse method properties");
             auto refs = resp.getResults()[0].getReferences();
             # browse results return ExpandedNodeIds, which may use the `nsu=` (namespace URI) form that
             # NodeId::parse() cannot parse; resolve them to absolute NodeIds via the namespace table
-            auto namespace_table = client.getNamespaceTable();
+            auto namespace_table = opcClient().getNamespaceTable();
             *string input_id;
             *string output_id;
             if (refs) {
@@ -1503,7 +1523,7 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
         NodeId nid = NodeId::parse(node_id_str);
         ArrayList arg_nodes();
         arg_nodes.add(nid);
-        auto values = awaitFuture(client.readValuesAsync(0.0, TimestampsToReturn::Neither, arg_nodes),
+        auto values = awaitFuture(opcClient().readValuesAsync(0.0, TimestampsToReturn::Neither, arg_nodes),
             "read method arguments");
         auto dv = values[0];
         auto variant = dv.getValue();
@@ -1514,7 +1534,7 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
         if (!arr) {
             return ();
         }
-        auto ctx = client.getStaticEncodingContext();
+        auto ctx = opcClient().getStaticEncodingContext();
         list<hash<auto>> rv = ();
         foreach auto eo in (arr) {
             Argument arg = eo.decode(ctx);
@@ -1545,7 +1565,7 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
             ));
         }
         auto response = awaitFuture(
-            client.readAsync(0.0, TimestampsToReturn::Both, read_value_ids), "read");
+            opcClient().readAsync(0.0, TimestampsToReturn::Both, read_value_ids), "read");
         auto results_list = response.getResults();
 
         list<hash<auto>> results = ();
@@ -1585,7 +1605,7 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
             value_ids.add(new ReadValueId(node_id, AttributeId::Value.uid(), NOTHING,
                 QualifiedName::NULL_VALUE));
             auto value_response = awaitFuture(
-                client.readAsync(0.0, TimestampsToReturn::Both, value_ids), "read");
+                opcClient().readAsync(0.0, TimestampsToReturn::Both, value_ids), "read");
             auto value_results = value_response.getResults();
             auto value_status = value_results[0].getStatusCode();
             return {"node_id": node_id_str, "value": convertValue(value_results[0].getValue())}
@@ -1613,7 +1633,7 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
         }
 
         auto response = awaitFuture(
-            client.readAsync(0.0, TimestampsToReturn::Both, read_value_ids), "read");
+            opcClient().readAsync(0.0, TimestampsToReturn::Both, read_value_ids), "read");
         auto results = response.getResults();
 
         # the overall status is from the Value attribute read
@@ -1707,14 +1727,14 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
         hrvids.add(new HistoryReadValueId(node_id, NOTHING, QualifiedName::NULL_VALUE, NOTHING));
 
         auto response = awaitFuture(
-            client.historyReadAsync(details, TimestampsToReturn::Both, False, hrvids),
+            opcClient().historyReadAsync(details, TimestampsToReturn::Both, False, hrvids),
             "read history");
         auto results = response.getResults();
         auto result = results[0];
         auto status = result.getStatusCode();
 
         list<hash<auto>> data_values = ();
-        auto history_data = result.getHistoryData().decode(client.getStaticEncodingContext());
+        auto history_data = result.getHistoryData().decode(opcClient().getStaticEncodingContext());
         if (history_data) {
             auto dv_list = history_data.getDataValues();
             if (dv_list) {
@@ -1782,7 +1802,7 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
             AttributeId::Value.uid(), NOTHING, QualifiedName::NULL_VALUE));
 
         auto response = awaitFuture(
-            client.readAsync(0.0, TimestampsToReturn::Both, read_value_ids), "read");
+            opcClient().readAsync(0.0, TimestampsToReturn::Both, read_value_ids), "read");
         auto results = response.getResults();
 
         auto status = results[0].getStatusCode();
@@ -1832,9 +1852,9 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
             throw "OPCUA-REQUEST-ERROR", "this OPC UA provider was created without a `url`; it is configured "
                 "for schema/API-management use only and cannot perform client operations";
         }
-        if (!client) {
-            client = getClient(copts, logger);
-            awaitFuture(client.connectAsync(), "connect");
+        if (!opcClient()) {
+            setOpcUaClientIntern(getClient(opcOpts(), logger), new Priv::ModuleToken());
+            awaitFuture(opcClient().connectAsync(), "connect");
             debug("OPC UA: Connected to %y", url);
         }
     }
@@ -1849,14 +1869,14 @@ public class AbstractFunctionalOpcUaDataProvider inherits AbstractOpcUaDataProvi
         clearSchemaCache();
         try {
             # bounded so a dead server cannot hang the reconnect path
-            awaitFutureWithDeadline(client.disconnectAsync(), copts.connect_timeout ?? 10000,
+            awaitFutureWithDeadline(opcClient().disconnectAsync(), opcOpts().connect_timeout ?? 10000,
                 sprintf("OPC UA disconnect from %y", url));
         } catch () {
             # ignore disconnect errors
         }
-        delete client;
-        client = getClient(copts, logger);
-        awaitFuture(client.connectAsync(), "reconnect");
+        clearOpcUaClientIntern(new Priv::ModuleToken());
+        setOpcUaClientIntern(getClient(opcOpts(), logger), new Priv::ModuleToken());
+        awaitFuture(opcClient().connectAsync(), "reconnect");
         debug("OPC UA: Reconnected to %y", url);
     }
 }

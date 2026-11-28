@@ -435,6 +435,8 @@ string sub kafka_own_client_config(object conn) {
             \subclassTest());
         addTestCase("the connection and creator's options of a Kafka data provider are refused to restricted code",
             \kafkaClientConfigTest());
+        addTestCase("a subclass cannot read the client or connection options of an MQTT or OPC UA data provider",
+            \clientMemberTest());
         addTestCase("deserialized Access data providers take no path of restricted code", \deserializationTest());
         addTestCase("restricted callers keep what does not name a path", \restrictedAllowedTest());
         addTestCase("sandbox policy refuses the classpath and request files", \sandboxTest());
@@ -916,9 +918,160 @@ string sub jms_get_impl(object c, hash<auto> h) { return XJms::f(c, h); }
 string sub kafka_subclass_config(object o) { return XKafka::f(o); }
 ");
             assertEq("PERMISSION-DENIED", sp.callFunction("kafka_subclass_config", dp), l + "subclass");
+            # nor can a subclass read the connection member itself: it is private:internal (qore#7866)
+            assertRegex("^PARSE-EXCEPTION: .*private member 'conn'", parseIn(r.opts, "class YKafka inherits KafkaDataProvider {
+    static auto f(KafkaDataProvider o) { return o.conn; }
+}
+"), l + "subclass reading the connection");
+            # and the module's accessor of the connection needs a token that code outside the module cannot name
+            assertRegex("^PARSE-EXCEPTION: ", parseIn(r.opts, "class ZKafka inherits KafkaDataProvider {
+    static auto f(KafkaDataProvider o) { return o.getConnectionIntern(new Priv::CreatorOptions()); }
+}
+"), l + "subclass calling the module's accessor");
         }
         # the host still reads them after the borrowers were refused
         assertEq(opts, dp.getClientConfig().options);
+        # trusted code cannot read the connection member through a subclass either: it uses getClientConfig()
+        # (qore#7866)
+        assertRegex("^PARSE-EXCEPTION: .*private member 'conn'", parseIn(0, "class TKafka inherits KafkaDataProvider {
+    static auto f(KafkaDataProvider o) { return o.conn; }
+}
+"), "trusted subclass reading the connection");
+        # the module's own child providers still get the connection (qore#7866)
+        assertEq("KafkaProducerDataProvider", dp.getChildProviderEx("producer").className());
+    }
+
+    #! The clients and connection options of the MQTT, OPC UA and Kafka data providers are private:internal (qore#7866)
+    /** They hold the host's credentials and key store passwords: a subclass, which restricted code can declare,
+        could read them from a provider that the host lent it; the module's own classes use token-gated methods,
+        which a subclass cannot call, as code outside the module cannot name the token (the private:internal helpers
+        of AbstractFunctionalOpcUaDataProvider are refused to a subclass when they are called)
+    */
+    clientMemberTest() {
+        # [the description, the expected error, the source of the subclass]
+        list<list<string>> cases = (
+            ("MQTT client", "private member 'client'", "class XMqtt inherits AbstractMqttDataProvider {
+    static auto f(AbstractMqttDataProvider o) { return o.client; }
+}
+"),
+            ("MQTT connection options", "private member 'opts'", "class XMqtt inherits AbstractMqttDataProvider {
+    static auto f(AbstractMqttDataProvider o) { return o.opts; }
+}
+"),
+            ("MQTT accessor without the token", "argument 'token'", "class XMqtt inherits AbstractMqttDataProvider {
+    static auto f(AbstractMqttDataProvider o) { return o.getMqttClientIntern(); }
+}
+"),
+            ("MQTT accessor with NOTHING", "argument 'token'", "class XMqtt inherits AbstractMqttDataProvider {
+    static auto f(AbstractMqttDataProvider o) { return o.getMqttClientIntern(NOTHING); }
+}
+"),
+            ("MQTT token", "cannot resolve namespace 'Priv'", "class XMqtt inherits AbstractMqttDataProvider {
+    static auto f(AbstractMqttDataProvider o) { return o.getMqttClientIntern(new Priv::CreatorOptions()); }
+}
+"),
+            ("OPC UA client", "private member 'client'", "class XOpcUa inherits AbstractOpcUaDataProvider {
+    static auto f(AbstractOpcUaDataProvider o) { return o.client; }
+}
+"),
+            ("OPC UA constructor options", "private member 'copts'", "class XOpcUa inherits AbstractOpcUaDataProvider {
+    static auto f(AbstractOpcUaDataProvider o) { return o.copts; }
+}
+"),
+            ("OPC UA accessor without the token", "argument 'token'", "class XOpcUa inherits AbstractOpcUaDataProvider {
+    static auto f(AbstractOpcUaDataProvider o) { return o.getOpcUaOptionsIntern(); }
+}
+"),
+            ("OPC UA token", "cannot resolve namespace 'Priv'", "class XOpcUa inherits AbstractOpcUaDataProvider {
+    static auto f(AbstractOpcUaDataProvider o) { return o.getOpcUaOptionsIntern(new Priv::ModuleToken()); }
+}
+"),
+            ("OPC UA subscription", "private member 'subscription'", "class XOpcUa inherits AbstractFunctionalOpcUaDataProvider {
+    static auto f(AbstractFunctionalOpcUaDataProvider o) { return o.subscription; }
+}
+"),
+            ("OPC UA monitored item listeners", "private member 'monitored_item_listeners'", "class XOpcUa
+        inherits AbstractFunctionalOpcUaDataProvider {
+    static auto f(AbstractFunctionalOpcUaDataProvider o) { return o.monitored_item_listeners; }
+}
+"),
+            ("Kafka connection accessor without the token", "argument 'token'", "class XKafka inherits KafkaDataProvider {
+    static auto f(KafkaDataProvider o) { return o.getConnectionIntern(); }
+}
+"),
+            ("Kafka producer", "private member 'prod'", "class XKafka inherits KafkaProducerDataProvider {
+    static auto f(KafkaProducerDataProvider o) { return o.prod; }
+}
+"),
+            ("Kafka consumer", "private member 'cons'", "class XKafka inherits KafkaConsumerDataProvider {
+    static auto f(KafkaConsumerDataProvider o) { return o.cons; }
+}
+"),
+        );
+        # restricted code, and trusted code as well: no subclass reads them
+        list<hash<auto>> restrictions = Restrictions + ({"label": "trusted", "opts": 0},);
+        foreach hash<auto> r in (restrictions) {
+            foreach list<string> c in (cases) {
+                assertRegex("^PARSE-(EXCEPTION|TYPE-ERROR): .*" + c[1], parseIn(r.opts, c[2]), r.label + ": " + c[0]);
+            }
+        }
+
+        # the private:internal helpers of AbstractFunctionalOpcUaDataProvider are refused to a subclass when it calls
+        # them; the provider makes its client only when it connects
+        OpcUaDataProvider opcua({"url": "opc.tcp://127.0.0.1:1"});
+        foreach hash<auto> r in (restrictions) {
+            Program p(PO_NEW_STYLE | r.opts);
+            map p.loadModule($1), Modules;
+            p.parse("class XOpcUa inherits AbstractFunctionalOpcUaDataProvider {
+    static string call(AbstractFunctionalOpcUaDataProvider o, string m) {
+        try {
+            call_object_method(o, m);
+            return \"called\";
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+    static string client(AbstractFunctionalOpcUaDataProvider o) {
+        try {
+            o.opcClient();
+            return \"called\";
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err;
+        }
+    }
+}
+string sub call(object o, string m) { return XOpcUa::call(o, m); }
+string sub client(object o) { return XOpcUa::client(o); }
+", "jni-provider-path-opcua-helpers");
+            assertEq("METHOD-DOES-NOT-EXIST", p.callFunction("client", opcua), r.label + ": opcClient()");
+            assertEq("METHOD-DOES-NOT-EXIST", p.callFunction("call", opcua, "opcOpts"), r.label + ": opcOpts()");
+            assertEq("METHOD-DOES-NOT-EXIST", p.callFunction("call", opcua, "opcClient"), r.label
+                + ": opcClient() by name");
+        }
+
+        # the creator's options of an MQTT connection, with its passwords, are checked without a virtual call: an
+        # override of checkOptions() in a subclass does not receive them
+        MqttConnection mconn("c", "c", "mqtt://localhost:1883", {"opts": {"username": "u", "password": "host-secret"}});
+        foreach hash<auto> r in (restrictions) {
+            Program p(PO_NEW_STYLE | r.opts);
+            map p.loadModule($1), Modules;
+            p.parse("our *hash<auto> seen;
+class XMqtt inherits MqttDataProvider {
+    constructor(MqttConnection c) : MqttDataProvider(c) {
+    }
+    *hash<auto> checkOptions(string err, *hash<string, hash<DataProviderOptionInfo>> defaults,
+            *hash<auto> user_options, *string req) {
+        seen = user_options;
+        return MqttDataProvider::checkOptions(err, defaults, user_options, req);
+    }
+}
+string sub probe(object c) {
+    XMqtt x(c);
+    return exists seen ? sprintf(\"override called with %y\", keys seen) : \"not called\";
+}
+", "jni-provider-path-checkoptions");
+            assertEq("not called", p.callFunction("probe", mconn), r.label + ": checkOptions() override");
+        }
     }
 
     #! Parses the code in a new Program with the parse options and the modules; returns the error or "parsed"

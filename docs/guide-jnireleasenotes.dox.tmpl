@@ -55,6 +55,19 @@
         options to trusted code (for example to make a client of the same cluster), and refuses them with
         \c PERMISSION-DENIED to code that is restricted from the \c NETWORK or \c FILESYSTEM functional domain, or
         that the provider was lent to and that is restricted from those domains
+      - <b>Behavior change</b>, KafkaDataProvider (qore#7866): the connection of a Kafka data provider
+        (KafkaDataProvider::KafkaDataProviderBase) is a \c private:internal member, which a subclass cannot read: a
+        subclass that restricted code declared could read the connection of a provider that the host lent it, with
+        the host's credentials; code that needs the connection uses
+        KafkaDataProvider::KafkaDataProvider::getClientConfig()
+      - <b>Behavior change</b>, MqttDataProvider and OpcUaDataProvider (qore#7866): the client and connection
+        options of MqttDataProvider::AbstractMqttDataProvider, and the client and constructor options of
+        OpcUaDataProvider::AbstractOpcUaDataProvider, are \c private:internal members, which a subclass cannot read,
+        as they hold the host's credentials and key store passwords; a subclass publishes with the provider's MQTT
+        client with MqttDataProvider::AbstractFunctionalMqttDataProvider::publishIntern().  So are the OPC UA
+        subscription and the Kafka producer and consumer, which give the clients; the MQTT callback handlers are
+        \c private:internal methods, and the creator's options of an MQTT connection are checked without a virtual
+        call, which an override of \c checkOptions() in a subclass received
     - <b>Behavior change</b> (qore#7738): \c org.qore.jni.QoreJavaDynamicApi.lookup(), which returned a lookup
       object for the class loader of the Program whose copy of the class it was called on, has been removed; nothing
       in the module used it
