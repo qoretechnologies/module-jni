@@ -1281,6 +1281,7 @@ set(JAVA_TEST_JAR_SRC
     test/java/src/org/qore/jni/test/ObjectHolder.java
     test/java/src/org/qore/jni/test/JdbcTransactionDriver.java
     test/java/src/org/qore/jni/test/JdbcConnectionDriver.java
+    test/java/src/org/qore/jni/test/JdbcRestrictedUrlDriver.java
     test/java/src/org/qore/jni/test/Callbacks.java
     test/java/src/org/qore/jni/test/ClassPtrProbe.java
     test/java/src/org/qore/jni/test/ClasspathUrlProbe.java
@@ -1457,6 +1458,7 @@ set(CPP_SRC
     src/JniQoreClass.cpp
     src/QoreJdbcDriver.cpp
     src/QoreJdbcConnection.cpp
+    src/QoreJdbcUrlPolicy.cpp
     src/QoreJdbcStatement.cpp
     src/QoreJdbcPreparedStatement.cpp
 )

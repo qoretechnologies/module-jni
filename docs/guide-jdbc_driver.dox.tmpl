@@ -544,4 +544,73 @@ foreach hash<auto> column in (result.schemaV2()) {
       \c info hash of the jni module in \c get_module_hash()); with a %Qore library that does not, the database name
       is judged only by the code that opens the connection, so trusted code must not open a datasource whose
       database name less trusted code set
+
+    @subsection jdbc_restricted_choosers Drivers for Code Restricted by Parse Options
+
+    A JDBC driver is Java code: some drivers read and write files (the file URLs of H2, Derby, HSQLDB and SQLite, or
+    an H2 \c INIT script), connect to other destinations, load classes that their URL names (a socket factory), or
+    run Java that the SQL of the connection defines (H2 \c CREATE \c ALIAS).  So the code that chose a connection
+    (the code that created the datasource or set its \c url option, database name or another connection value, see
+    above) is limited to the drivers that cannot do so for it if it has any of the parse options \c PO_NO_FILESYSTEM,
+    \c PO_NO_NETWORK, \c PO_NO_EXTERNAL_PROCESS, \c PO_NO_UNCONTROLLED_APIS or \c PO_NO_EMBEDDED_LOGIC (qore#7867):
+    every connection, also a reconnection and a new connection of a \c DatasourcePool on another thread, is refused
+    with \c JNI-SANDBOX-ERROR unless:
+    - the driver is one of the client/server drivers of the table below, in a URL form of the table
+    - every URL parameter is on the list of the driver's parameters that cannot name files, URLs, key or trust stores,
+      classes, local sockets or other destinations (ex: \c sslmode, \c connectTimeout and \c ApplicationName for
+      PostgreSQL); the error names a parameter that is not on it
+    - the driver that \c DriverManager selects for the URL is of one of the classes of the table: it makes the
+      connection, so no other driver on the classpath that accepts the URL can serve it
+
+    |!Driver|!URL forms|!Driver classes
+    |PostgreSQL|\c postgresql://host[:port][,host[:port]...][/database][?params]|\c org.postgresql.Driver
+    |MySQL|\c mysql://host[:port][,host[:port]...][/database][?params]|\c com.mysql.cj.jdbc.Driver
+    |MariaDB|\c mariadb://host[:port][,host[:port]...][/database][?params]|\c org.mariadb.jdbc.Driver
+    |Oracle|\c oracle:thin:[user[/password]]\@host:port:sid, \c oracle:thin:[user[/password]]\@[//]host[:port]/service|\c oracle.jdbc.OracleDriver, \c oracle.jdbc.driver.OracleDriver
+    |SQL Server|\c sqlserver://[host[\\instance][:port]][;params]|\c com.microsoft.sqlserver.jdbc.SQLServerDriver
+    |DB2|\c db2://host[:port]/database[:params;]|\c com.ibm.db2.jcc.DB2Driver
+
+    Embedded and file drivers, every other driver, the other URL forms of these drivers (ex: an Oracle TNS alias,
+    connect descriptor, \c ldap: or \c tcps: URL, or MySQL \c loadbalance: and \c address=(...) hosts), the
+    Oracle EZConnect parameters, and URLs with control or non-ASCII characters are refused.  The URL is the only way
+    that driver properties reach a driver: the jdbc driver passes the \c user and \c password of the datasource, and
+    for a connection that restricted code chose, the properties that turn off the features of the driver that reach
+    local files or the credentials of the host for the server:
+    - PostgreSQL: \c jaasLogin=false, \c gssEncMode=disable and \c gsslib=gssapi (no JAAS login with the Kerberos
+      credentials of the host, and no SSPI with the logged-on Windows user, for an authentication that the server
+      requests); the Java GSS API can still use the Kerberos credentials of the host without a JAAS login in a JVM
+      that sets the system property \c javax.security.auth.useSubjectCredsOnly to \c false or
+      \c sun.security.jgss.native to \c true, and the credentials of a JAAS \c Subject that the connecting thread
+      runs with (\c Subject.doAs()), so restricted code must not choose connections in such a JVM or thread
+    - MySQL: \c allowLoadLocalInfile=false and \c allowUrlInLocalInfile=false (no \c LOAD \c DATA \c LOCAL
+      \c INFILE), and \c disabledAuthenticationPlugins with the Kerberos, LDAP SASL (also its password-based SCRAM
+      mechanisms), OCI, OpenID Connect and WebAuthn authentication plugins
+    - MariaDB: \c allowLocalInfile=false (no \c LOAD \c DATA \c LOCAL \c INFILE, which the driver allows by
+      default), and \c restrictedAuth with the authentication plugins that use only the user and password of the
+      connection (not GSSAPI)
+
+    A driver ignores the properties that it does not know, so a restricted connection also needs a version of the
+    driver that has them, as \c Driver.getMajorVersion() and \c getMinorVersion() report it: PostgreSQL 42.3,
+    MySQL Connector/J 8.0 and MariaDB Connector/J 3.1 or later; an older version is refused with
+    \c java.lang.SecurityException.  As the Driver API reports no patch version, these are the first minor versions
+    whose every release has the properties: PostgreSQL 42.2.15 or later 42.2 releases and MariaDB Connector/J 3.0.3
+    or later 3.0 releases have them too, but are refused.
+
+    The \c DATABASE domain is separate: an allowed connection to a database server needs no other domain, as for the
+    native %Qore database drivers, and the files of the server (ex: \c COPY \c FROM a server file) are the server's.
+    As the native drivers, the drivers can use the configuration of the host for a connection: for example, the
+    PostgreSQL driver reads the password of a connection without one from the \c .pgpass file of the user, and the
+    client certificate and root certificate of a TLS connection from the user's \c .postgresql directory, as
+    \c libpq does; the MySQL and MariaDB drivers present the client certificate of the JVM's key store
+    (\c javax.net.ssl.keyStore) to a server of a TLS connection; and the Oracle driver uses the \c ojdbc.properties
+    file and a wallet of its \c TNS_ADMIN directory.  The user and password of a datasource are sent to the server
+    that the URL names, so trusted code that sets them on a datasource whose URL restricted code can set lets that
+    code choose the server that receives them.
+
+    The code that opens the connection is not judged by its parse options: a connection that trusted code chose is a
+    capability that trusted code can lend to restricted code, which can then use it, also to open new connections of
+    a \c DatasourcePool on its own threads.  Library module code has no parse options of its own, as everywhere in
+    %Qore, so a datasource that a module creates for restricted code is judged by the sandbox only.  Without a %Qore
+    library that records the code that chose a connection, the connection is judged by the setter of the \c url
+    option, and otherwise by the code that opens it.
 */

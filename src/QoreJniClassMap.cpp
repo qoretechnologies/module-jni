@@ -6097,6 +6097,8 @@ void JniExternalProgramData::initDynamicApi(Env& env) {
         "(Ljava/lang/Class;Ljava/lang/ClassLoader;)Ljava/util/ServiceLoader;");
     methodQoreJavaDynamicApiGetConnection = env.getStaticMethod(dynamicApi, "getConnection",
         "(Ljava/lang/String;Ljava/util/Properties;)Ljava/sql/Connection;");
+    methodQoreJavaDynamicApiGetRestrictedConnection = env.getStaticMethod(dynamicApi, "getRestrictedConnection",
+        "(Ljava/lang/String;Ljava/util/Properties;[Ljava/lang/String;)Ljava/sql/Connection;");
 
     printd(LogLevel, "JniExternalProgramData::JniExternalProgramData(): this: %p: dynamic API created: %p " \
         "classloader: %p QoreJavaClassBase: %p\n", this, getDynamicApi(), getClassLoader(),

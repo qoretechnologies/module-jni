@@ -6,6 +6,9 @@
 
     @section jni_3_0_0 jni Module Version 3.0.0
 
+    - <b>Security</b> (qore#7867): code restricted from the filesystem, the network, external processes,
+      uncontrolled APIs or embedded logic by parse options that chooses a \c jdbc connection can only use the
+      allow-listed client/server drivers, URL forms and parameters (see @ref jdbc_restricted_choosers)
     - <b>Security</b> (qore#7811): the data provider modules use the options and request fields that name local
       paths with their own Program's options, so they now refuse them to code that is restricted from the
       \c FILESYSTEM functional domain (\c PERMISSION-DENIED), as follows; with the \c jni module loaded, such a

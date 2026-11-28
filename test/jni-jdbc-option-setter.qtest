@@ -276,6 +276,12 @@ list<string> sub loader_urls() {
         return kind == "sandboxed";
     }
 
+    #! Returns True if the code of the kind given has a parse option that limits the connections that it chooses to
+    #! the allow-listed jdbc drivers, which the qore-none URLs of the test are not (qore#7867)
+    private static bool parseRestricted(string kind) {
+        return kind == "no-filesystem" || kind == "no-uncontrolled";
+    }
+
     #! Returns True if the Qore library refuses a connection that the code of the kind given chose
     /** a Qore library that checks the destinations of connections refuses the jdbc driver, which cannot report its
         destinations, for a connection chosen by code whose sandbox restricts network or filesystem access, as the
@@ -398,8 +404,11 @@ string sub open_desc() {
             }
             # the code of the kind copies a datasource that trusted code configured
             Datasource trusted("jdbc:u/p@jdbc:qore-none://x{classpath=" + NoSuchEntry + "}");
-            # the copy is the code's own datasource object: the code of the kind chose its connection
-            assertEq(connectRefused(kind) || chooserRefused(kind) ? "NETWORK-ACCESS-DENIED" : "JNI-ERROR",
+            # the copy is the code's own datasource object: the code of the kind chose its connection, so code
+            # restricted by parse options is limited to the allow-listed drivers (qore#7867)
+            assertEq(connectRefused(kind) || chooserRefused(kind)
+                ? "NETWORK-ACCESS-DENIED"
+                : (parseRestricted(kind) ? "JNI-SANDBOX-ERROR" : "JNI-ERROR"),
                 open(pgms{kind}.callFunction("copy_ds", trusted)), kind + ": its copy of a trusted datasource");
         }
     }

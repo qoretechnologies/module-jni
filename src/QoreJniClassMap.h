@@ -627,6 +627,12 @@ public:
         return methodQoreJavaDynamicApiGetConnection;
     }
 
+    //! QoreJavaDynamicApi.getRestrictedConnection(): connects with a driver of the given classes (qore#7867)
+    DLLLOCAL jmethodID getGetRestrictedConnectionMethodId() const {
+        assert(methodQoreJavaDynamicApiGetRestrictedConnection);
+        return methodQoreJavaDynamicApiGetRestrictedConnection;
+    }
+
     DLLLOCAL jmethodID getFieldId() const {
         assert(methodQoreJavaDynamicApiGetField);
         return methodQoreJavaDynamicApiGetField;
@@ -860,6 +866,7 @@ protected:
     jmethodID methodQoreJavaDynamicApiLoadServiceLoader = 0;
     // QoreJavaDynamicApi.getConnection()
     jmethodID methodQoreJavaDynamicApiGetConnection = 0;
+    jmethodID methodQoreJavaDynamicApiGetRestrictedConnection = 0;
 
     // code generation mutex
     QoreRecursiveThreadLock codeGenLock;
