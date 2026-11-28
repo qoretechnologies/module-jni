@@ -89,6 +89,17 @@ static inline bool jni_sandbox_refuses_uncontrolled_code(QoreSandboxManagerHelpe
 }
 #endif
 
+#ifdef QORE_HAVE_UNCONTROLLED_API_ENFORCEMENT
+//! The restriction classes (bits of QORE_UNCONTROLLED_API_RESTRICTION_DOMAINS) that the Java code jni runs enforces
+/** None (qore#7832): Java code does its own file, network and process I/O, which no Qore restriction reaches, so code
+    with \c PO_NO_FILESYSTEM, \c PO_NO_NETWORK or \c PO_NO_EXTERNAL_PROCESS is refused Java as code with
+    \c PO_NO_UNCONTROLLED_APIS is.  The module declares nothing (qore_module_declare_enforced_domains() is not called),
+    and every Java class sets this value explicitly (JniQoreClass), so the builtins of the module and the Java classes
+    all have it.
+*/
+#define QORE_JNI_ENFORCED_DOMAINS 0
+#endif
+
 // module API 2.3 (qore#5699): module commands are judged by the restrictions of the code that issues them, and module
 // functions can judge their caller the same way
 #if QORE_MODULE_API_MAJOR > 2 || (QORE_MODULE_API_MAJOR == 2 && QORE_MODULE_API_MINOR >= 3)

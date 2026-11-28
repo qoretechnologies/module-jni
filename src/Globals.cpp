@@ -1344,12 +1344,21 @@ static jobject JNICALL java_api_new_object_save(JNIEnv* jenv, jobject obj, jlong
 
     const QoreClass* cls = pgm->findClass(clsname.c_str(), &xsink);
     if (cls && !xsink) {
+#ifdef QORE_HAVE_UNCONTROLLED_API_ENFORCEMENT
+        // the Program's restrictions are checked as the Qore library checks a class that code resolves at run time,
+        // which refuses a class of an uncontrolled API also to a Program that restricts one of the classes that the
+        // class's runtime does not enforce (qore#7832)
+        if (!cls->runtimeCheckDomain(*pgm, &xsink)) {
+            cls->runtimeCheckInstantiateClass(&xsink);
+        }
+#else
         if (pgm->getParseOptions() & cls->getDomain()) {
             xsink.raiseException("CREATE-OBJECT-ERROR", "Program sandboxing restrictions do not allow access to " \
                 "the '%s' class", cls->getName());
         } else {
             cls->runtimeCheckInstantiateClass(&xsink);
         }
+#endif
     }
 
     if (!cls && !xsink) {

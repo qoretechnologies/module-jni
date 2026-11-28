@@ -6,6 +6,21 @@
 
     @section jni_3_0_0 jni Module Version 3.0.0
 
+    - <b>Security</b>, <b>behavior change</b> (qore#7832): with a %Qore library that has
+      \c QORE_HAVE_UNCONTROLLED_API_ENFORCEMENT, Java code is refused to code with \c PO_NO_FILESYSTEM,
+      \c PO_NO_NETWORK or \c PO_NO_EXTERNAL_PROCESS exactly as to code with \c PO_NO_UNCONTROLLED_APIS, because the JVM
+      does its file, network and process I/O itself (see @ref jni_sandbox): the Java classes, the module's functions
+      (\c Jni::load_class(), \c Jni::invoke(), ...), and the module commands that run Java code (\c import,
+      \c define-class, \c define-pending-class, \c kotlin-eval, ...) are refused to such code.  The module's own checks
+      of the Program that a command is issued into (\c define-class, \c define-pending-class, \c kotlin-eval,
+      \c set-property, \c register-shared-class, \c set-java-thread-policy, the \c global-* classpath commands), of the
+      Program of its exported import functions, of a Java call that creates a %Qore object, and the class handler of
+      wildcard imports, which loads no Java class for such a Program, refuse such Programs too (a library module's
+      Program that its header trusts with uncontrolled APIs is not refused).  Every Java class declares that it
+      enforces none of the classes (\c QoreClass::setEnforcedDomains(0)).  \c PO_NO_PROCESS_CONTROL and
+      \c PO_NO_THREAD_CONTROL do not refuse Java code.  The module reports the feature with the
+      \c uncontrolled_api_enforcement key of its \c info hash in \c get_module_hash()
+
     - <b>Security</b> (qore#7811): the data provider modules use the options and request fields that name local
       paths with their own Program's options, so they now refuse them to code that is restricted from the
       \c FILESYSTEM functional domain (\c PERMISSION-DENIED), as follows; with the \c jni module loaded, such a

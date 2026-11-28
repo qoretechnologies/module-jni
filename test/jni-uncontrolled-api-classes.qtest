@@ -1,0 +1,320 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../build"
+%prepend-module-path "${SCRIPT_DIR}/../qlib"
+%requires jni
+%requires QUnit
+
+%exec-class JniUncontrolledApiClassesTest
+
+#! Java code is refused to code that restricts a class that Java code does not respect (qore#7832)
+/** Java code does its own file, network and process I/O, which no %Qore restriction reaches.  With a %Qore library
+    that refuses an uncontrolled API to code restricted from a class that the API's runtime does not enforce, and a jni
+    module built for it (\c get_module_hash().jni.info.uncontrolled_api_enforcement), code with \c PO_NO_FILESYSTEM,
+    \c PO_NO_NETWORK or \c PO_NO_EXTERNAL_PROCESS is refused Java exactly where and as code with
+    \c PO_NO_UNCONTROLLED_APIS is: the Java classes, the module's functions and the module commands that run Java code,
+    both as the code that issues them and as the Program that they are issued into.  \c PO_NO_PROCESS_CONTROL and
+    \c PO_NO_THREAD_CONTROL are not such classes.  Without the feature, these restrictions do not refuse Java code.
+*/
+class JniUncontrolledApiClassesTest inherits QUnit::Test {
+    private:internal {
+        #! the restriction classes that Java code does not respect
+        const ClassKinds = {
+            "no-filesystem": PO_NO_FILESYSTEM,
+            "no-network": PO_NO_NETWORK,
+            "no-external-process": PO_NO_EXTERNAL_PROCESS,
+        };
+
+        #! the reason of a refusal for each class: its functional domain or its parse option
+        const ClassReasons = {
+            "no-filesystem": "FILESYSTEM",
+            "no-network": "NETWORK",
+            "no-external-process": "EXTERNAL_PROCESS",
+        };
+
+        #! restrictions that are not such classes: Java code is never refused for them (decision D2)
+        const OtherKinds = {
+            "no-process-control": PO_NO_PROCESS_CONTROL,
+            "no-process-thread-control": PO_NO_PROCESS_CONTROL | PO_NO_THREAD_CONTROL,
+        };
+
+        #! the paths of restricted code to Java code: each defines "auto sub t(auto method, auto obj)", which returns
+        #! "ok" if Java code ran
+        const Paths = {
+            "import-directive": "%module-cmd(jni) import java.lang.StringBuilder\n"
+                "auto sub t(auto method, auto obj) { return \"ok\"; }",
+            "import-wildcard-directive": "%module-cmd(jni) import java.util.concurrent.*\n"
+                "auto sub t(auto method, auto obj) { return \"ok\"; }",
+            # the argument is not valid byte code: an allowed issuer gets the command's own error
+            "define-class-directive": "%module-cmd(jni) define-class qore.QoreTestUcPlaceholder AAAA\n"
+                "auto sub t(auto method, auto obj) { return \"ok\"; }",
+            "define-pending-class-directive": "%module-cmd(jni) define-pending-class qore.QoreTestUcPending AAAA\n"
+                "auto sub t(auto method, auto obj) { return \"ok\"; }",
+            "import-runtime": "auto sub t(auto method, auto obj) { "
+                "Program::issueModuleCmd(\"jni\", \"import java.lang.StringBuffer\"); return \"ok\"; }",
+            "define-class-runtime": "auto sub t(auto method, auto obj) { "
+                "Program::issueModuleCmd(\"jni\", \"define-class qore.QoreTestUcRuntime AAAA\"); return \"ok\"; }",
+            "load-class": "auto sub t(auto method, auto obj) { "
+                "return load_class(\"java.lang.StringBuilder\").getName() == \"java.lang.StringBuilder\" ? \"ok\" "
+                ": \"wrong class\"; }",
+            "load-class-dynamic": "auto sub t(auto method, auto obj) { "
+                "auto c = call_function(\"Jni::org::qore::jni::load_class\", \"java.lang.StringBuilder\"); "
+                "return c.getName() == \"java.lang.StringBuilder\" ? \"ok\" : \"wrong class\"; }",
+            "invoke": "auto sub t(auto method, auto obj) { "
+                "return Jni::org::qore::jni::invoke(method, obj) == \"probe\" ? \"ok\" : \"wrong result\"; }",
+            "invoke-dynamic": "auto sub t(auto method, auto obj) { "
+                "return call_function(\"Jni::org::qore::jni::invoke\", method, obj) == \"probe\" ? \"ok\" "
+                ": \"wrong result\"; }",
+            "java-class": "auto sub t(auto method, auto obj) { "
+                "return (new Jni::java::lang::StringBuilder(\"x\")).toString() == \"x\" ? \"ok\" : \"wrong result\"; }",
+            "java-class-dynamic": "auto sub t(auto method, auto obj) { "
+                "object o = create_object(\"Jni::java::lang::Object\"); return o ? \"ok\" : \"no object\"; }",
+            "lent-object": "auto sub t(auto method, auto obj) { "
+                "return obj.toString() == \"probe\" ? \"ok\" : \"wrong result\"; }",
+        };
+
+        #! the module commands that a trusted issuer issues into a restricted Program, which run Java code there or
+        #! change state of the JVM for it, and the results accepted when they are allowed
+        const TargetCommands = {
+            # the argument is not valid byte code: an allowed command gets its own error
+            "define-class qore.QoreTestUcTarget AAAA": ("JNI-DEFINE-CLASS-ERROR", "JNI-ERROR"),
+            "define-pending-class qore.QoreTestUcTargetPending AAAA": ("ok", "JNI-DEFINE-CLASS-ERROR", "JNI-ERROR"),
+            "set-property org.qore.test.uc.target value": ("ok",),
+            "global-add-classpath /nonexistent-qore-test-dir": ("ok",),
+            "register-shared-class qore.QoreTestUcTargetShared": ("ok",),
+            # Kotlin scripting may not be installed
+            "kotlin-eval 1": ("ok", "KOTLIN-SCRIPTING-NOT-AVAILABLE"),
+        };
+    }
+
+    constructor() : QUnit::Test("JNI uncontrolled API restriction classes", "1.0", \ARGV) {
+        addTestCase("the module reports the feature as the Qore library has it", \featureTest());
+        addTestCase("restricted code is refused Java code as with PO_NO_UNCONTROLLED_APIS", \restrictedCodeTest());
+        addTestCase("process and thread control are not restriction classes", \otherKindsTest());
+        addTestCase("a trusted issuer cannot run Java code in a restricted Program", \targetTest());
+        addTestCase("a restricted Program cannot use Java classes imported into it", \importedClassTest());
+        addTestCase("a library module trusted with uncontrolled APIs keeps Java code", \libraryTest());
+        set_return_value(main());
+    }
+
+    #! Returns True if the Qore library refuses uncontrolled APIs for the restriction classes that their runtime does
+    #! not enforce (the module hash of a binary module has "enforced_domains" then)
+    /** The expectations follow the Qore library, not the module: a jni module built without the feature and loaded
+        by a Qore library with it must refuse the same (featureTest() checks that the module reports the feature)
+    */
+    private static bool enforced() {
+        return exists get_module_hash().jni.enforced_domains;
+    }
+
+    #! Returns True if the jni module was built for the restriction classes of uncontrolled APIs
+    private static bool moduleHasFeature() {
+        return get_module_hash().jni.info.uncontrolled_api_enforcement ?? False;
+    }
+
+    #! Returns the result of the path in a new Program with the parse options given: "ok" or the error
+    private static string runPath(string path, int po, *reference<string> desc) {
+        Program p(PO_NEW_STYLE | po);
+        try {
+            p.parse("%requires jni\n" + Paths{path}, "jni-uncontrolled-api-classes-" + path);
+            Jni::java::lang::Class cls = load_class("java.lang.Object");
+            Jni::java::lang::reflect::Method m = cls.getMethod("toString");
+            return p.callFunction("t", m, new Jni::java::lang::String("probe"));
+        } catch (hash<ExceptionInfo> ex) {
+            desc = ex.desc;
+            return ex.err;
+        }
+    }
+
+    #! Returns the result of a module command that this (trusted) code issues into the Program given: "ok" or the error
+    private static string issueInto(Program p, string cmd, *reference<string> desc) {
+        try {
+            p.issueModuleCmd("jni", cmd);
+            return "ok";
+        } catch (hash<ExceptionInfo> ex) {
+            desc = ex.desc;
+            return ex.err;
+        }
+    }
+
+    featureTest() {
+        # the module has the feature exactly when the Qore library that it was built with has it (the module hash of a
+        # Qore library with the feature has "enforced_domains"); jni enforces none of the classes
+        hash<auto> jh = get_module_hash().jni;
+        assertEq(exists jh.enforced_domains, moduleHasFeature(), "the module follows the Qore library");
+        if (enforced()) {
+            assertEq(0, jh.enforced_domains, "jni declares no restriction class");
+        }
+    }
+
+    restrictedCodeTest() {
+        on_exit Jni::java::lang::System::clearProperty("org.qore.test.uc.target");
+        foreach string path in (keys Paths) {
+            string allowed_desc;
+            string allowed = runPath(path, 0, \allowed_desc);
+            string baseline_desc;
+            string baseline = runPath(path, PO_NO_UNCONTROLLED_APIS, \baseline_desc);
+            # the control: the path runs Java code for unrestricted code and is refused to PO_NO_UNCONTROLLED_APIS
+            if (path =~ /^define-(pending-)?class/) {
+                assertTrue(inlist(allowed, ("ok", "JNI-DEFINE-CLASS-ERROR", "JNI-ERROR")), path + ": unrestricted: "
+                    + allowed + ": " + allowed_desc);
+            } else {
+                assertEq("ok", allowed, path + ": unrestricted: " + allowed_desc);
+            }
+            assertNeq("ok", baseline, path + ": PO_NO_UNCONTROLLED_APIS");
+            assertNeq(allowed, baseline, path + ": PO_NO_UNCONTROLLED_APIS is refused");
+            foreach hash<auto> kind in (ClassKinds.pairIterator()) {
+                string desc;
+                string result = runPath(path, kind.value, \desc);
+                if (enforced()) {
+                    assertEq(baseline, result, path + ": " + kind.key + ": refused as with PO_NO_UNCONTROLLED_APIS: "
+                        + desc);
+                    # the reason: the restriction class (or, for a module command, the PO_NO_UNCONTROLLED_APIS that
+                    # the issuer's restriction counts as), or, for a Java class that a name does not resolve to (the
+                    # module loads none for the Program), that it is not found, as with PO_NO_UNCONTROLLED_APIS
+                    assertRegex(ClassReasons{kind.key} + "|0x200000000000|cannot find|not found|no class|"
+                        "does not exist", desc, path + ": " + kind.key + ": the reason");
+                } else {
+                    assertEq(allowed, result, path + ": " + kind.key + ": not refused without the feature: " + desc);
+                }
+            }
+        }
+    }
+
+    otherKindsTest() {
+        foreach string path in (keys Paths) {
+            string allowed = runPath(path, 0);
+            foreach hash<auto> kind in (OtherKinds.pairIterator()) {
+                string desc;
+                assertEq(allowed, runPath(path, kind.value, \desc), path + ": " + kind.key + ": " + desc);
+            }
+        }
+    }
+
+    targetTest() {
+        on_exit Jni::java::lang::System::clearProperty("org.qore.test.uc.target");
+        foreach hash<auto> c in (TargetCommands.pairIterator()) {
+            # the control: allowed into an unrestricted Program, refused into a PO_NO_UNCONTROLLED_APIS Program by the
+            # target's own check
+            {
+                Program p(PO_NEW_STYLE);
+                p.loadModule("jni");
+                string desc;
+                string err = issueInto(p, c.key, \desc);
+                assertTrue(inlist(err, c.value), c.key + ": an unrestricted target: " + err + ": " + desc);
+            }
+            {
+                Program p(PO_NEW_STYLE | PO_NO_UNCONTROLLED_APIS);
+                p.loadModule("jni");
+                string desc;
+                assertEq("JNI-SANDBOX-ERROR", issueInto(p, c.key, \desc), c.key + ": a PO_NO_UNCONTROLLED_APIS "
+                    "target: " + desc);
+                assertRegex("does not allow uncontrolled APIs", desc, c.key + ": a PO_NO_UNCONTROLLED_APIS target: "
+                    "the reason");
+            }
+            foreach hash<auto> kind in (ClassKinds.pairIterator()) {
+                Program p(PO_NEW_STYLE | kind.value);
+                p.loadModule("jni");
+                string desc;
+                string err = issueInto(p, c.key, \desc);
+                if (enforced()) {
+                    assertEq("JNI-SANDBOX-ERROR", err, c.key + ": a " + kind.key + " target: " + desc);
+                    assertRegex("a Program that restricts .*\\(which Java code does not respect\\)", desc,
+                        c.key + ": a " + kind.key + " target: the reason");
+                } else {
+                    assertTrue(inlist(err, c.value), c.key + ": a " + kind.key + " target without the feature: " + err
+                        + ": " + desc);
+                }
+            }
+            foreach hash<auto> kind in (OtherKinds.pairIterator()) {
+                Program p(PO_NEW_STYLE | kind.value);
+                p.loadModule("jni");
+                string desc;
+                string err = issueInto(p, c.key, \desc);
+                assertTrue(inlist(err, c.value), c.key + ": a " + kind.key + " target: " + err + ": " + desc);
+            }
+        }
+    }
+
+    importedClassTest() {
+        # a trusted issuer can import classes into a restricted Program (the import loads the class for the issuer, as
+        # into a PO_NO_UNCONTROLLED_APIS Program), but the Program's code is refused them
+        string src = "auto sub t() { return (new Jni::java::lang::StringBuilder(\"x\")).toString(); }";
+        hash<string, string> results;
+        hash<string, int> kinds = {"none": 0, "no-uncontrolled": PO_NO_UNCONTROLLED_APIS} + ClassKinds + OtherKinds;
+        foreach hash<auto> kind in (kinds.pairIterator()) {
+            Program p(PO_NEW_STYLE | kind.value);
+            p.loadModule("jni");
+            string desc;
+            assertEq("ok", issueInto(p, "import java.lang.StringBuilder", \desc), kind.key + ": the import: " + desc);
+            try {
+                p.parse(src, "jni-uncontrolled-api-imported-" + kind.key);
+                results{kind.key} = p.callFunction("t");
+            } catch (hash<ExceptionInfo> ex) {
+                results{kind.key} = ex.err;
+            }
+        }
+        assertEq("x", results.none, "an unrestricted Program uses the class");
+        assertNeq("x", results{"no-uncontrolled"}, "a PO_NO_UNCONTROLLED_APIS Program is refused the class");
+        foreach string kind in (keys ClassKinds) {
+            assertEq(enforced() ? results{"no-uncontrolled"} : "x", results{kind}, kind);
+        }
+        foreach string kind in (keys OtherKinds) {
+            assertEq("x", results{kind}, kind);
+        }
+    }
+
+    #! Runs jni-uncontrolled-api-classes-child.q in a process of its own: the Program of the kind given is the first
+    #! to load the fixture module, so that the module's Program inherits its parse options; returns its result
+    private static string runLibrary(string module, string kind) {
+        string dir = get_script_dir();
+        string mdir = dir + "jni-uncontrolled-api-fixture" + (exists ENV.QORE_MODULE_DIR
+            ? ":" + ENV.QORE_MODULE_DIR : "");
+        int rc;
+        string out = backquote(sprintf("QORE_MODULE_DIR='%s' '%s' '%sjni-uncontrolled-api-classes-child.q' %s %s 2>&1",
+            mdir, QORE_ARGV[0], dir, module, kind), \rc);
+        # the last line is the result; the JVM's notices and warnings precede it
+        list<string> lines = select (out.split("\n")), ($1 != "" && !($1 =~ /^Picked up /));
+        return lines ? lines.last() : sprintf("no output (exit status %d)", rc);
+    }
+
+    libraryTest() {
+        # a library module whose header trusts it with uncontrolled APIs (domains = "UNCONTROLLED_API") uses Java code
+        # for a loader that restricts the filesystem or the network, which the module's own Program inherits: they
+        # restrict the module's own access, which its header trusts it with
+        assertEq("ok", runLibrary("JniUcTrustedLibFixture", "none"), "trusted library: an unrestricted loader");
+        foreach string kind in (("no-filesystem", "no-network") + keys OtherKinds) {
+            assertEq("ok", runLibrary("JniUcTrustedLibFixture", kind), "trusted library: a " + kind + " loader");
+        }
+        # external processes are restricted for the calling code as well, which the module's trust does not lift: the
+        # Java code that the module runs for a PO_NO_EXTERNAL_PROCESS caller is refused at run time (fail closed)
+        string xp_result = runLibrary("JniUcTrustedLibFixture", "no-external-process");
+        if (enforced()) {
+            assertRegex("^INVALID-FUNCTION-ACCESS: .*EXTERNAL_PROCESS", xp_result, "trusted library: a "
+                "no-external-process loader");
+        } else {
+            assertEq("ok", xp_result, "trusted library: a no-external-process loader without the feature");
+        }
+        # a library module that is not trusted with uncontrolled APIs: its Java code is refused when a loader that
+        # restricts a class loads it first, as when a PO_NO_UNCONTROLLED_APIS loader does
+        assertEq("ok", runLibrary("JniUcLibFixture", "none"), "untrusted library: an unrestricted loader");
+        string baseline = runLibrary("JniUcLibFixture", "no-uncontrolled");
+        assertNeq("ok", baseline, "untrusted library: a PO_NO_UNCONTROLLED_APIS loader");
+        foreach string kind in (keys ClassKinds) {
+            string result = runLibrary("JniUcLibFixture", kind);
+            if (enforced()) {
+                assertEq(baseline.split(":")[0], result.split(":")[0], "untrusted library: a " + kind + " loader: "
+                    + result);
+                # refused for the class, as an uncontrolled API whose module does not enforce it
+                assertRegex(ClassReasons{kind} + ".*qore#7832", result, "untrusted library: a " + kind + " loader: "
+                    "the reason");
+            } else {
+                assertEq("ok", result, "untrusted library: a " + kind + " loader without the feature");
+            }
+        }
+        foreach string kind in (keys OtherKinds) {
+            assertEq("ok", runLibrary("JniUcLibFixture", kind), "untrusted library: a " + kind + " loader");
+        }
+    }
+}

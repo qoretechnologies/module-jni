@@ -350,6 +350,47 @@ JNI-SANDBOX-ERROR: a Java object or closure whose origin cannot be determined ca
     itself.  Java classes imported through this module are tagged with the \c QDOM_UNCONTROLLED_API functional
     domain for this reason, so that a Program with \c PO_NO_UNCONTROLLED_APIS cannot use them directly.
 
+    <b>Restriction classes that Java code does not respect</b> (qore#7832): with a %Qore library that refuses an
+    uncontrolled API to code restricted from a restriction class that the API's runtime does not enforce
+    (\c QORE_HAVE_UNCONTROLLED_API_ENFORCEMENT; the classes are \c Qore::UNCONTROLLED_API_RESTRICTION_DOMAINS: the
+    filesystem, the network and external processes), Java code is refused to code with \c PO_NO_FILESYSTEM,
+    \c PO_NO_NETWORK or \c PO_NO_EXTERNAL_PROCESS exactly where and as it is refused to code with
+    \c PO_NO_UNCONTROLLED_APIS, because the JVM does its file, network and process I/O itself, so these restrictions
+    would not hold for the Java code that the restricted code runs.  The jni module enforces none of the classes: it
+    declares none for its builtins (\c get_module_hash().jni.enforced_domains is 0), and every Java class sets 0 with
+    \c QoreClass::setEnforcedDomains() before it is published.  So such code is refused:
+    - the Java classes (\c Jni::java::lang::StringBuilder, for example) and their methods, also an object that a host
+      lent it, and the functions of the module (\c Jni::load_class(), \c Jni::invoke() and the others of the
+      \c UNCONTROLLED_API domain), at parse time and at run time (\c create_object(), \c call_function()), by the
+      %Qore library
+    - the module commands that run Java code (\c import, \c define-class, \c define-pending-class, \c kotlin-eval, and
+      the commands that change state of the whole JVM), as directives and at run time: their issuer's restrictions
+      count as \c PO_NO_UNCONTROLLED_APIS (\c JNI-SANDBOX-ERROR)
+    - in a Program that restricts a class, also when trusted code issues the command into it
+      (\c Program::issueModuleCmd()): the commands that the module checks for their target Program
+      (\c define-class, \c define-pending-class, \c kotlin-eval, \c set-property, \c register-shared-class,
+      \c set-java-thread-policy and the \c global-* classpath commands) are refused, as in a Program with
+      \c PO_NO_UNCONTROLLED_APIS (\c JNI-SANDBOX-ERROR: "a Program that restricts the filesystem (which Java code does
+      not respect)"); an \c import into such a Program loads the classes for its trusted issuer, but the Program's own
+      code cannot use them
+    - the Java classes of a wildcard import: the module loads no Java class (whose static initializer would run) for
+      a Program that is refused Java code while a name is resolved, and the name is then not found
+    - the imports of other modules through the module's exported import functions (the Java loader of the \c python
+      module), into such a Program or by such code
+    - a Java call that creates a %Qore object (\c QoreJavaApi.newObjectSave()) of a class that such a Program is
+      refused
+
+    \c PO_NO_PROCESS_CONTROL and \c PO_NO_THREAD_CONTROL are not such classes: code with them (the trusted interface
+    Programs of Qorus, for example) can still use Java code, which they do not restrict (a known gap).  A library
+    module whose module header trusts it with uncontrolled APIs (<tt>domains = "UNCONTROLLED_API"</tt>) keeps its Java
+    code when a Program that restricts a class loads it first, and its own Program inherits that restriction; a
+    library module that does not declare the domain is refused, as when a Program with \c PO_NO_UNCONTROLLED_APIS
+    loads it first.  The jni module reports the feature with the \c uncontrolled_api_enforcement key of its \c info
+    hash in \c get_module_hash(); without it, these restrictions do not refuse Java code.  The sandbox of a Program is
+    not one of these restrictions: a sandbox that trusts its code with uncontrolled APIs
+    (\c SandboxManager::setUncontrolledApiPolicy()) allows Java code, whose file and network access its policy then
+    reaches only where this module checks it (see below).
+
     Java code that sandboxed %Qore code may call - for example the actions of a data provider implemented in Java,
     which connect to destinations taken from a tenant's connection - checks every network destination and every
     path it uses with @ref org.qore.jni.QoreSandbox "org.qore.jni.QoreSandbox", which applies the policy of the

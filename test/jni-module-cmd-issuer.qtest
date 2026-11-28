@@ -27,10 +27,15 @@ class JniModuleCmdIssuerTest inherits QUnit::Test {
         #! all restricted issuer kinds
         const AllRestricted = ("no-uncontrolled", "no-filesystem", "no-embedded", "sandboxed");
 
-        #! the commands: the issuer kinds that are refused, and the results accepted for the other kinds
+        #! the commands: the issuer kinds that are refused, and the results accepted for the other kinds; "java":
+        #! the command runs Java code, which is refused as well to an issuer that restricts a class that Java code
+        #! does not respect (PO_NO_FILESYSTEM) with a Qore library that refuses uncontrolled APIs for such classes
+        #! (qore#7832)
         const Commands = {
-            "import java.lang.StringBuilder": {"refused": ("no-uncontrolled", "sandboxed"), "allowed": ("ok",)},
-            "import java.util.concurrent.*": {"refused": ("no-uncontrolled", "sandboxed"), "allowed": ("ok",)},
+            "import java.lang.StringBuilder": {"refused": ("no-uncontrolled", "sandboxed"), "allowed": ("ok",),
+                "java": True},
+            "import java.util.concurrent.*": {"refused": ("no-uncontrolled", "sandboxed"), "allowed": ("ok",),
+                "java": True},
             "add-classpath /nonexistent-qore-test-dir": {"refused": ("no-uncontrolled", "no-filesystem", "sandboxed"),
                 "allowed": ("ok",)},
             "add-relative-classpath nonexistent-qore-test-dir": {"refused": ("no-uncontrolled", "no-filesystem",
@@ -42,12 +47,12 @@ class JniModuleCmdIssuerTest inherits QUnit::Test {
             "register-shared-class qore.QoreTestIssuerPlaceholder": {"refused": AllRestricted, "allowed": ("ok",)},
             # the argument is not valid byte code: an allowed issuer gets the command's own error
             "define-class qore.QoreTestIssuerPlaceholder AAAA": {"refused": ("no-uncontrolled", "no-embedded",
-                "sandboxed"), "allowed": ("JNI-DEFINE-CLASS-ERROR", "JNI-ERROR")},
+                "sandboxed"), "allowed": ("JNI-DEFINE-CLASS-ERROR", "JNI-ERROR"), "java": True},
             "define-pending-class qore.QoreTestIssuerPlaceholder AAAA": {"refused": ("no-uncontrolled", "no-embedded",
-                "sandboxed"), "allowed": ("ok", "JNI-DEFINE-CLASS-ERROR", "JNI-ERROR")},
+                "sandboxed"), "allowed": ("ok", "JNI-DEFINE-CLASS-ERROR", "JNI-ERROR"), "java": True},
             # Kotlin scripting may not be installed
             "kotlin-eval 1": {"refused": ("no-uncontrolled", "no-embedded", "sandboxed"),
-                "allowed": ("ok", "KOTLIN-SCRIPTING-NOT-AVAILABLE")},
+                "allowed": ("ok", "KOTLIN-SCRIPTING-NOT-AVAILABLE"), "java": True},
             "set-compat-types true": {"refused": (), "allowed": ("ok",)},
             "mark-module-injected QoreTestIssuerPlaceholder": {"refused": (), "allowed": ("ok",)},
         };
@@ -106,6 +111,21 @@ class JniModuleCmdIssuerTest inherits QUnit::Test {
         return jh.api_major > 2 || (jh.api_major == 2 && jh.api_minor >= 3);
     }
 
+    #! Returns True if the Qore library refuses an issuer that restricts a class that the module's runtime does not
+    #! enforce, such as PO_NO_FILESYSTEM, what it refuses to an issuer with PO_NO_UNCONTROLLED_APIS (qore#7832)
+    /** The Qore library judges the issuer (the module hash of a binary module has "enforced_domains" then), whatever
+        the jni module was built with
+    */
+    private static bool uncontrolledApiClassesRefused() {
+        return exists get_module_hash().jni.enforced_domains;
+    }
+
+    #! Returns True if the jni module refuses Java code in a Program that restricts a class that Java code does not
+    #! respect, as in a Program with PO_NO_UNCONTROLLED_APIS: its own checks of the target Program (qore#7832)
+    private static bool uncontrolledApiEnforcement() {
+        return get_module_hash().jni.info.uncontrolled_api_enforcement ?? False;
+    }
+
     #! Returns a new Program of the given issuer kind
     private static Program getIssuer(string kind) {
         int po = Kinds{kind};
@@ -122,6 +142,12 @@ class JniModuleCmdIssuerTest inherits QUnit::Test {
         }
         on_exit Jni::java::lang::System::clearProperty("org.qore.test.issuer.placeholder");
         foreach hash<auto> c in (Commands.pairIterator()) {
+            # a command that runs Java code is refused to a no-filesystem issuer with the restriction classes of
+            # uncontrolled APIs (qore#7832)
+            list<string> refused = c.value.refused;
+            if (c.value.java && uncontrolledApiClassesRefused()) {
+                refused += "no-filesystem";
+            }
             foreach string kind in (keys Kinds) {
                 Program p = getIssuer(kind);
                 string err;
@@ -131,7 +157,7 @@ class JniModuleCmdIssuerTest inherits QUnit::Test {
                 } catch (hash<ExceptionInfo> ex) {
                     err = ex.err;
                 }
-                if (inlist(kind, c.value.refused)) {
+                if (inlist(kind, refused)) {
                     assertEq("JNI-SANDBOX-ERROR", err, kind + ": " + c.key);
                 } else {
                     assertTrue(inlist(err, c.value.allowed), kind + ": " + c.key + ": " + err);
@@ -489,9 +515,14 @@ class JniModuleCmdIssuerTest inherits QUnit::Test {
             assertEq("ok", issueCmd(p, "import java.lang.StringBuilder"), "a lockdown Program: import");
             assertEq("JNI-SANDBOX-ERROR", issueCmd(p, "global-add-classpath /nonexistent-qore-test-dir"),
                 "a lockdown Program: global-add-classpath");
+            # the lockdown options of a Program that allows uncontrolled APIs still restrict the filesystem, the
+            # network and external processes, which Java code does not respect: with the restriction classes of
+            # uncontrolled APIs (qore#7832), the Program is refused Java code as one with PO_NO_UNCONTROLLED_APIS is
+            # (the set of classes is pending a decision for Qorus' mapper Programs)
             Program fp(PO_LOCKDOWN & ~(PO_NO_MODULES | PO_NO_UNCONTROLLED_APIS));
             fp.loadModule("jni");
-            assertEq("ok", issueCmd(fp, "global-add-classpath /nonexistent-qore-test-dir"),
+            assertEq(uncontrolledApiEnforcement() ? "JNI-SANDBOX-ERROR" : "ok",
+                issueCmd(fp, "global-add-classpath /nonexistent-qore-test-dir"),
                 "a lockdown Program that allows uncontrolled APIs: global-add-classpath");
         }
         # a Qorus interface whose sandbox does not trust the code (a Qorus without the uncontrolled-API policy of
