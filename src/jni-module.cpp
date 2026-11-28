@@ -1971,12 +1971,13 @@ QoreClass* jni_class_handler(QoreNamespace* ns, const char* cname) {
     // code with them but restricts the filesystem or the network, which Java code does its I/O around (qore#7832).  A
     // name is resolved for the Program, also when trusted code parses the Program's code, so the Program's own
     // sandbox decides; and so does the sandbox of the code that resolves the name (code that a sandbox governs that
-    // parses into the Program)
+    // parses into the Program), resolved for a policy check as for the builtins, so that a system-policy capability
+    // of trusted code that sandboxed code calls resolves names
     {
         QoreSandboxManagerHelper psm(pgm);
         if ((psm && (!psm->trustsUncontrolledApis() || psm->filesystemRestricts() || psm->networkRestricts()))
                 || qore_sandbox_refuses_uncontrolled_api_classes(QORE_JNI_ENFORCED_DOMAINS,
-                    QoreSandboxManagerHelper::All)) {
+                    QoreSandboxManagerHelper::Policy)) {
             printd(LogLevel, "jni_class_handler() cp: %s: a sandbox refuses the Program Java code\n", cp.c_str());
             return nullptr;
         }

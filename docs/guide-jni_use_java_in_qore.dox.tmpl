@@ -280,18 +280,18 @@ JNI-SANDBOX-ERROR: a Java object or closure whose origin cannot be determined ca
     @par
     A host that wants Java or sandboxed code to call it hands over a %Qore closure or object that it controls, or an
     interface that it implements with a \c QoreInvocationHandler: such callbacks run in the host's Program, whatever
-    code or thread calls them.  With a %Qore library that has \c QORE_HAVE_SANDBOX_UNCONTROLLED_API_CLASSES
-    (qore#7832), the sandbox of a sandboxed caller still governs the call: when it refuses Java code (it does not trust
-    its code with uncontrolled APIs, or it restricts the filesystem or the network), a host callback's own Java calls
-    are refused while that caller calls it, and so is the call of a Java object that the host obtained as a %Qore
-    closure, which runs Java code itself.  The origin follows the objects that the module creates or hands over, and applies where
-    the module calls them, not to the state that Java code moves between objects: Java code of a trusted class that
-    calls into %Qore with values that its caller chose acts for whoever runs it, an object that Java code (ex: a
-    factory method or reflection) created for sandboxed code has no origin, and Java code that a host runs (ex: a
-    method of the JDK, or code that invokes a method handle) can run the objects that it is given.  A host therefore
-    does not run Java code for sandboxed code with values that sandboxed code chose, and wraps what it accepts from
-    sandboxed code in a %Qore closure that it controls.  A %Qore object or closure that Java code can find (ex: in a
-    static field) can be called with all of its methods, in its own Program; a host must not leave them in Java state
+    code or thread calls them.  With a %Qore library that has \c QORE_HAVE_SANDBOX_UNCONTROLLED_API_CLASSES (qore#7832),
+    the sandbox of a sandboxed caller still governs the call: when it refuses Java code (it does not trust its code with
+    uncontrolled APIs, or it restricts the filesystem or the network), a host callback's own Java calls are refused
+    while that caller calls it, and so is the call of a Java object that the host obtained as a %Qore closure, which
+    runs Java code itself.  The origin follows the objects that the module creates or hands over, and applies where the
+    module calls them, not to the state that Java code moves between objects: Java code of a trusted class that calls
+    into %Qore with values that its caller chose acts for whoever runs it, an object that Java code (ex: a factory
+    method or reflection) created for sandboxed code has no origin, and Java code that a host runs (ex: a method of the
+    JDK, or code that invokes a method handle) can run the objects that it is given.  A host therefore does not run Java
+    code for sandboxed code with values that sandboxed code chose, and wraps what it accepts from sandboxed code in a
+    %Qore closure that it controls.  A %Qore object or closure that Java code can find (ex: in a static field) can be
+    called with all of its methods, in its own Program; a host must not leave them in Java state
     that sandboxed Java code can reach.
 
     @warning A sandbox that allows uncontrolled APIs, and so Java, is not an isolation boundary against malicious
@@ -387,14 +387,15 @@ JNI-SANDBOX-ERROR: a Java object or closure whose origin cannot be determined ca
       code, also when trusted code opens the connection (the restrictions recorded for the code that set the option)
 
     \c PO_NO_PROCESS_CONTROL and \c PO_NO_THREAD_CONTROL are not such classes: code with them (the trusted interface
-    Programs of Qorus, for example) can still use Java code, which they do not restrict (a known gap).  A library
-    module whose module header trusts it with uncontrolled APIs (<tt>domains = "UNCONTROLLED_API"</tt>) keeps its Java
-    code when a Program that restricts a class (the filesystem, the network or external processes) loads it first,
-    and its own Program inherits that restriction: the restrictions that the module's own Program imposes are
-    relieved for its own code, at parse time and at run time; a restriction that a restricted caller imposes on the
-    module's code (for example \c PO_NO_EXTERNAL_PROCESS of a sandboxed caller) is not.  A library module that does
-    not declare the domain is refused, as when a Program with \c PO_NO_UNCONTROLLED_APIS loads it first.  The jni module reports the feature with the \c uncontrolled_api_enforcement key of its \c info
-    hash in \c get_module_hash(); without it, these restrictions do not refuse Java code.
+    Programs of Qorus, for example) can still use Java code, which they do not restrict (a known gap).  A library module
+    whose module header trusts it with uncontrolled APIs (<tt>domains = "UNCONTROLLED_API"</tt>) keeps its Java code
+    when a Program that restricts a class (the filesystem, the network or external processes) loads it first, and its
+    own Program inherits that restriction: the restrictions that the module's own Program imposes are relieved for its
+    own code, at parse time and at run time; a restriction that a restricted caller imposes on the module's code (for
+    example \c PO_NO_EXTERNAL_PROCESS of a sandboxed caller) is not.  A library module that does not declare the domain
+    is refused, as when a Program with \c PO_NO_UNCONTROLLED_APIS loads it first.  The jni module reports the feature
+    with the \c uncontrolled_api_enforcement key of its \c info hash in \c get_module_hash(); without it, these
+    restrictions do not refuse Java code.
 
     <b>Sandboxes that restrict a class</b> (qore#7832): with a %Qore library that has
     \c QORE_HAVE_SANDBOX_UNCONTROLLED_API_CLASSES, a sandbox that trusts its code with uncontrolled APIs
@@ -404,12 +405,12 @@ JNI-SANDBOX-ERROR: a Java object or closure whose origin cannot be determined ca
     classes and the module's functions to such code, and the module commands of such an issuer, and the module's own
     sandbox checks refuse it the same way (the \c jdbc driver and its choosers, \c check_class_option(), the commands
     that change the JVM or the classpath of every Program, a class definition in another Program's class loader, the
-    call of a Java object used as a %Qore closure, and the class handler of wildcard imports, which loads no Java
-    class while a name is resolved in a Program whose own sandbox refuses Java code, also when trusted code parses
-    the Program's code), so
-    a sandbox only trusts code with Java when it opens both the filesystem and the network.  The module reports it with
-    the \c sandbox_uncontrolled_api_classes key of its \c info hash.  Without it, a trusting sandbox allows Java code,
-    whose file and network access its policy then reaches only where this module checks it (see below).
+    call of a Java object used as a %Qore closure, and the class handler of wildcard imports, which loads no Java class
+    while a name is resolved in a Program whose own sandbox refuses Java code, also when trusted code parses the
+    Program's code, or while code whose sandbox refuses Java code resolves it), so a sandbox only trusts code with Java
+    when it opens both the filesystem and the network.  The module reports it with the
+    \c sandbox_uncontrolled_api_classes key of its \c info hash.  Without it, a trusting sandbox allows Java code, whose
+    file and network access its policy then reaches only where this module checks it (see below).
 
     Java code that sandboxed %Qore code may call - for example the actions of a data provider implemented in Java,
     which connect to destinations taken from a tenant's connection - checks every network destination and every

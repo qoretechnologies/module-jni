@@ -443,11 +443,12 @@ class JniUncontrolledApiClassesTest inherits QUnit::Test {
             "trusting-restricting": {"trust": True, "open": False, "refused": True},
             "trusting-open": {"trust": True, "open": True, "refused": False},
         };
-        # a class of the jar that nothing else in the process loads, for each sandbox (see classHandlerTest())
+        # a class of the jar that nothing else in the process loads, for each sandbox (see classHandlerTest()), and no
+        # super class of another one
         hash<string, string> jar_classes = {
-            "refusing": "VarargsLeaf",
-            "trusting-restricting": "VarargsMid",
-            "trusting-open": "VarargsGrand",
+            "refusing": "ListConversions",
+            "trusting-restricting": "ValueTypeMapping",
+            "trusting-open": "CollectionTypes",
         };
         foreach hash<auto> sb in (sandboxes.pairIterator()) {
             string jcls = jar_classes{sb.key};
@@ -456,6 +457,7 @@ class JniUncontrolledApiClassesTest inherits QUnit::Test {
             p.issueModuleCmd("jni", "add-classpath " + jar);
             p.issueModuleCmd("jni", "import org.qore.jni.test.*");
             object loader = p.callFunction("get_class_loader");
+            assertEq(NOTHING, loadedClass(loader, "org.qore.jni.test." + jcls), sb.key + ": not loaded yet");
             SandboxManager sm();
             if (sb.value.trust) {
                 sm.setUncontrolledApiPolicy(True);
@@ -481,6 +483,49 @@ class JniUncontrolledApiClassesTest inherits QUnit::Test {
                 assertRegex("reference to undefined type 'Jni::org::qore::jni::test::" + jcls + "'", desc ?? "",
                     sb.key + ": the name is not found");
                 assertEq(NOTHING, loaded, sb.key + ": no Java class was loaded");
+            }
+        }
+
+        # the code that resolves the name: sandboxed code parses code into a Program that has no sandbox of its own;
+        # its own sandbox governs the parse, so the class handler loads no Java class for it with the restriction
+        # classes of sandboxes (qore#7832)
+        hash<string, hash<auto>> resolvers = {
+            "trusting-restricting": {"open": False, "refused": True, "cls": "OverloadChoices"},
+            "trusting-open": {"open": True, "refused": False, "cls": "FloatConversions"},
+        };
+        foreach hash<auto> rs in (resolvers.pairIterator()) {
+            string jcls = rs.value.cls;
+            # the Program that the name is resolved in: trusted, with no sandbox
+            Program q(PO_NEW_STYLE);
+            q.loadModule("jni");
+            q.issueModuleCmd("jni", "add-classpath " + jar);
+            q.issueModuleCmd("jni", "import org.qore.jni.test.*");
+            object loader = q.callFunction("get_class_loader");
+            assertEq(NOTHING, loadedClass(loader, "org.qore.jni.test." + jcls), "resolver " + rs.key
+                + ": not loaded yet");
+            # the sandboxed code that parses into it
+            SandboxManager sm();
+            sm.setUncontrolledApiPolicy(True);
+            if (rs.value.open) {
+                sm.setFilesystemDefaultPolicy(True);
+                sm.setNetworkDefaultPolicy(True);
+            }
+            Program t(PO_NEW_STYLE);
+            t.setSandboxManager(sm);
+            t.parse("string sub parse_into(Program q, string code) { try { q.parse(code, \"resolver\"); "
+                "return \"parsed\"; } catch (hash<ExceptionInfo> ex) { return ex.err + \": \" + ex.desc; } }",
+                "jni-uncontrolled-api-resolver-" + rs.key);
+            string rv = t.callFunction("parse_into", q, "auto sub u(Jni::org::qore::jni::test::" + jcls
+                + " x) { return x; }");
+            auto loaded = loadedClass(loader, "org.qore.jni.test." + jcls);
+            if (!rs.value.refused) {
+                # the control: the class is loaded for the Program while the sandboxed code resolves the name
+                assertEq("parsed", rv, "resolver " + rs.key + ": parsed");
+                assertNeq(NOTHING, loaded, "resolver " + rs.key + ": the class is loaded");
+            } else if (sandboxClassesRefused()) {
+                assertRegex("reference to undefined type 'Jni::org::qore::jni::test::" + jcls + "'", rv,
+                    "resolver " + rs.key + ": the name is not found");
+                assertEq(NOTHING, loaded, "resolver " + rs.key + ": no Java class was loaded");
             }
         }
     }
