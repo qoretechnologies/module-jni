@@ -385,9 +385,11 @@ JNI-SANDBOX-ERROR: a Java object or closure whose origin cannot be determined ca
     \c PO_NO_PROCESS_CONTROL and \c PO_NO_THREAD_CONTROL are not such classes: code with them (the trusted interface
     Programs of Qorus, for example) can still use Java code, which they do not restrict (a known gap).  A library
     module whose module header trusts it with uncontrolled APIs (<tt>domains = "UNCONTROLLED_API"</tt>) keeps its Java
-    code when a Program that restricts a class loads it first, and its own Program inherits that restriction; a
-    library module that does not declare the domain is refused, as when a Program with \c PO_NO_UNCONTROLLED_APIS
-    loads it first.  The jni module reports the feature with the \c uncontrolled_api_enforcement key of its \c info
+    code when a Program that restricts a class (the filesystem, the network or external processes) loads it first,
+    and its own Program inherits that restriction: the restrictions that the module's own Program imposes are
+    relieved for its own code, at parse time and at run time; a restriction that a restricted caller imposes on the
+    module's code (for example \c PO_NO_EXTERNAL_PROCESS of a sandboxed caller) is not.  A library module that does
+    not declare the domain is refused, as when a Program with \c PO_NO_UNCONTROLLED_APIS loads it first.  The jni module reports the feature with the \c uncontrolled_api_enforcement key of its \c info
     hash in \c get_module_hash(); without it, these restrictions do not refuse Java code.  The sandbox of a Program is
     not one of these restrictions: a sandbox that trusts its code with uncontrolled APIs
     (\c SandboxManager::setUncontrolledApiPolicy()) allows Java code, whose file and network access its policy then

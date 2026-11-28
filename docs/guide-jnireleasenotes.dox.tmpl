@@ -16,8 +16,10 @@
       \c set-property, \c register-shared-class, \c set-java-thread-policy, the \c global-* classpath commands), of the
       Program of its exported import functions, of a Java call that creates a %Qore object, of the code that set the
       \c classpath option of the \c jdbc driver, and the class handler of wildcard imports, which loads no Java class
-      for such a Program, refuse such Programs too (a library module's
-      Program that its header trusts with uncontrolled APIs is not refused).  Every Java class declares that it
+      for such a Program, refuse such Programs too.  A library module that its header trusts with uncontrolled APIs
+      keeps its Java code: the restrictions that its own Program imposes (inherited from the code that loaded it
+      first), external processes included, are relieved for its code, but not those that a restricted caller
+      imposes.  Every Java class declares that it
       enforces none of the classes (\c QoreClass::setEnforcedDomains(0)).  \c PO_NO_PROCESS_CONTROL and
       \c PO_NO_THREAD_CONTROL do not refuse Java code.  The module reports the feature with the
       \c uncontrolled_api_enforcement key of its \c info hash in \c get_module_hash()

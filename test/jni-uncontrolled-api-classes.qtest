@@ -281,13 +281,19 @@ class JniUncontrolledApiClassesTest inherits QUnit::Test {
 
     #! Runs jni-uncontrolled-api-classes-child.q in a process of its own: the Program of the kind given is the first
     #! to load the fixture module, so that the module's Program inherits its parse options; returns its result
-    private static string runLibrary(string module, string kind) {
+    /** @param module the fixture module
+        @param kind the restrictions of the Program
+        @param mode empty: the Program loads the module first and calls its code; \c "first-load": the Program loads
+        the module first, and trusted code calls its code; \c "caller-only": trusted code loads the module first, and
+        the Program calls its code
+    */
+    private static string runLibrary(string module, string kind, string mode = "") {
         string dir = get_script_dir();
         string mdir = dir + "jni-uncontrolled-api-fixture" + (exists ENV.QORE_MODULE_DIR
             ? ":" + ENV.QORE_MODULE_DIR : "");
         int rc;
-        string out = backquote(sprintf("QORE_MODULE_DIR='%s' '%s' '%sjni-uncontrolled-api-classes-child.q' %s %s 2>&1",
-            mdir, QORE_ARGV[0], dir, module, kind), \rc);
+        string out = backquote(sprintf("QORE_MODULE_DIR='%s' '%s' '%sjni-uncontrolled-api-classes-child.q' %s %s %s "
+            "2>&1", mdir, QORE_ARGV[0], dir, module, kind, mode), \rc);
         # the last line is the result; the JVM's notices and warnings precede it
         list<string> lines = select (out.split("\n")), ($1 != "" && !($1 =~ /^Picked up /));
         return lines ? lines.last() : sprintf("no output (exit status %d)", rc);
@@ -295,20 +301,16 @@ class JniUncontrolledApiClassesTest inherits QUnit::Test {
 
     libraryTest() {
         # a library module whose header trusts it with uncontrolled APIs (domains = "UNCONTROLLED_API") uses Java code
-        # for a loader that restricts the filesystem or the network, which the module's own Program inherits: they
-        # restrict the module's own access, which its header trusts it with
+        # for a loader that restricts a class, which the module's own Program inherits: the restrictions that its own
+        # Program imposes are relieved, the filesystem, the network and external processes alike; and code of a
+        # Program that is not sandboxed calls it with the module's own options
         assertEq("ok", runLibrary("JniUcTrustedLibFixture", "none"), "trusted library: an unrestricted loader");
-        foreach string kind in (("no-filesystem", "no-network") + keys OtherKinds) {
+        foreach string kind in (keys (ClassKinds + OtherKinds)) {
             assertEq("ok", runLibrary("JniUcTrustedLibFixture", kind), "trusted library: a " + kind + " loader");
-        }
-        # external processes are restricted for the calling code as well, which the module's trust does not lift: the
-        # Java code that the module runs for a PO_NO_EXTERNAL_PROCESS caller is refused at run time (fail closed)
-        string xp_result = runLibrary("JniUcTrustedLibFixture", "no-external-process");
-        if (enforced()) {
-            assertRegex("^INVALID-FUNCTION-ACCESS: .*EXTERNAL_PROCESS", xp_result, "trusted library: a "
-                "no-external-process loader");
-        } else {
-            assertEq("ok", xp_result, "trusted library: a no-external-process loader without the feature");
+            assertEq("ok", runLibrary("JniUcTrustedLibFixture", kind, "first-load"), "trusted library: a " + kind
+                + " first loader, called by trusted code");
+            assertEq("ok", runLibrary("JniUcTrustedLibFixture", kind, "caller-only"), "trusted library: called by a "
+                + kind + " Program");
         }
         # a library module that is not trusted with uncontrolled APIs: its Java code is refused when a loader that
         # restricts a class loads it first, as when a PO_NO_UNCONTROLLED_APIS loader does
