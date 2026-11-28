@@ -796,22 +796,28 @@ int QoreJdbcConnection::connect(Env& env, ExceptionSink* xsink) {
         return -1;
     }
     // the url option is in UTF-8, and the database name in the datasource's encoding (see ds_string())
-    std::string url = !str.rfind("jdbc:", 0) ? str : "jdbc:" + str;
-
+    std::string url;
     // the drivers that may serve a connection that restricted code chose and its properties (qore#7867); no driver
     // classes if not restricted
     QoreJdbcRestrictedUrl allowed;
     const std::vector<std::string>& driver_classes = allowed.driver_classes;
-    if (restricted) {
-        std::string error;
-        if (!qore_jdbc_check_restricted_url(url, allowed, error)) {
-            xsink->raiseException("JNI-SANDBOX-ERROR", "the jdbc driver cannot connect for code that chose the "
-                "connection and is restricted from the filesystem, the network, external processes, uncontrolled "
-                "APIs or embedded logic, except with an allow-listed client/server driver and URL: %s",
-                error.c_str());
-            return -1;
+    // no C++ exception may reach libqore, which calls the driver (ex: std::bad_alloc)
+    try {
+        url = !str.rfind("jdbc:", 0) ? str : "jdbc:" + str;
+        if (restricted) {
+            std::string error;
+            if (!qore_jdbc_check_restricted_url(url, allowed, error)) {
+                xsink->raiseException("JNI-SANDBOX-ERROR", "the jdbc driver cannot connect for code that chose the "
+                    "connection and is restricted from the filesystem, the network, external processes, uncontrolled "
+                    "APIs or embedded logic, except with an allow-listed client/server driver and URL: %s",
+                    error.c_str());
+                return -1;
+            }
+            assert(!driver_classes.empty());
         }
-        assert(!driver_classes.empty());
+    } catch (std::exception& e) {
+        xsink->raiseException("JDBC-CONNECTION-ERROR", "error building the JDBC URL: %s", e.what());
+        return -1;
     }
 
     // the URL is masked in the text of the Java exceptions of the connection also after the url option changes

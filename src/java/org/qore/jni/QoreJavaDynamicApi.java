@@ -204,7 +204,9 @@ public class QoreJavaDynamicApi {
     }
 
     //! sets the Java caller context and runs DriverManager.getConnection()
-    public static Connection getConnection(String url, Properties props) throws Throwable {
+    /** private: called only through JNI, which ignores the access modifiers
+    */
+    private static Connection getConnection(String url, Properties props) throws Throwable {
         return QoreJavaApi.openJdbcConnection(() -> DriverManager.getConnection(url, props));
     }
 
@@ -216,10 +218,12 @@ public class QoreJavaDynamicApi {
         selected as DriverManager.getConnection() selects it, for this caller (the class loader of the Program), and
         connects itself, so no other driver can accept the URL after the check.
 
+        private: called only through JNI, which ignores the access modifiers
+
         @throws SecurityException if the driver is not of one of the given classes, or is older than its minimum
         version
     */
-    public static Connection getRestrictedConnection(String url, Properties props, String[] driverClasses)
+    private static Connection getRestrictedConnection(String url, Properties props, String[] driverClasses)
             throws Throwable {
         return QoreJavaApi.openJdbcConnection(() -> {
             Driver driver = DriverManager.getDriver(url);

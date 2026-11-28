@@ -316,11 +316,19 @@ bool check_query_url(const QoreJdbcDriverPolicy& policy, const std::string& rest
     return check_params(policy, rest, pos + 1, '&', error);
 }
 
-//! Checks a SQL Server URL: "//[host[\instance][:port]][;k=v...]"; values may be braced: "{a;b}" with "}}" for '}'
+//! Checks a SQL Server URL: "//[host[\\instance][:port]][;k=v...]"
+/** Braced values (\c "{a;b}") are refused: the drivers have parsed them differently across versions, which could make
+    a value a parameter of its own; a password with such characters is given as the password of the datasource
+*/
 bool check_sqlserver_url(const std::string& rest, std::string& error) {
     const QoreJdbcDriverPolicy& policy = sqlserver_policy;
     if (rest.compare(0, 2, "//")) {
         error = "only the '//host' network form of 'sqlserver' JDBC URLs can be used";
+        return false;
+    }
+    if (rest.find_first_of("{}") != std::string::npos) {
+        error = "'sqlserver' JDBC URLs with braced values cannot be used; give the password as the password of the "
+            "datasource";
         return false;
     }
     size_t pos = 2;
@@ -373,38 +381,7 @@ bool check_sqlserver_url(const std::string& rest, std::string& error) {
         if (!check_param(policy, rest.substr(ns, ne - ns), error)) {
             return false;
         }
-        pos = eq + 1;
-        while (pos < rest.size() && rest[pos] == ' ') {
-            ++pos;
-        }
-        if (pos < rest.size() && rest[pos] == '{') {
-            // a braced value: up to the '}' that is not doubled
-            ++pos;
-            while (true) {
-                if (pos >= rest.size()) {
-                    error = "a braced 'sqlserver' JDBC URL parameter value is not closed";
-                    return false;
-                }
-                if (rest[pos] == '}') {
-                    if (pos + 1 < rest.size() && rest[pos + 1] == '}') {
-                        pos += 2;
-                        continue;
-                    }
-                    ++pos;
-                    break;
-                }
-                ++pos;
-            }
-            while (pos < rest.size() && rest[pos] == ' ') {
-                ++pos;
-            }
-            if (pos < rest.size() && rest[pos] != ';') {
-                error = "a braced 'sqlserver' JDBC URL parameter value is followed by other text";
-                return false;
-            }
-        } else {
-            pos = semi == std::string::npos ? rest.size() : semi;
-        }
+        pos = semi == std::string::npos ? rest.size() : semi;
     }
     return true;
 }
