@@ -44,6 +44,9 @@ auto sub ev(string script) {
 }
 ";
         const NotGoverned = "JNI-ERROR.*cannot call into a Qore Program other than the one of the calling code";
+        #! the reason that a test case is skipped when the tenants' sandbox refuses Java code (qore#7832)
+        const RefusedSkip = "qore#7832: a sandbox that trusts its code with uncontrolled APIs but restricts the "
+            + "filesystem or the network refuses Java code, so the tenants cannot evaluate Kotlin scripts";
     }
 
     private {
@@ -123,8 +126,32 @@ auto sub ev(string script) {
             tenant1 = makeTenant("tenant1");
             tenant2 = makeTenant("tenant2");
             ClassLoaderAccessProbe::setHolder(get_class_loader());
-            assertEq("QoreURLClassLoader:tenant1", tenant1.callFunction("ev", Report));
+            if (sandboxClassesRefused()) {
+                # qore#7832: the tenants' sandbox restricts the filesystem and the network, which Java code does not
+                # enforce, so it refuses Java code although it trusts the tenants with uncontrolled APIs
+                assertRefusedEval(tenant1);
+            } else {
+                assertEq("QoreURLClassLoader:tenant1", tenant1.callFunction("ev", Report));
+            }
         }
+    }
+
+    #! returns the regex of the refusal of the given Java API by a sandbox that trusts its code with uncontrolled APIs
+    #! but restricts the filesystem and the network (qore#7832)
+    private static string refusedFor(string api) {
+        return "restricts FILESYSTEM \\(PO_NO_FILESYSTEM\\), NETWORK \\(PO_NO_NETWORK\\), which uncontrolled API .*"
+            + api + ".* does not enforce \\(qore#7832\\)";
+    }
+
+    #! asserts that the sandbox of the given tenant refuses its Kotlin evaluation (qore#7832)
+    private assertRefusedEval(Program tenant) {
+        assertThrows("INVALID-FUNCTION-ACCESS", refusedFor("kotlin_eval"), \tenant.callFunction(), ("ev", Report));
+    }
+
+    #! Returns True if a sandbox that trusts its code with uncontrolled APIs but restricts the filesystem or the network
+    #! refuses Java code (qore#7832)
+    private static bool sandboxClassesRefused() {
+        return get_module_hash().jni.info.sandbox_uncontrolled_api_classes ?? False;
     }
 
     private assertRefused(string rv) {
@@ -144,6 +171,10 @@ auto sub ev(string script) {
 
     sandboxedTest() {
         setupTenants();
+        if (sandboxClassesRefused()) {
+            assertRefusedEval(tenant2);
+            testSkip(RefusedSkip);
+        }
         assertEq("QoreURLClassLoader:tenant2", tenant2.callFunction("ev", Report));
         string script = "val r = try { " + Holder + ".setContext(); \"reached: \" + " + Who
             + " } catch (e: Throwable) { \"refused: \" + e }\nr";
@@ -152,6 +183,10 @@ auto sub ev(string script) {
 
     forgeTest() {
         setupTenants();
+        if (sandboxClassesRefused()) {
+            assertRefusedEval(tenant1);
+            testSkip(RefusedSkip);
+        }
         # a class loader cannot be derived from one of another Program
         assertRefused(tenant1.callFunction("ev", "val r = try { org.qore.jni.QoreURLClassLoader.createDerived("
             + Holder + "); \"created\" } catch (e: Throwable) { \"refused: \" + e }\nr"));
@@ -171,6 +206,13 @@ auto sub ev(string script) {
 
     acrossProgramsTest() {
         setupTenants();
+        if (sandboxClassesRefused()) {
+            # trusted code still evaluates scripts in its own Program while the tenants are refused
+            assertRefusedEval(tenant1);
+            assertEq("QoreURLClassLoader:host", kotlin_eval(Report));
+            assertRefusedEval(tenant2);
+            testSkip(RefusedSkip);
+        }
         assertEq("QoreURLClassLoader:tenant1", tenant1.callFunction("ev", Report));
         assertEq("QoreURLClassLoader:host", kotlin_eval(Report));
         assertEq("QoreURLClassLoader:tenant2", tenant2.callFunction("ev", Report));
@@ -209,7 +251,14 @@ auto sub ev(string script) {
         background run("tenant2", tenant2);
         start.dec();
         done.waitForZero();
-        assertEq((), errs);
+        if (sandboxClassesRefused()) {
+            # qore#7832: each tenant's first evaluation is refused; the concurrent evaluations of trusted code succeed
+            assertEq(2, errs.size(), sprintf("%y", errs));
+            assertEq(("tenant1", "tenant2"), sort(map (regex_extract($1, "^([^:]+):")[0]), errs), sprintf("%y", errs));
+            map assertRegex("^tenant[12]: INVALID-FUNCTION-ACCESS: .*" + refusedFor("kotlin_eval"), $1, $1), errs;
+        } else {
+            assertEq((), errs);
+        }
     }
 
     #! the classes of a script that cannot be taken from the compiler stay in Kotlin's class loader, which is unknown
@@ -225,8 +274,15 @@ auto sub ev(string script) {
         setupTenants();
         object compiler = ClassLoaderAccessProbe::newKotlinCompiler(get_class_loader());
         on_exit ClassLoaderAccessProbe::closeObject(compiler);
-        string rv = tenant1.callFunction("close_object", compiler);
-        assertRegex("^refused: .*" + NotGoverned, rv, rv);
+        string rv;
+        if (sandboxClassesRefused()) {
+            # qore#7832: the tenant's sandbox refuses the call to Java code before the close is attempted
+            assertThrows("INVALID-FUNCTION-ACCESS", refusedFor("closeObject"), \tenant1.callFunction(),
+                ("close_object", compiler));
+        } else {
+            rv = tenant1.callFunction("close_object", compiler);
+            assertRegex("^refused: .*" + NotGoverned, rv, rv);
+        }
         assertFalse(ClassLoaderAccessProbe::isClosedObject(compiler));
         rv = ClassLoaderAccessProbe::closeObject(compiler);
         assertEq("ok: closed", rv, rv);

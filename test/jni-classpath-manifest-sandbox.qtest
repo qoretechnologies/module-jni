@@ -300,12 +300,17 @@ class JniClasspathManifestSandboxTest inherits QUnit::Test {
                 "the class of that jar is loaded",
                 "an open sandbox is refused a special file that a Class-Path names",
                 "the error names the special file",
-                "a network-only sandbox adds a jar with a local Class-Path",
-                "the class of the named jar is loaded with it",
-                "a network-only sandbox refuses a Class-Path that names a URL",
-                "the error names the entry",
-                "the class of the refused jar is not loaded",
             );
+            # qore#7832: a sandbox that restricts the network refuses Java code although it allows uncontrolled APIs
+            expected += map sprintf("result: callers: %s: %s: OK", jdk, $1), sandboxClassesRefused()
+                ? ("a network-only sandbox is refused Java code (qore#7832)",)
+                : (
+                    "a network-only sandbox adds a jar with a local Class-Path",
+                    "the class of the named jar is loaded with it",
+                    "a network-only sandbox refuses a Class-Path that names a URL",
+                    "the error names the entry",
+                    "the class of the refused jar is not loaded",
+                );
         }
         checkCase("callers", expected);
     }
@@ -323,7 +328,15 @@ class JniClasspathManifestSandboxTest inherits QUnit::Test {
         list<string> lines = select out.split("\n"), $1 =~ /^result: /;
         *list<*string> gate = (out =~ x/^jdk-gate: (verified|refused) ([0-9]+)$/m);
         assertEq(2, gate.size(), "the child did not report the JDK gate: " + out);
-        if (gate[0] == "verified" || name == "unsandboxed" || name == "callers") {
+        # qore#7832: the sandbox of every case but "unsandboxed" and "callers" restricts the filesystem, so it refuses
+        # Java code although it allows uncontrolled APIs: the child checks the refusal of the Program's first import,
+        # on any JDK, and the rest of the case is skipped
+        bool refused = name != "unsandboxed" && name != "callers" && sandboxClassesRefused();
+        if (refused) {
+            assertEq((sprintf("result: %s: refused (qore#7832): OK", name),
+                sprintf("result: %s: skipped (qore#7832: a sandbox that restricts the filesystem refuses Java code)",
+                    name)), lines, out);
+        } else if (gate[0] == "verified" || name == "unsandboxed" || name == "callers") {
             assertEq(expected, lines, out);
         } else {
             # the JDK is outside the verified versions: every check of the documented refusal must hold (qore#7204)
@@ -332,6 +345,18 @@ class JniClasspathManifestSandboxTest inherits QUnit::Test {
         }
         assertTrue(out =~ /^end$/m, "the child did not reach its end: " + out);
         assertFalse(out =~ /unhandled QORE System exception/, "an unhandled exception was printed: " + out);
+        if (refused) {
+            testSkip("qore#7832: a sandbox that restricts the filesystem refuses Java code, so the manifest Class-Path "
+                "attributes are not checked against it");
+        }
+    }
+
+    #! Returns True if a sandbox that trusts its code with uncontrolled APIs but restricts the filesystem or the network
+    #! refuses Java code (qore#7832)
+    /** the constructor loads the jni module in this process
+    */
+    private static bool sandboxClassesRefused() {
+        return get_module_hash().jni.info.sandbox_uncontrolled_api_classes ?? False;
     }
 
     private makeDir(string dir) {

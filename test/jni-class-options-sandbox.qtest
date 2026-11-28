@@ -584,13 +584,40 @@ string sub get_context(object c) {
         getChecking(sm).callFunction("run");
     }
 
-    #! Returns the error of the option check under the manager, or "ok"
-    private static string checkResult(SandboxManager sm) {
+    #! Returns the error of the option check under the manager, or "ok"; with @p full, the error and its description
+    private static string checkResult(SandboxManager sm, *bool full) {
         try {
             checkUnder(sm);
             return "ok";
         } catch (hash<ExceptionInfo> ex) {
-            return ex.err;
+            return full ? ex.err + ": " + ex.desc : ex.err;
+        }
+    }
+
+    #! Returns True if a sandbox that trusts its code with uncontrolled APIs but restricts the filesystem or the network
+    #! refuses Java code (qore#7832)
+    private static bool sandboxClassesRefused() {
+        return get_module_hash().jni.info.sandbox_uncontrolled_api_classes ?? False;
+    }
+
+    #! Returns True if the restriction of the API test cases restricts the filesystem or the network (qore#7832)
+    private static bool restrictsFilesystemOrNetwork(hash<auto> r) {
+        return r.name =~ /^(network|filesystem):/;
+    }
+
+    #! the result of the option check of code that a trusting sandbox governs, which restricts the filesystem or the
+    #! network (qore#7832)
+    const HalfRefused = "^JNI-SANDBOX-ERROR: .*or whose sandbox restricts the filesystem or the network";
+
+    #! Asserts the result of the option check of code that sandboxes govern that trust it
+    /** with qore#7832, a sandbox that trusts the code but restricts the filesystem or the network refuses the option
+        (it refuses Java code); otherwise the option is allowed
+    */
+    private assertTrustedResult(bool fs_net, string result, string name) {
+        if (fs_net && sandboxClassesRefused()) {
+            assertRegex(HalfRefused, result, name);
+        } else {
+            assertEq("ok", result, name);
         }
     }
 
@@ -659,9 +686,10 @@ string sub get_context(object c) {
         skipIfNoRestrictsApi();
         SandboxManager sm = allowAll();
         map $1.set(sm), restrictions();
-        assertEq("ok", checkResult(trusting(sm)), "all restrictions, trusted");
+        assertTrustedResult(True, checkResult(trusting(sm), True), "all restrictions, trusted");
         foreach hash<auto> r in (restrictions()) {
-            assertEq("ok", checkResult(trusting(restricted(r))), r.name + ": trusted");
+            assertTrustedResult(restrictsFilesystemOrNetwork(r), checkResult(trusting(restricted(r)), True),
+                r.name + ": trusted");
         }
     }
 
@@ -669,15 +697,18 @@ string sub get_context(object c) {
     /** a closure that the Program under @p outer created calls the Program under @p inner: the closure has the
         sandbox provenance of @p outer, so the governing sandbox of the code of @p inner is the composition of both
     */
-    private static string composed(SandboxManager outer, SandboxManager inner) {
+    /** returns the error code, or with @p full, the error code and its description
+    */
+    private static string composed(SandboxManager outer, SandboxManager inner, *bool full) {
         Program ip = getChecking(inner);
         Program op(PO_NEW_STYLE);
         op.setSandboxManager(outer);
         op.parse("code sub make(Program p) { return string sub () { try { p.callFunction(\"run\"); "
-            "return \"ok\"; } catch (hash<ExceptionInfo> ex) { return ex.err; } }; }",
+            "return \"ok\"; } catch (hash<ExceptionInfo> ex) { return ex.err + \": \" + ex.desc; } }; }",
             "jni-class-options-restricts-outer");
         code c = op.callFunction("make", ip);
-        return c();
+        string result = c();
+        return full ? result : (result =~ x/^([^:]+)/)[0];
     }
 
     restrictsApiCompositionTest() {
@@ -691,7 +722,8 @@ string sub get_context(object c) {
         foreach hash<auto> r in (restrictions()) {
             assertEq("JNI-SANDBOX-ERROR", composed(allowAll(), restricted(r)), r.name + ": restricting inner member");
             assertEq("JNI-SANDBOX-ERROR", composed(restricted(r), allowAll()), r.name + ": restricting outer member");
-            assertEq("ok", composed(trusting(restricted(r)), trusting()), r.name + ": trusting members");
+            assertTrustedResult(restrictsFilesystemOrNetwork(r), composed(trusting(restricted(r)), trusting(), True),
+                r.name + ": trusting members");
             assertEq("JNI-SANDBOX-ERROR", composed(trusting(restricted(r)), allowAll()), r.name
                 + ": a member that does not trust the code");
             assertEq("JNI-SANDBOX-ERROR", composed(allowAll(), trusting(restricted(r))), r.name

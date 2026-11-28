@@ -465,6 +465,25 @@ object sub make() {
         assertEq("ok: 10", NativeHandleProbe::callBinding("value", f.same_a, f.same_a_binding, 7));
     }
 
+    #! Returns True if a sandbox that trusts its code with uncontrolled APIs but restricts the filesystem or the network
+    #! refuses Java code (qore#7832)
+    private static bool sandboxClassesRefused() {
+        return get_module_hash().jni.info.sandbox_uncontrolled_api_classes ?? False;
+    }
+
+    #! asserts that parsing the source in the sandboxed Program is refused its import of a Java class (qore#7832): the
+    #! sandbox adds PO_NO_UNCONTROLLED_APIS to the restrictions of the code that issues the module command
+    private assertRefusedImport(Program p, string src, string label) {
+        try {
+            p.parse(src, label);
+            fail(label + ": the import was not refused");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("JNI-SANDBOX-ERROR", ex.err, label);
+            assertRegex("cannot use the \"import\" module command.*parse options that forbid it \\(0x200000000000, ",
+                ex.desc, label + " (description)");
+        }
+    }
+
     private assertNotInstance(string result, string label) {
         assertTrue(result =~ /^exception: .*not an instance of the class/, sprintf("%s: %s", label, result));
     }
@@ -501,6 +520,14 @@ object sub make() {
         tenant.loadModule("jni");
         tenant.issueModuleCmd("jni", "add-classpath " + get_script_dir() + "/../build/qore-jni-test.jar");
         tenant.setSandboxManager(mgr);
+        if (sandboxClassesRefused()) {
+            # qore#7832: the sandbox restricts the filesystem and the network (the defaults of a new sandbox), which
+            # Java code does not enforce, so the Program's import of the probe is refused although the sandbox trusts
+            # it with uncontrolled APIs; sandboxed code then cannot call a method binding at all
+            assertRefusedImport(tenant, CallerSource, "native-handle-sandboxed-caller");
+            testSkip("qore#7832: a sandbox that restricts the filesystem or the network refuses Java code, so its code "
+                "cannot call the method binding of a same-named class");
+        }
         tenant.parse(CallerSource, "native-handle-sandboxed-caller");
         foreach string name in ("value", "other") {
             assertNotInstance(tenant.callFunction("call_binding", name, f.same_b, f.same_a_binding, 7),
@@ -857,13 +884,21 @@ nothing sub fail_point(*string point, int skip) { Jni::org::qore::jni::dbg_jni_f
         tenant.loadModule("jni");
         tenant.issueModuleCmd("jni", "add-classpath " + get_script_dir() + "/../build/qore-jni-test.jar");
         tenant.setSandboxManager(mgr);
-        tenant.parse("%modern
+        string src = "%modern
 %requires jni
 %module-cmd(jni) import org.qore.jni.test.NativeHandleProbe
 string sub double_release() { return NativeHandleProbe::classpathDoubleRelease(); }
 string sub wrong_kind() { return NativeHandleProbe::classpathWrongKind(); }
 string sub identity(int other) { return NativeHandleProbe::classpathIdentity(other); }
-", "native-handle-classpath-policy");
+";
+        if (sandboxClassesRefused()) {
+            # qore#7832: the sandbox denies the filesystem, which Java code does not enforce, so the Program's import
+            # of the probe is refused although the sandbox trusts it with uncontrolled APIs
+            assertRefusedImport(tenant, src, "native-handle-classpath-policy");
+            testSkip("qore#7832: a sandbox that restricts the filesystem refuses Java code, so its code cannot reach "
+                "the handles of the filesystem policies bound to its classpath entries");
+        }
+        tenant.parse(src, "native-handle-classpath-policy");
 
         # a handle is released once; afterwards it is unknown
         list<string> r = tenant.callFunction("double_release").split("; ");

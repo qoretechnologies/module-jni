@@ -93,6 +93,9 @@ list<string> sub compiler_classpath_paths(string classpath) {
         const UncheckedLocation = "cannot be checked for another location";
         #! the most manifest entries that are checked for a classpath
         const MaxManifestEntries = 4096;
+        #! the module's refusal of the first import of a Program whose sandbox restricts the filesystem or the network
+        #! (qore#7832)
+        const RefusedDesc = "cannot use the \"import\" module command.*forbid it \\(0x200000000000, ";
 
         #! entries whose path is the path that is read: followed on a verified JDK
         const ExactCases = (
@@ -325,6 +328,28 @@ list<string> sub compiler_classpath_paths(string classpath) {
         return newProgram(sm);
     }
 
+    #! Returns True if a sandbox that trusts its code with uncontrolled APIs but restricts the filesystem or the network
+    #! refuses Java code (qore#7832)
+    private static bool sandboxClassesRefused() {
+        return get_module_hash().jni.info.sandbox_uncontrolled_api_classes ?? False;
+    }
+
+    #! asserts that the Program that \a make makes is refused its first import, as its sandbox restricts the
+    #! filesystem or the network and so refuses Java code (qore#7832)
+    private assertProgramRefused(code make, string label) {
+        assertThrows("JNI-SANDBOX-ERROR", RefusedDesc, make, NOTHING, label + " (qore#7832)");
+    }
+
+    #! with qore#7832, asserts that the Program that \a make makes is refused, and skips the rest of the test case,
+    #! whose classpath rules for the code of such a sandbox cannot be exercised
+    private checkRefused(code make, string label) {
+        if (!sandboxClassesRefused()) {
+            return;
+        }
+        assertProgramRefused(make, label);
+        testSkip("qore#7832: " + label + " refuses Java code, so its classpath rules cannot be exercised");
+    }
+
     #! adds a classpath as the trusted host
     private hash<auto> hostAdd(Program p, string path) {
         try {
@@ -356,6 +381,7 @@ list<string> sub compiler_classpath_paths(string classpath) {
     }
 
     exactTest() {
+        checkRefused(sub () { getProgram((scratch,)); }, "a sandbox that restricts the filesystem");
         foreach hash<ClasspathUrlCase> c in (usable(ExactCases)) {
             string x = makeCase(c);
             Program p = getProgram(allowedPaths(x, c));
@@ -372,6 +398,7 @@ list<string> sub compiler_classpath_paths(string classpath) {
     }
 
     inexactTest() {
+        checkRefused(sub () { getProgram((scratch,)); }, "a sandbox that restricts the filesystem");
         foreach hash<ClasspathUrlCase> c in (InexactCases) {
             string x = makeCase(c);
             Program p = getProgram(allowedPaths(x, c));
@@ -380,6 +407,7 @@ list<string> sub compiler_classpath_paths(string classpath) {
     }
 
     nestedTest() {
+        checkRefused(sub () { getProgram((scratch,)); }, "a sandbox that restricts the filesystem");
         foreach hash<ClasspathUrlCase> c in (InexactCases + OtherAuthorityCases) {
             string x = makeCase(c);
             Program p = getProgram(allowedPaths(x, c));
@@ -399,6 +427,7 @@ list<string> sub compiler_classpath_paths(string classpath) {
     }
 
     sandboxedIssuerTest() {
+        checkRefused(sub () { getProgram((scratch,)); }, "a sandbox that restricts the filesystem");
         foreach hash<ClasspathUrlCase> c in (InexactCases + OtherAuthorityCases) {
             string x = makeCase(c);
             Program p = getProgram(allowedPaths(x, c));
@@ -417,6 +446,7 @@ list<string> sub compiler_classpath_paths(string classpath) {
     }
 
     otherAuthorityTest() {
+        checkRefused(sub () { getProgram((scratch,)); }, "a sandbox that restricts the filesystem");
         foreach hash<ClasspathUrlCase> c in (OtherAuthorityCases) {
             string x = makeCase(c);
             # the policy does not allow the target: the refusal names the jar, as the target is not resolved first
@@ -426,6 +456,7 @@ list<string> sub compiler_classpath_paths(string classpath) {
     }
 
     localAuthorityTest() {
+        checkRefused(sub () { getProgram((scratch,)); }, "a sandbox that restricts the filesystem");
         foreach hash<ClasspathUrlCase> c in (LocalAuthorityCases) {
             string x = makeCase(c);
             Program p = getProgram(allowedPaths(x, c));
@@ -460,6 +491,11 @@ list<string> sub compiler_classpath_paths(string classpath) {
     permissiveTest() {
         foreach bool open_network in ((True, False)) {
             string mode = open_network ? "restricts nothing" : "restricts only the network";
+            if (!open_network && sandboxClassesRefused()) {
+                # qore#7832: a sandbox that restricts the network refuses Java code
+                assertProgramRefused(sub () { getPermissiveProgram(False); }, mode);
+                continue;
+            }
             foreach hash<ClasspathUrlCase> c in (usable(ExactCases)) {
                 string x = makeCase(c);
                 Program p = getPermissiveProgram(open_network);
@@ -527,15 +563,24 @@ list<string> sub compiler_classpath_paths(string classpath) {
         # a directory and an archive entry with another authority
         list<hash<ClasspathUrlCase>> others = cast<list<hash<ClasspathUrlCase>>>((OtherAuthorityCases[0],
             OtherAuthorityCases[6]));
+        # qore#7832: a sandbox that restricts the network refuses Java code
+        bool refused_java = sandboxClassesRefused();
+        if (refused_java) {
+            assertProgramRefused(sub () { getPermissiveProgram(False); }, "a sandbox that restricts only the network");
+        }
         foreach string route in (JavaRoutes) {
             string x;
             Program p;
             foreach hash<ClasspathUrlCase> other in (others) {
-                # a caller that restricts only the network: refused before the class loader can use the entry
-                x = makeCase(other);
-                p = getPermissiveProgram(False);
-                assertRegex(refused, p.callFunction("java_add", route, x + "/main/main.jar"), route + ": " + other.label);
-                assertNothingRead(p, route + ": " + other.label);
+                # a caller that restricts only the network: refused before the class loader can use the entry; with
+                # qore#7832, such a sandbox refuses Java code, which network-only cases check
+                if (!refused_java) {
+                    x = makeCase(other);
+                    p = getPermissiveProgram(False);
+                    assertRegex(refused, p.callFunction("java_add", route, x + "/main/main.jar"),
+                        route + ": " + other.label);
+                    assertNothingRead(p, route + ": " + other.label);
+                }
 
                 # a caller that restricts nothing is not affected; the entry with another authority is not read
                 x = makeCase(other);
@@ -544,10 +589,12 @@ list<string> sub compiler_classpath_paths(string classpath) {
             }
 
             # the positive control of a caller that restricts only the network, on every JDK
-            x = makeCase(exact);
-            p = getPermissiveProgram(False);
-            assertEq("ok", p.callFunction("java_add", route, x + "/main/main.jar"), route);
-            assertEq((Allowed, Allowed, Allowed, Allowed), p.callFunction("read_all"), route);
+            if (!refused_java) {
+                x = makeCase(exact);
+                p = getPermissiveProgram(False);
+                assertEq("ok", p.callFunction("java_add", route, x + "/main/main.jar"), route);
+                assertEq((Allowed, Allowed, Allowed, Allowed), p.callFunction("read_all"), route);
+            }
 
             x = makeCase(exact);
             p = getPermissiveProgram(True);
@@ -571,12 +618,14 @@ list<string> sub compiler_classpath_paths(string classpath) {
     }
 
     networkArchiveNameTest() {
+        checkRefused(sub () { getPermissiveProgram(False); }, "a sandbox that restricts only the network");
         string x = newDir();
         ClasspathUrlProbe::writeMarkerJar(x + "/archive.bin", Allowed);
         assertNetworkOnlyReads("addPathOrig", x + "/archive.bin", "an archive with another name");
     }
 
     networkLaterPathTest() {
+        checkRefused(sub () { getPermissiveProgram(False); }, "a sandbox that restricts only the network");
         # a missing path that could become an archive: its manifest could not be checked when it is opened
         string x = newDir();
         string path = x + "/later.jar";
@@ -616,6 +665,7 @@ list<string> sub compiler_classpath_paths(string classpath) {
     }
 
     networkUnreadableTest() {
+        checkRefused(sub () { getPermissiveProgram(False); }, "a sandbox that restricts only the network");
         # a file that is neither regular nor a directory is not opened, as reading it may not return
         string x = newDir();
         mkfifo(x + "/fifo.jar");
@@ -648,6 +698,7 @@ list<string> sub compiler_classpath_paths(string classpath) {
     }
 
     networkInnerEntryTest() {
+        checkRefused(sub () { getPermissiveProgram(False); }, "a sandbox that restricts only the network");
         string x = newDir();
         ClasspathUrlProbe::writeMarkerJar(x + "/dep.jar", Allowed);
         string url = "jar:file:" + ClasspathUrlProbe::encodedPath(x) + "/dep.jar!/sub/";
@@ -667,6 +718,7 @@ list<string> sub compiler_classpath_paths(string classpath) {
     }
 
     networkNestedRoutesTest() {
+        checkRefused(sub () { getPermissiveProgram(False); }, "a sandbox that restricts only the network");
         hash<ClasspathUrlCase> other = OtherAuthorityCases[0];
         hash<ClasspathUrlCase> exact = ExactCases[0];
         foreach string route in (JavaRoutes) {
@@ -683,6 +735,7 @@ list<string> sub compiler_classpath_paths(string classpath) {
     }
 
     networkBoundTest() {
+        checkRefused(sub () { getPermissiveProgram(False); }, "a sandbox that restricts only the network");
         string x = newDir();
         ClasspathUrlProbe::writeMarkerJar(x + "/dep.jar", Allowed);
         list<string> entries = map "dep.jar", xrange(MaxManifestEntries);
@@ -696,6 +749,7 @@ list<string> sub compiler_classpath_paths(string classpath) {
     }
 
     networkCycleTest() {
+        checkRefused(sub () { getPermissiveProgram(False); }, "a sandbox that restricts only the network");
         string x = newDir();
         ClasspathUrlProbe::writeMarkerDir(x + "/classes", Allowed);
         ClasspathUrlProbe::writeManifestJar(x + "/a.jar", "b.jar classes/");
@@ -723,6 +777,7 @@ list<string> sub compiler_classpath_paths(string classpath) {
     }
 
     networkUrlCheckDisabledTest() {
+        checkRefused(sub () { getPermissiveProgram(False); }, "a sandbox that restricts only the network");
         string prop = "jdk.net.URLClassPath.disableClassPathURLCheck";
         *string saved = Jni::java::lang::System::getProperty(prop);
         on_exit {
@@ -742,6 +797,7 @@ list<string> sub compiler_classpath_paths(string classpath) {
     }
 
     networkUnverifiedJdkTest() {
+        checkRefused(sub () { getPermissiveProgram(False); }, "a sandbox that restricts only the network");
         hash<ClasspathUrlCase> exact = ExactCases[0];
         # what the JDK follows is not assumed: an entry that is not a file is refused, as when the JDK follows it
         # (qore#7364); first, as the classpaths that the routes add are shared; the jar that the manifest names is in a
@@ -776,12 +832,26 @@ list<string> sub compiler_classpath_paths(string classpath) {
         hash<ClasspathUrlCase> inexact = InexactCases[0];
         string x = makeCase(inexact);
         string jar = x + "/main/main.jar";
-        foreach Program p in ((newProgram(), getPermissiveProgram(True), getPermissiveProgram(False))) {
+        # qore#7832: a sandbox that restricts the filesystem or the network refuses Java code, so only the Programs
+        # with no sandbox or one that restricts nothing can be checked
+        bool refused_java = sandboxClassesRefused();
+        if (refused_java) {
+            assertProgramRefused(sub () { getPermissiveProgram(False); }, "a sandbox that restricts only the network");
+            assertProgramRefused(sub () { getProgram(allowedPaths(x, inexact)); },
+                "a sandbox that restricts the filesystem");
+        }
+        list<Program> unrestricted = (newProgram(), getPermissiveProgram(True));
+        if (!refused_java) {
+            push unrestricted, getPermissiveProgram(False);
+        }
+        foreach Program p in (unrestricted) {
             assertEq("ok: 1", p.callFunction("compiler_classpath", jar));
         }
         # and it still applies to one
-        Program restricted = getProgram(allowedPaths(x, inexact));
-        assertRegex("cannot be checked exactly", restricted.callFunction("compiler_classpath", jar));
+        if (!refused_java) {
+            Program restricted = getProgram(allowedPaths(x, inexact));
+            assertRegex("cannot be checked exactly", restricted.callFunction("compiler_classpath", jar));
+        }
 
         # the checks of what a compiler could read differently are for a caller whose filesystem access is restricted
         x = newDir();
@@ -791,22 +861,27 @@ list<string> sub compiler_classpath_paths(string classpath) {
         f.open2(x + "/text.bin", O_CREAT | O_WRONLY | O_TRUNC, 0600);
         f.write("not an archive\n");
         f.close();
-        foreach Program p in ((newProgram(), getPermissiveProgram(True), getPermissiveProgram(False))) {
+        foreach Program p in (unrestricted) {
             assertEq("ok: 1", p.callFunction("compiler_classpath", x + "/differs.jar"));
             assertEq("ok: 1", p.callFunction("compiler_classpath", x + "/text.bin"));
             # an archive with no manifest Class-Path
             assertEq("ok: 1", p.callFunction("compiler_classpath", x + "/dep.jar"));
         }
-        restricted = getProgram((x,));
-        assertRegex("a compiler could resolve", restricted.callFunction("compiler_classpath", x + "/differs.jar"));
-        assertRegex("does not have a .jar or .zip name", restricted.callFunction("compiler_classpath",
-            x + "/text.bin"));
-        assertEq("ok: 1", restricted.callFunction("compiler_classpath", x + "/dep.jar"));
+        if (!refused_java) {
+            Program restricted = getProgram((x,));
+            assertRegex("a compiler could resolve", restricted.callFunction("compiler_classpath",
+                x + "/differs.jar"));
+            assertRegex("does not have a .jar or .zip name", restricted.callFunction("compiler_classpath",
+                x + "/text.bin"));
+            assertEq("ok: 1", restricted.callFunction("compiler_classpath", x + "/dep.jar"));
+        }
 
         # a caller that restricts the network still gets the location rule; the entry is not read
         x = makeCase(OtherAuthorityCases[0]);
         jar = x + "/main/main.jar";
-        assertRegex(OtherLocation, getPermissiveProgram(False).callFunction("compiler_classpath", jar));
+        if (!refused_java) {
+            assertRegex(OtherLocation, getPermissiveProgram(False).callFunction("compiler_classpath", jar));
+        }
         assertEq("ok: 1", getPermissiveProgram(True).callFunction("compiler_classpath", jar));
         assertEq("ok: 1", newProgram().callFunction("compiler_classpath", jar));
     }
@@ -837,6 +912,7 @@ list<string> sub compiler_classpath_paths(string classpath) {
     }
 
     compilerClasspathNetworkTest() {
+        checkRefused(sub () { getPermissiveProgram(False); }, "a sandbox that restricts only the network");
         string x = makeCompilerCases();
         Program p = getPermissiveProgram(False);
         # as the class loader ignores it, and with no jar index support to follow
@@ -866,6 +942,7 @@ list<string> sub compiler_classpath_paths(string classpath) {
     }
 
     compilerClasspathFilesystemTest() {
+        checkRefused(sub () { getProgram((scratch,)); }, "a sandbox that restricts the filesystem");
         string x = makeCompilerCases();
         Program p = getProgram((x,));
         assertRegex("is not a file", p.callFunction("compiler_classpath", x + "/nonfile.jar"));
@@ -880,6 +957,7 @@ list<string> sub compiler_classpath_paths(string classpath) {
     }
 
     networkOnePathTest() {
+        checkRefused(sub () { getPermissiveProgram(False); }, "a sandbox that restricts only the network");
         foreach string name in ("a;b.jar", "a:b.jar") {
             string x = newDir();
             ClasspathUrlProbe::writeMarkerJar(x + "/" + name, Allowed);
@@ -888,6 +966,7 @@ list<string> sub compiler_classpath_paths(string classpath) {
     }
 
     networkLocalUrlTest() {
+        checkRefused(sub () { getPermissiveProgram(False); }, "a sandbox that restricts only the network");
         string x = newDir();
         ClasspathUrlProbe::writeMarkerJar(x + "/dep.jar", Allowed);
         string url = "file://localhost" + ClasspathUrlProbe::encodedPath(x) + "/dep.jar";
@@ -895,6 +974,7 @@ list<string> sub compiler_classpath_paths(string classpath) {
     }
 
     networkIgnoredEntryTest() {
+        checkRefused(sub () { getPermissiveProgram(False); }, "a sandbox that restricts only the network");
         string x = newDir();
         ClasspathUrlProbe::writeMarkerJar(x + "/dep.jar", Allowed);
         # the JDK's class loader does not follow the first entry, and opens no connection for it
@@ -903,16 +983,26 @@ list<string> sub compiler_classpath_paths(string classpath) {
     }
 
     networkJarIndexTest() {
+        checkRefused(sub () { getPermissiveProgram(False); }, "a sandbox that restricts only the network");
         string x = newDir();
         ClasspathUrlProbe::writeIndexedJar(x + "/indexed.jar", Allowed);
         assertNetworkOnlyReads("addPath", x + "/indexed.jar", "an archive with a jar index");
     }
 
     capturedPolicyTest() {
-        assertTrue(getPermissiveProgram(False).callFunction("captured_network"), "restricts only the network");
+        if (sandboxClassesRefused()) {
+            # qore#7832: a sandbox that restricts the filesystem or the network refuses Java code, so no policy of
+            # such a sandbox can be captured by its code
+            assertProgramRefused(sub () { getPermissiveProgram(False); }, "restricts only the network");
+            assertProgramRefused(sub () { getProgram((scratch,), True); }, "restricts only the filesystem");
+            assertProgramRefused(sub () { getProgram((scratch,)); }, "restricts both");
+        } else {
+            assertTrue(getPermissiveProgram(False).callFunction("captured_network"), "restricts only the network");
+            assertFalse(getProgram((scratch,), True).callFunction("captured_network"),
+                "restricts only the filesystem");
+            assertTrue(getProgram((scratch,)).callFunction("captured_network"), "restricts both");
+        }
         assertFalse(getPermissiveProgram(True).callFunction("captured_network"), "restricts nothing");
-        assertFalse(getProgram((scratch,), True).callFunction("captured_network"), "restricts only the filesystem");
-        assertTrue(getProgram((scratch,)).callFunction("captured_network"), "restricts both");
         assertFalse(newProgram().callFunction("captured_network"), "no sandbox");
     }
 }

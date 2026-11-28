@@ -45,7 +45,7 @@ class JniJdbcOptionSetterTest inherits QUnit::Test {
             "trusted-sandbox": -2,
         };
 
-        #! the kinds of code that may not set the classpath option
+        #! the kinds of code that may not set the classpath option (see isRefused())
         const Refused = ("no-filesystem", "no-uncontrolled", "sandboxed");
 
         #! the code of the Programs of the test
@@ -57,6 +57,16 @@ string sub open(Datasource ds) {
         return \"ok\";
     } catch (hash<ExceptionInfo> ex) {
         return ex.err;
+    }
+}
+
+string sub open_desc(Datasource ds) {
+    try {
+        ds.open();
+        ds.close();
+        return \"ok\";
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err + \": \" + ex.desc;
     }
 }
 
@@ -166,6 +176,34 @@ list<string> sub loader_urls() {
         remove_tree(denied);
     }
 
+    #! Returns True if a sandbox that trusts its code with uncontrolled APIs but restricts the filesystem or the network
+    #! refuses Java code (qore#7832)
+    private static bool sandboxClassesRefused() {
+        return get_module_hash().jni.info.sandbox_uncontrolled_api_classes ?? False;
+    }
+
+    #! Returns the kinds of code that may not set the classpath option
+    /** with the rule of qore#7832, the sandbox of the trusted-sandbox code trusts it with uncontrolled APIs but
+        restricts the filesystem, which Java code does not enforce, so it refuses the code the option (and every Java
+        use) as a sandbox that does not trust it does
+    */
+    private static list<string> refusedKinds() {
+        return sandboxClassesRefused() ? Refused + ("trusted-sandbox",) : Refused;
+    }
+
+    #! Returns True if the code of the kind given may not set the classpath option
+    private static bool isRefused(string kind) {
+        return inlist(kind, refusedKinds());
+    }
+
+    #! Returns the kinds of code whose class loader the test can list
+    /** with the rule of qore#7832, the sandbox of the trusted-sandbox code, which restricts the filesystem, refuses
+        its code Java code, so it cannot import the classes that list its class loader
+    */
+    private static list<string> loaderKinds() {
+        return sandboxClassesRefused() ? ("trusted",) : LoaderKinds;
+    }
+
     #! Returns True if the jdbc driver judges its options by the code that set them (qore#5741)
     private static bool setterAware() {
         *hash<auto> info = get_module_hash().jni.info;
@@ -189,6 +227,22 @@ list<string> sub loader_urls() {
         }
     }
 
+    #! Returns the sandbox of the trusted-sandbox code
+    /** a sandbox that a host attaches to trusted code for its limits and interrupts: it allows uncontrolled APIs, and
+        its filesystem policy allows only one directory (its code loads no module)
+    */
+    private SandboxManager getTrustingSandbox() {
+        SandboxManager sm();
+        sm.setFilesystemDefaultPolicy(False);
+        sm.setNetworkDefaultPolicy(True);
+        # (a Qore without the policy has no run-time refusal of uncontrolled APIs: the call is dynamic)
+        if (sm.hasCallableMethod("setUncontrolledApiPolicy")) {
+            call_object_method(sm, "setUncontrolledApiPolicy", True);
+        }
+        sm.addFilesystemAllowedPath(allowed, QSEC_READ);
+        return sm;
+    }
+
     #! Returns a Program of the kind of code given
     private Program getProgram(string kind) {
         int po = Kinds{kind};
@@ -196,20 +250,10 @@ list<string> sub loader_urls() {
         if (po == -1) {
             p.setSandboxManager(new SandboxManager());
         } else if (po == -2) {
-            # a sandbox that a host attaches to trusted code for its limits and interrupts: it allows uncontrolled
-            # APIs, and its filesystem policy allows only one directory (its code loads no module)
-            SandboxManager sm();
-            sm.setFilesystemDefaultPolicy(False);
-            sm.setNetworkDefaultPolicy(True);
-            # (a Qore without the policy has no run-time refusal of uncontrolled APIs: the call is dynamic)
-            if (sm.hasCallableMethod("setUncontrolledApiPolicy")) {
-                call_object_method(sm, "setUncontrolledApiPolicy", True);
-            }
-            sm.addFilesystemAllowedPath(allowed, QSEC_READ);
-            p.setSandboxManager(sm);
+            p.setSandboxManager(getTrustingSandbox());
         }
         # a Program is parsed once
-        p.parse(inlist(kind, LoaderKinds) ? LoaderSource + Source : Source, "jni-jdbc-option-setter-" + kind);
+        p.parse(inlist(kind, loaderKinds()) ? LoaderSource + Source : Source, "jni-jdbc-option-setter-" + kind);
         return p;
     }
 
@@ -246,7 +290,7 @@ list<string> sub loader_urls() {
         without that policy, the sandbox refuses the option like any other)
     */
     private string expectedFor(string kind, string entry) {
-        if (inlist(kind, Refused)) {
+        if (isRefused(kind)) {
             return "JNI-SANDBOX-ERROR";
         }
         # without the uncontrolled-API policy of sandboxes, every governing sandbox restricts the code it governs
@@ -273,7 +317,9 @@ list<string> sub loader_urls() {
         sandbox trusts (see chooserRefused()); opening a datasource that trusted code created is not refused for it
     */
     private static bool connectRefused(string kind) {
-        return kind == "sandboxed";
+        # with the rule of qore#7832, the driver also refuses to connect for the trusted-sandbox code, whose sandbox
+        # restricts the filesystem, which the driver does not enforce
+        return kind == "sandboxed" || (kind == "trusted-sandbox" && sandboxClassesRefused());
     }
 
     #! Returns True if the code of the kind given has a parse option that limits the connections that it chooses to
@@ -348,6 +394,44 @@ string sub open_desc() {
             assertTrue(setterAware(), "a jni module with the uncontrolled-API policy judges the jdbc classpath "
                 "option by its setter (\"jdbc_option_setter\" in the \"info\" key of the module hash)");
         }
+        if (!sandboxClassesRefused()) {
+            return;
+        }
+        # qore#7832: the sandbox of the trusted-sandbox code trusts it with uncontrolled APIs but restricts the
+        # filesystem, which Java code does not enforce: it is refused Java classes, the classpath option and the
+        # connections of the driver, as code that its sandbox does not trust is
+        try {
+            Program lp(PO_NEW_STYLE);
+            lp.setSandboxManager(getTrustingSandbox());
+            lp.parse(LoaderSource, "jni-jdbc-option-setter-trusted-sandbox-loader");
+            fail("the trusted-sandbox code imported Java classes");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("JNI-SANDBOX-ERROR", ex.err, "trusted-sandbox: import");
+            assertRegex("cannot use the \"import\" module command.*parse options that forbid it \\(0x200000000000, ",
+                ex.desc, "trusted-sandbox: import (description)");
+        }
+        Program ts = pgms."trusted-sandbox";
+        Datasource ds("jdbc:u/p@jdbc:qore-none://x");
+        ts.callFunction("set_classpath", ds, allowed + DirSep + "driver.jar");
+        # the sandbox adds PO_NO_UNCONTROLLED_APIS to the restrictions of the code that sets the option
+        assertRegex("^JNI-SANDBOX-ERROR: the jdbc 'classpath' option adds to the Program's classpath, which code that "
+            "does not allow uncontrolled APIs", openDesc(ds),
+            "trusted-sandbox: the classpath option in its own policy");
+        assertRegex("^NETWORK-ACCESS-DENIED: the jdbc driver cannot connect for code that a sandbox does not trust "
+            "with uncontrolled APIs, or whose sandbox restricts the filesystem or the network",
+            ts.callFunction("open_desc", new Datasource("jdbc:u/p@jdbc:qore-none://x")),
+            "trusted-sandbox: a connection that trusted code chose");
+    }
+
+    #! Opens a datasource as this trusted code; returns "ok" or the error and its description
+    private static string openDesc(Datasource ds) {
+        try {
+            ds.open();
+            ds.close();
+            return "ok";
+        } catch (hash<ExceptionInfo> ex) {
+            return ex.err + ": " + ex.desc;
+        }
     }
 
     directTest() {
@@ -359,7 +443,7 @@ string sub open_desc() {
             }
         }
         # restricted code cannot create a pool with a classpath either: the pool opens its first connection
-        foreach string kind in (Refused) {
+        foreach string kind in (refusedKinds()) {
             assertEq(connectRefused(kind) ? "NETWORK-ACCESS-DENIED" : "JNI-SANDBOX-ERROR",
                 pgms{kind}.callFunction("make_pool", get_script_dir() + "qore-jni-test.jar"), kind + ": a pool");
         }
@@ -437,7 +521,7 @@ string sub open_desc() {
             Datasource ds({"type": "jdbc", "db": "qore-transaction-test:fixture"});
             ds.open();
             on_exit ds.close();
-            string exp = inlist(kind, Refused)
+            string exp = isRefused(kind)
                 ? "JNI-SANDBOX-ERROR"
                 : (kind == "trusted-sandbox" ? "FILESYSTEM-ACCESS-DENIED" : "ok");
             assertEq(exp, pgms{kind}.callFunction("try_set_classpath", ds, jar), kind + ": setOption() when open");
@@ -457,7 +541,7 @@ string sub open_desc() {
             ds.open();
             on_exit ds.close();
             assertEq("ok", try_set_classpath(ds, jar), kind + ": trusted code sets the classpath when open");
-            string exp = inlist(kind, Refused)
+            string exp = isRefused(kind)
                 ? "JNI-SANDBOX-ERROR"
                 : (kind == "trusted-sandbox" ? "FILESYSTEM-ACCESS-DENIED" : "ok");
             assertEq(exp, pgms{kind}.callFunction("try_set_classpath", ds, jar), kind + ": the same value set again");
@@ -479,7 +563,7 @@ string sub open_desc() {
         setenv("QORE_JNI_TEST_CP_DIR", dirname(jar));
         string raw = "$QORE_JNI_TEST_CP_DIR" + DirSep + basename(jar);
         foreach string kind in (keys Kinds) {
-            string exp = inlist(kind, Refused)
+            string exp = isRefused(kind)
                 ? "JNI-SANDBOX-ERROR"
                 : (kind == "trusted-sandbox" ? "FILESYSTEM-ACCESS-DENIED" : "ok");
             foreach string again in ((raw, jar)) {
@@ -503,7 +587,7 @@ string sub open_desc() {
         {
             string allowed_raw = "$QORE_JNI_TEST_CP_DIR" + DirSep + "env-allowed.jar";
             foreach string kind in (keys Kinds) {
-                string exp = inlist(kind, Refused) ? "JNI-SANDBOX-ERROR" : "ok";
+                string exp = isRefused(kind) ? "JNI-SANDBOX-ERROR" : "ok";
                 Datasource ds({"type": "jdbc", "db": "qore-transaction-test:fixture"});
                 ds.open();
                 on_exit ds.close();
@@ -517,9 +601,12 @@ string sub open_desc() {
         ds.open();
         on_exit ds.close();
         string entry = allowed + DirSep + "open-connection.jar";
-        assertEq("ok", pgms."trusted-sandbox".callFunction("try_set_classpath", ds, entry),
+        # with the rule of qore#7832, the sandbox refuses the option, as it restricts the filesystem
+        assertEq(isRefused("trusted-sandbox") ? "JNI-SANDBOX-ERROR" : "ok",
+            pgms."trusted-sandbox".callFunction("try_set_classpath", ds, entry),
             "trusted-sandbox: an allowed entry when open");
-        # the copy keeps the trusted sandbox as the setter: its policy allows the entry for trusted code too
+        # the copy keeps the trusted sandbox as the setter: its policy allows the entry for trusted code too (or the
+        # refused value is not kept)
         assertEq("ok", open(ds.copy()), "trusted-sandbox: a copy with an allowed entry");
     }
 
@@ -567,7 +654,7 @@ string sub open_desc() {
             # added to the class loader of the Program that created the pool, not of the code that opened the
             # connection
             assertTrue(loaderHas(NOTHING, marker), kind + ": the class loader of the code that created the pool");
-            if (inlist(kind, LoaderKinds)) {
+            if (inlist(kind, loaderKinds())) {
                 assertFalse(loaderHas(kind, marker), kind + ": the class loader of the code that opened the "
                     "connection");
             }

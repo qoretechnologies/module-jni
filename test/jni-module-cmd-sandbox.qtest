@@ -219,12 +219,33 @@ class JniModuleCmdSandboxTest inherits QUnit::Test {
             "jni-module-cmd-sandbox-own");
         string own_name = own.callFunction("java_name", "::JniModuleCmdSandboxOwn");
         assertEq("qore.JniModuleCmdSandboxOwn", own_name);
-        assertEq("ok", issueIn(own, "define-class " + own_name + " "
-            + own.callFunction("byte_code", "::JniModuleCmdSandboxOwn").toBase64()),
-            "sandboxed define-class of its own class");
 
         # trusted code defines the class in the loader of the module that owns it
         assertEq("parsed", parseIn(NOTHING, "define-class " + cmd), "trusted define-class");
+
+        if (sandboxClassesRefused()) {
+            # qore#7832: the sandbox restricts the filesystem, which Java code does not enforce, so it refuses the
+            # uncontrolled API that generates the byte code although it trusts the Program with uncontrolled APIs
+            try {
+                own.callFunction("byte_code", "::JniModuleCmdSandboxOwn");
+                fail("the sandbox that restricts the filesystem allowed get_byte_code()");
+            } catch (hash<ExceptionInfo> ex) {
+                assertEq("INVALID-FUNCTION-ACCESS", ex.err, "get_byte_code() with a restricting sandbox");
+                assertRegex("restricts FILESYSTEM \\(PO_NO_FILESYSTEM\\).*uncontrolled API function 'get_byte_code\\(.*"
+                    "qore#7832", ex.desc, "get_byte_code() with a restricting sandbox (description)");
+            }
+            testSkip("qore#7832: a sandbox that restricts the filesystem refuses Java code, so the sandboxed Program "
+                "cannot generate the byte code of its own class to define");
+        }
+        assertEq("ok", issueIn(own, "define-class " + own_name + " "
+            + own.callFunction("byte_code", "::JniModuleCmdSandboxOwn").toBase64()),
+            "sandboxed define-class of its own class");
+    }
+
+    #! Returns True if a sandbox that trusts its code with uncontrolled APIs but restricts the filesystem or the network
+    #! refuses Java code (qore#7832)
+    private static bool sandboxClassesRefused() {
+        return get_module_hash().jni.info.sandbox_uncontrolled_api_classes ?? False;
     }
 
     jdbcClasspathTest() {

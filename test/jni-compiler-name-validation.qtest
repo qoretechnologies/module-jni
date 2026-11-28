@@ -201,6 +201,10 @@ hash<auto> sub kotlin_compile(hash<auto> sources, *hash<auto> injected, *softlis
         const NameError = "invalid class name for compilation";
         #! the refusal of a compiler option
         const OptionError = "Java compiler option is not allowed";
+
+        #! why a case is skipped after the refusal of qore#7832
+        const RefusedSkip = "qore#7832: a sandbox that trusts its code with uncontrolled APIs but restricts the "
+            "filesystem or the network refuses Java code";
     }
 
     private {
@@ -604,6 +608,12 @@ public class %s extends AbstractProcessor {
         # whatever the compiler makes of them, no file is left outside of its directory
         assertEq(4, out.size(), sprintf("%y", out));
         assertEq("", trim(backquote(sprintf("find %s -type f", shellQuote(root)))));
+        if (sandboxClassesRefused()) {
+            # qore#7832: the tenant, whose sandbox restricts the filesystem, cannot use Java, so its compiler never
+            # makes an output file
+            map assertChildRefused($1.value, $1.key), out.pairIterator();
+            testSkip(RefusedSkip);
+        }
     }
 
     loaderRoutesTest() {
@@ -629,9 +639,14 @@ public class %s extends AbstractProcessor {
         mkdir(dir, 0700);
         writeClass(dir + "/CurrentDirFixture.class", "CurrentDirFixture");
         hash<string, string> out = runChild("no-locations", NOTHING, NOTHING, dir);
-        assertEq("refused", out.restricted);
         # the control: the fixture is found for trusted code
         assertEq("compiled", out.trusted);
+        if (sandboxClassesRefused()) {
+            # qore#7832: the restricted Program, whose sandbox restricts the filesystem, cannot use Java
+            assertChildRefused(out.restricted, "restricted");
+            testSkip(RefusedSkip);
+        }
+        assertEq("refused", out.restricted);
     }
 
     compilerServiceTest() {
@@ -1044,6 +1059,12 @@ public class %s extends AbstractProcessor {
         checkKotlin();
         hash<string, string> out = runChild("kotlin-after", NOTHING, kotlin_jars);
         assertEq("compiled", out."host compile");
+        if (sandboxClassesRefused()) {
+            # qore#7832: the tenant, whose sandbox restricts the filesystem, cannot use Java, so the host's compile
+            # does not follow a tenant's use of Java
+            assertChildRefused(out.tenant, "the tenant");
+            testSkip(RefusedSkip);
+        }
     }
 
     #! writes the class file of a new class
@@ -1062,6 +1083,11 @@ public class %s extends AbstractProcessor {
 
         # after: the caller of a Java thread is not known, unless the policy is captured
         out = runChild("thread-after");
+        if (sandboxClassesRefused()) {
+            # qore#7832: the tenant, whose sandbox restricts the filesystem, cannot use Java
+            map assertChildRefused(out{$1}, $1), ("tenant thread", "tenant captured");
+            testSkip(RefusedSkip);
+        }
         map assertRegex("^refused: .*JNI-SANDBOX-ERROR", out{$1}, $1), ("tenant thread", "host thread");
         assertEq("ok: true", out."tenant captured");
         assertEq("ok: false", out."host captured");
@@ -1259,8 +1285,28 @@ public class %s extends AbstractProcessor {
                 sm.addFilesystemDeniedPath(denied_path);
             }
             p.setSandboxManager(sm);
+            if (sandboxClassesRefused() && (!open || !open_network || allowed_path || denied_path)) {
+                # qore#7832: a sandbox that trusts its code with uncontrolled APIs but restricts the filesystem or
+                # the network refuses Java code, so nothing that the case does with this Program can be reached
+                assertThrows("INVALID-FUNCTION-ACCESS",
+                    "restricts (FILESYSTEM|NETWORK).*'get_class_loader\\(\\)'.*qore#7832", \p.callFunction(),
+                    "own_loader", "qore#7832: a sandbox that restricts the filesystem or the network refuses Java");
+                testSkip(RefusedSkip);
+            }
         }
         return p;
+    }
+
+    #! Returns True if a sandbox that trusts its code with uncontrolled APIs but restricts the filesystem or the network
+    #! refuses Java code (qore#7832)
+    private static bool sandboxClassesRefused() {
+        return get_module_hash().jni.info.sandbox_uncontrolled_api_classes ?? False;
+    }
+
+    #! asserts the result of the child process for a Program whose sandbox restricts the filesystem (qore#7832)
+    private assertChildRefused(*string result, string label) {
+        assertRegex("^refused by qore#7832: (INVALID-FUNCTION-ACCESS: )?.*restricts FILESYSTEM.*qore#7832",
+            result ?? "", label);
     }
 
     #! skips a test that needs Kotlin, which is an error in CI, where the images have it

@@ -619,8 +619,46 @@ sub program_end_case(string root) {
     result("program-end budget", MaxOutstandingCopies, q.callFunction("hold_copies", MaxOutstandingCopies * 2));
 }
 
+#! Returns True if a sandbox that trusts its code with uncontrolled APIs but restricts the filesystem or the network
+#! refuses Java code (qore#7832)
+bool sub sandbox_classes_refused() {
+    return get_module_hash().jni.info.sandbox_uncontrolled_api_classes ?? False;
+}
+
+#! qore#7832: the sandbox of every case restricts the filesystem, or, in the network cases, the network, so it refuses
+#! Java code although it allows uncontrolled APIs: the first lookup of the case's sandboxed Program is refused, and the
+#! rest of the case cannot run; prints the result of checking the refusal
+sub refused_case(string name, string root) {
+    SandboxManager sm;
+    string restricts;
+    if (name =~ /^network-/) {
+        sm = new SandboxManager();
+        sm.setUncontrolledApiPolicy(True);
+        sm.setFilesystemDefaultPolicy(True);
+        sm.setNetworkDefaultPolicy(False);
+        restricts = "NETWORK \\(PO_NO_NETWORK\\)";
+    } else {
+        sm = get_policy(root, ("allowed",));
+        restricts = "FILESYSTEM \\(PO_NO_FILESYSTEM\\)";
+    }
+    Program p = new_program(sm, root + "/allowed");
+    string rv;
+    try {
+        rv = "no error: " + p.callFunction("lookup", "getResource", "g.txt");
+    } catch (hash<ExceptionInfo> ex) {
+        rv = ex.err + ": " + ex.desc;
+    }
+    printf("result: %s refused (qore#7832): %s\n", name,
+        regex(rv, "^INVALID-FUNCTION-ACCESS: the sandbox that governs the calling code restricts " + restricts
+            + ".*\\(qore#7832\\)") ? "OK" : sprintf("found %y", rv));
+}
+
 string case_name = ARGV[0];
 string root = ARGV[1];
+if (sandbox_classes_refused()) {
+    refused_case(case_name, root);
+    exit(0);
+}
 # these cases do not depend on the encoding of file names
 switch (case_name) {
     case "budget": budget_case(root); exit(0);

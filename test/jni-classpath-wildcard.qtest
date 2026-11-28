@@ -91,12 +91,22 @@ class JniClasspathWildcardTest inherits QUnit::Test {
     }
 
     sandbox() {
+        # qore#7832: with a jni module that reports it, the child's sandbox, which restricts the filesystem, refuses
+        # Java code although it allows uncontrolled APIs; this process does not load the module, so the child checks
+        # it, asserts the refusal and skips the rest
+        string out = runInTempDir("sandbox", "");
+        if (out =~ /^result: sandbox: skipped \(qore#7832/m) {
+            assertEq(("result: sandbox: refused (qore#7832): OK",),
+                (select out.split("\n"), $1 =~ /^result: / && $1 !~ /: skipped/), out);
+            testSkip("qore#7832: a sandbox that restricts the filesystem refuses Java code, so the bare wildcard is "
+                "not checked against it");
+        }
         checkCase("sandbox", (
             "result: sandbox: allowed user.dir: OK",
             "result: sandbox: user.dir not allowed: OK",
             "result: sandbox: user.dir not allowed, the current directory allowed: OK",
             "result: sandbox: user.dir allowed, the current directory not allowed: OK",
-        ));
+        ), "", out);
     }
 
     #! the class loader printed a debug message for a wildcard that matches no file unconditionally (qore#6819)
@@ -121,9 +131,12 @@ class JniClasspathWildcardTest inherits QUnit::Test {
 
     #! runs a case of the child and checks its results, and that it printed no Java exception, and returns its output
     /** No debug message of the class loader is expected, except in the \c debug cases, whose callers check it
+        \a out is the output of a run of the case if the caller already ran it
     */
-    private string checkCase(string name, list<string> expected, string env = "") {
-        string out = runInTempDir(name, env);
+    private string checkCase(string name, list<string> expected, string env = "", *string out) {
+        if (!exists out) {
+            out = runInTempDir(name, env);
+        }
         if (out =~ /^result: [^:]+: skipped/m) {
             testSkip(trim(out));
         }

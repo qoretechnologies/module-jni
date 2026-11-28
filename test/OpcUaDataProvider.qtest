@@ -1763,6 +1763,12 @@ public class OpcUaDataProviderTest inherits QUnit::Test {
         assertTrue(threw, msg);
     }
 
+    #! Returns True if a sandbox that trusts its code with uncontrolled APIs but restricts the filesystem or the network
+    #! refuses Java code (qore#7832)
+    private static bool sandboxClassesRefused() {
+        return get_module_hash().jni.info.sandbox_uncontrolled_api_classes ?? False;
+    }
+
     #! Returns @ref True if the running qore propagates an active network SandboxManager to code
     #! executing in a different (module or child) Program reached through the call stack.
     /** The generic OPC UA server runtime performs its TCP bind from module-context code (the
@@ -2115,7 +2121,7 @@ sub sandboxProbe() {
         }
         # the runtime started, stopped, started again and stopped again in a Program whose sandbox allows binds to
         # the given ports only; returns the error, if any
-        code run = *string sub (list<int> allowed_ports, int runtime_port) {
+        code run = *string sub (list<int> allowed_ports, int runtime_port, *bool full) {
             SandboxManager sm();
             sm.setNetworkDefaultPolicy(True);
             map sm.addNetworkAllowedPort($1), allowed_ports;
@@ -2131,7 +2137,7 @@ sub sandboxProbe() {
 %prepend-module-path \"${SCRIPT_DIR}/../qlib\"
 %requires OpcUaDataProvider
 
-*string sub cycle(int port) {
+*string sub cycle(int port, *bool full) {
     try {
         OpcUaServerRuntime runtime({
             \"port\": port,
@@ -2156,12 +2162,20 @@ sub sandboxProbe() {
         runtime.start();
         runtime.stop();
     } catch (hash<ExceptionInfo> ex) {
-        return ex.err;
+        return full ? ex.err + \": \" + ex.desc : ex.err;
     }
 }
 ", "opcua_runtime_bind_check");
-            return p.callFunction("cycle", runtime_port);
+            return p.callFunction("cycle", runtime_port, full);
         };
+        if (sandboxClassesRefused()) {
+            # qore#7832: a sandbox that trusts its code with uncontrolled APIs but restricts the network (an allowed
+            # port) refuses Java code, so the runtime cannot be created and its bind never reaches the network check
+            assertRegex("^INVALID-FUNCTION-ACCESS: .*restricts .*NETWORK .*opcua.*qore#7832", run((0,), 0, True),
+                "qore#7832: a sandbox that restricts the network refuses the runtime");
+            testSkip("qore#7832: a sandbox that restricts the network refuses Java code, so the runtime's bind cannot "
+                "be checked by the network sandbox");
+        }
         assertNothing(run((0,), 0), "an OS-assigned port is checked as port 0, also for a restart");
         assertNothing(run((port,), port), "a configured port is checked as that port");
         assertEq("NETWORK-ACCESS-DENIED", run((0,), port), "a configured port that the sandbox denies is refused");
@@ -2372,6 +2386,17 @@ hash<auto> sub sandboxRuntimeSchema() {
     }
 }
 ", "opcua_runtime_sandbox");
+
+        if (sandboxClassesRefused()) {
+            # qore#7832: a sandbox that trusts its code with uncontrolled APIs but restricts the network (blocked
+            # loopback and private ranges) refuses Java code, so the runtime's loopback bind is refused before it
+            # reaches the network check
+            assertThrows("INVALID-FUNCTION-ACCESS", "restricts .*NETWORK .*opcua::GenericServer.*qore#7832",
+                \p.callFunction(), "startSandboxedRuntime",
+                "qore#7832: a sandbox that restricts the network refuses the runtime");
+            testSkip("qore#7832: a sandbox that restricts the network refuses Java code, so the runtime's bind "
+                "cannot be checked by the network sandbox");
+        }
 
         # the server's bind to loopback is allowed, but a client connection to it is denied
         *string connect_err;

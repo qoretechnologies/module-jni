@@ -236,8 +236,39 @@ sub unsandboxed_case(string root) {
     result("unsandboxed: the class of the linked jar is loaded", True, p2.callFunction("can_load", KotlinClass));
 }
 
+#! Returns True if a sandbox that trusts its code with uncontrolled APIs but restricts the filesystem or the network
+#! refuses Java code (qore#7832)
+bool sub sandbox_classes_refused() {
+    return get_module_hash().jni.info.sandbox_uncontrolled_api_classes ?? False;
+}
+
+#! qore#7832: the sandbox of a sandboxed case restricts the filesystem, so it refuses Java code although it allows
+#! uncontrolled APIs: the Program's first import is refused, and no classpath entry can be checked against the policy;
+#! checks the refusal and prints that the rest of the case is skipped
+sub refused_case(string name, string root, string dir) {
+    Program p(PO_NEW_STYLE);
+    p.setSandboxManager(get_sandbox(root, (dir,)));
+    string rv;
+    try {
+        p.parse(LoaderSource, "loader");
+        rv = "parsed";
+    } catch (hash<ExceptionInfo> ex) {
+        rv = ex.err + ": " + ex.desc;
+    }
+    printf("result: %s: refused (qore#7832): %s\n", name,
+        rv =~ /^JNI-SANDBOX-ERROR: cannot use the "import" module command.*\(0x200000000000, / ? "OK" : rv);
+    printf("result: %s: skipped (qore#7832: a sandbox that restricts the filesystem refuses Java code)\n", name);
+}
+
 sub main() {
     string root = ARGV[1];
+    # the directory of the test tree that each sandboxed case allows
+    hash<string, string> sandboxed = {"deny": "mix", "escape": "esc", "inside": "in", "plain": "plain"};
+    if (sandboxed{ARGV[0]} && sandbox_classes_refused()) {
+        refused_case(ARGV[0], root, sandboxed{ARGV[0]});
+        printf("end\n");
+        return;
+    }
     switch (ARGV[0]) {
         case "deny": deny_case(root); break;
         case "escape": escape_case(root); break;

@@ -232,6 +232,30 @@ auto sub run(code c, ...) {
         return p;
     }
 
+    #! Returns True if a sandbox that trusts its code with uncontrolled APIs but restricts the filesystem or the network
+    #! refuses Java code (qore#7832)
+    private static bool sandboxClassesRefused() {
+        return get_module_hash().jni.info.sandbox_uncontrolled_api_classes ?? False;
+    }
+
+    #! the reason of the refusal of Java code under the sandbox of the sandboxed code, which trusts its code with
+    #! uncontrolled APIs but restricts the filesystem (qore#7832)
+    const RefusalReason = "the sandbox that governs the calling code restricts FILESYSTEM \\(PO_NO_FILESYSTEM\\).*"
+        "uncontrolled API .* does not enforce \\(qore#7832\\)";
+
+    #! the reason for skipping the rest of a case under qore#7832
+    const RefusalSkip = "qore#7832: the sandbox of the sandboxed code trusts it with uncontrolled APIs but restricts "
+        "the filesystem, so it refuses the Java code that the trusted code runs on its behalf; no Qore code reaches "
+        "Java under the sandbox";
+
+    #! asserts that the trusted code refuses to hand Qore code to Java under the sandbox of the sandboxed code
+    /** qore#7832: the sandbox trusts its code with uncontrolled APIs but restricts the filesystem, which the jni
+        module's uncontrolled API does not enforce, so its first Java use is refused
+    */
+    private assertRefused(Program u, Program p, string name, ...) {
+        assertThrows("INVALID-FUNCTION-ACCESS", RefusalReason, \call(), (u, p, name) + argv, name + " (qore#7832)");
+    }
+
     #! calls a function of the trusted code, directly or from the sandboxed code
     private auto call(Program u, *Program p, string name, ...) {
         code c = u.callFunction("get", name);
@@ -261,6 +285,10 @@ auto sub run(code c, ...) {
         Program u = getTrusted();
         Program p = getSandboxed();
         Queue results();
+        if (sandboxClassesRefused()) {
+            assertRefused(u, p, "run_proxy_in_java_thread", secret, results);
+            testSkip(RefusalSkip);
+        }
         QoreInvocationHandler h = call(u, p, "run_proxy_in_java_thread", secret, results);
         assertEq("FILESYSTEM-ACCESS-DENIED", results.get(CallbackTimeout));
         h.destroy();
@@ -270,6 +298,10 @@ auto sub run(code c, ...) {
         Program u = getTrusted();
         Program p = getSandboxed();
         Queue results();
+        if (sandboxClassesRefused()) {
+            assertRefused(u, p, "run_closure_in_java_thread", secret, results);
+            testSkip(RefusalSkip);
+        }
         call(u, p, "run_closure_in_java_thread", secret, results);
         assertEq("FILESYSTEM-ACCESS-DENIED", results.get(CallbackTimeout));
     }
@@ -284,9 +316,16 @@ auto sub run(code c, ...) {
             assertEq(SecretContent, results.get(CallbackTimeout), how + " (unsandboxed)");
             delete r;
             # handed to Java by trusted code for the sandboxed code
+            if (sandboxClassesRefused()) {
+                assertRefused(u, p, "run_method_in_java_thread", secret, results, how);
+                continue;
+            }
             r = call(u, p, "run_method_in_java_thread", secret, results, how);
             assertEq("FILESYSTEM-ACCESS-DENIED", results.get(CallbackTimeout), how);
             delete r;
+        }
+        if (sandboxClassesRefused()) {
+            testSkip(RefusalSkip);
         }
     }
 
@@ -308,6 +347,11 @@ auto sub run(code c, ...) {
             # variable is untyped, as it refers to a deleted object once Java has destroyed it; it is never deleted
             # here
             auto r = call(u, NOTHING, "make_destroy_reader", secret, results);
+            if (i.sandbox && sandboxClassesRefused()) {
+                assertRefused(u, i.sandbox, "destroy_in_java_thread", r);
+                # the object was never handed to Java; it is destroyed on this thread when it is released
+                continue;
+            }
             object latch = call(u, i.sandbox, "destroy_in_java_thread", r);
             # Java's thread waits for the latch; count it down also if an assertion fails before the explicit
             # countdown; counting down again has no effect
@@ -324,12 +368,19 @@ auto sub run(code c, ...) {
             # releasing the reference to the deleted object raises no exception
             remove r;
         }
+        if (sandboxClassesRefused()) {
+            testSkip(RefusalSkip);
+        }
     }
 
     testRelease() {
         Program u = getTrusted();
         Program p = getSandboxed();
         Queue results();
+        if (sandboxClassesRefused()) {
+            assertRefused(u, p, "make_handler", secret, results);
+            testSkip(RefusalSkip);
+        }
         QoreInvocationHandler h = call(u, p, "make_handler", secret, results);
         # the handler is released by the unsandboxed code here
         h.destroy();

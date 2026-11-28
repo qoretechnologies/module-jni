@@ -257,6 +257,16 @@ list<string> sub loader_urls() {
         if (!(new SandboxManager()).hasCallableMethod("setUncontrolledApiPolicy")) {
             testSkip("this Qore library cannot allow uncontrolled APIs in a sandbox");
         }
+        if (sandboxClassesRefused()) {
+            # qore#7832: the sandbox trusts the Program with uncontrolled APIs but restricts the filesystem, so the
+            # add-classpath command of the Program is refused before the pattern is checked
+            hash<auto> res = sandboxResult(dir + DirSep + "a[*.jar", dir);
+            assertEq("JNI-SANDBOX-ERROR", res.result, "a[*.jar: refused");
+            assertRegex("cannot use the \"add-classpath\" module command.*0x200000000000", res.desc,
+                "a[*.jar: refused for the sandbox");
+            testSkip("qore#7832: a sandbox that restricts the filesystem refuses Java code, so the pattern is not "
+                "checked against the sandbox");
+        }
         foreach string pattern in (("a[*.jar", "a.*.jar", "a?*.jar")) {
             string cp = dir + DirSep + pattern;
             # allowed: the Program adds the files that the pattern matches, as it does without a sandbox, and loads
@@ -461,7 +471,8 @@ list<string> sub loader_urls() {
 
     #! returns the result of parsing SandboxSource for the classpath in a new Program with a sandbox that allows
     #! reading only the given directory: "result": the error code, or "parsed: " and the result of calling the class of
-    #! the test jar; "files": the names of the jars of the test directory that the Program added
+    #! the test jar; "desc": the error's description; "files": the names of the jars of the test directory that the
+    #! Program added
     private hash<auto> sandboxResult(string cp, string allowed) {
         SandboxManager sm();
         call_object_method(sm, "setUncontrolledApiPolicy", True);
@@ -472,7 +483,7 @@ list<string> sub loader_urls() {
         try {
             p.parse(sprintf(SandboxSource, cp), "sandboxed");
         } catch (hash<ExceptionInfo> ex) {
-            return {"result": ex.err};
+            return {"result": ex.err, "desc": ex.desc};
         }
         return {
             "result": "parsed: " + p.callFunction("map_of").key,
@@ -535,6 +546,12 @@ list<string> sub loader_urls() {
     #! returns the result lines of the child's output
     private static list<string> getResults(string out) {
         return select out.split("\n"), $1 =~ /^result: /;
+    }
+
+    #! Returns True if a sandbox that trusts its code with uncontrolled APIs but restricts the filesystem or the network
+    #! refuses Java code (qore#7832)
+    private static bool sandboxClassesRefused() {
+        return get_module_hash().jni.info.sandbox_uncontrolled_api_classes ?? False;
     }
 
     #! skips the test case if the module is not a debug build

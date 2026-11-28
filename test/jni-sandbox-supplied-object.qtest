@@ -34,6 +34,17 @@ class JniSandboxSuppliedObjectTest inherits QUnit::Test {
         const Unowned = "JNI-SANDBOX-ERROR: a Java object or closure whose origin cannot be determined cannot call "
             "into Qore once sandboxed code has used Java; use a Qore closure controlled by the calling Program";
 
+        #! the refusal of Java code under the sandbox of the sandboxed Program, which trusts its code with uncontrolled
+        #! APIs but restricts the filesystem and the network (qore#7832)
+        const SandboxRefused = "^INVALID-FUNCTION-ACCESS: the sandbox that governs the calling code restricts "
+            "FILESYSTEM \\(PO_NO_FILESYSTEM\\), NETWORK \\(PO_NO_NETWORK\\), which uncontrolled API .* does not "
+            "enforce \\(qore#7832\\)$";
+
+        #! the reason for skipping the rest of a case that needs sandboxed Java (qore#7832)
+        const SandboxRefusedSkip = "qore#7832: the sandbox of the sandboxed Program trusts it with uncontrolled APIs "
+            "but restricts the filesystem and the network, so it refuses its Java code; no sandboxed code can use "
+            "Java in the process";
+
         #! the result of the host's function
         const HostResult = "OK: \"host secret\"";
 
@@ -74,8 +85,12 @@ class JniSandboxSuppliedObjectTest inherits QUnit::Test {
         *string latch;
         int jdk;
         hash<string, list<string>> rv = runMatrix(shape, "sandboxed", \latch, \jdk);
+        # qore#7832: the sandbox refuses the sandboxed Program's Java code, so it never uses Java in the process
+        bool refused = sandboxClassesRefused();
         if (latch) {
-            assertEq("True", latch, "sandboxed code has used Java in the process");
+            assertEq(refused ? "False" : "True", latch, refused
+                ? "the sandbox refuses the Java code of sandboxed code (qore#7832)"
+                : "sandboxed code has used Java in the process");
         }
         # no combination reaches the host's function or creates its directory, whatever the error
         hash<string, string> reached = map {$1.key: $1.value[0] + "|" + $1.value[1]}, rv.pairIterator(),
@@ -86,8 +101,10 @@ class JniSandboxSuppliedObjectTest inherits QUnit::Test {
         foreach string handover in (Handovers) {
             foreach string runner in (Runners) {
                 foreach string fn in (Functions) {
-                    expected{handover + "|" + runner + "|" + fn} = expectedRefusal(shape, handover, runner,
-                        jdk) + "|absent";
+                    # qore#7832: the sandbox refuses the object's making, before any rule of the object applies
+                    expected{handover + "|" + runner + "|" + fn} = (refused
+                        ? "SandboxRefused"
+                        : expectedRefusal(shape, handover, runner, jdk)) + "|absent";
                 }
             }
         }
@@ -121,15 +138,18 @@ class JniSandboxSuppliedObjectTest inherits QUnit::Test {
         string dir = tmp.path + DirSep + "mixed";
         mkdir(dir);
         (string out, *string latch) = runChild(("mixed", dir));
-        if (latch) {
-            assertEq("True", latch, "sandboxed code has used Java in the process");
-        }
         hash<string, list<string>> rv;
         foreach string line in (out.split("\n")) {
             if (line =~ /^P\|/) {
                 list<string> l = line.split("|");
                 rv{l[1]} = (l[2], l[3]);
             }
+        }
+        if (sandboxClassesRefused()) {
+            assertSandboxRefused(rv, latch, out);
+        }
+        if (latch) {
+            assertEq("True", latch, "sandboxed code has used Java in the process");
         }
         hash<string, string> expected;
         foreach string runner in (Runners) {
@@ -162,7 +182,7 @@ class JniSandboxSuppliedObjectTest inherits QUnit::Test {
     originTest() {
         string dir = tmp.path + DirSep + "origin";
         mkdir(dir);
-        string out = runChild(("origin", dir))[0];
+        (string out, *string latch) = runChild(("origin", dir));
         int jdk = childJdk(out);
         hash<string, list<string>> rv;
         foreach string line in (out.split("\n")) {
@@ -170,6 +190,9 @@ class JniSandboxSuppliedObjectTest inherits QUnit::Test {
                 list<string> l = line.split("|");
                 rv{l[1]} = (l[2], l[3]);
             }
+        }
+        if (sandboxClassesRefused()) {
+            assertSandboxRefused(rv, latch, out);
         }
         hash<string, string> expected = {
             # the object's code calls the host's Program, which neither a deleted origin nor the first origin reaches
@@ -220,9 +243,31 @@ class JniSandboxSuppliedObjectTest inherits QUnit::Test {
         # the host's function is not reached, whatever the error
         assertFalse(rv."define-class-host"[0] =~ /host secret/, rv."define-class-host"[0]);
         assertEq("OK: \"nothing handed over\"", rv."define-class-host"[0], out);
+        if (sandboxClassesRefused()) {
+            # qore#7832: the sandbox refuses the sandboxed code's Java code before it can look up the dispatch class
+            assertRegex(SandboxRefused, rv."define-class-sandboxed"[0], out);
+            return;
+        }
         # the module's dispatch class has no lookup to hand out
         assertRegex("^JNI-ERROR: java.lang.NoSuchMethodException: org.qore.jni.QoreJavaDynamicApi.lookup\\(\\)",
             rv."define-class-sandboxed"[0], out);
+    }
+
+    #! Returns True if a sandbox that trusts its code with uncontrolled APIs but restricts the filesystem or the network
+    #! refuses Java code (qore#7832)
+    private static bool sandboxClassesRefused() {
+        return get_module_hash().jni.info.sandbox_uncontrolled_api_classes ?? False;
+    }
+
+    #! asserts that the child stopped at the sandbox's refusal of the sandboxed code's first use of Java, and skips the
+    #! rest of the case (qore#7832)
+    private:internal assertSandboxRefused(hash<string, list<string>> rv, *string latch, string out) {
+        assertEq(("sandboxed-java",), keys rv, out);
+        assertRegex(SandboxRefused, rv."sandboxed-java"[0], out);
+        if (latch) {
+            assertEq("False", latch, "the sandbox refuses the Java code of sandboxed code (qore#7832)");
+        }
+        testSkip(SandboxRefusedSkip);
     }
 
     #! the refusal that a combination of an object of the shape that sandboxed code made raises
@@ -269,6 +314,8 @@ class JniSandboxSuppliedObjectTest inherits QUnit::Test {
                 o = "UnknownOrigin";
             } else if (o.equalPartial("FILESYSTEM-ACCESS-DENIED: ")) {
                 o = "FILESYSTEM-ACCESS-DENIED";
+            } else if (o.regex(SandboxRefused)) {
+                o = "SandboxRefused";
             }
             out{i.key} = o + "|" + i.value[1];
         }

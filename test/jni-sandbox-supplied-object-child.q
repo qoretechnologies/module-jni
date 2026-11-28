@@ -366,6 +366,24 @@ nothing sub print_latch() {
     printf("latch: %y\n", dp.callFunction("latch"));
 }
 
+#! returns True if the sandbox refuses the sandboxed code's first use of Java given, after printing the refusal as
+#! "P|sandboxed-java|<outcome>|-"
+/** qore#7832: a sandbox that trusts its code with uncontrolled APIs but restricts the filesystem or the network
+    refuses its Java code, so none of the calls that need sandboxed Java can run; any other error is raised
+*/
+bool sub sandbox_refuses_java(code c) {
+    try {
+        c();
+    } catch (hash<ExceptionInfo> ex) {
+        if (ex.err == "INVALID-FUNCTION-ACCESS" && ex.desc =~ /\(qore#7832\)$/) {
+            printf("P|sandboxed-java|%s: %s|-\n", ex.err, replace(replace(ex.desc, "\n", " "), "|", "/"));
+            return True;
+        }
+        rethrow;
+    }
+    return False;
+}
+
 #! makes, hands over and runs every combination for the shape given
 nothing sub matrix(string dir, string shape, string mode) {
     Program p = supplier(mode == "sandboxed");
@@ -399,7 +417,9 @@ nothing sub matrix(string dir, string shape, string mode) {
 nothing sub mixed(string dir) {
     Program p = supplier(True);
     # sandboxed code uses Java
-    p.callFunction("make", "adapter", "host_fn");
+    if (sandbox_refuses_java(auto sub () { return p.callFunction("make", "adapter", "host_fn"); })) {
+        return;
+    }
     code report = nothing sub (string name, code c, *string path) {
         printf("P|%s|%s|%s\n", name, outcome(c), path ? (is_dir(path) ? "created" : "absent") : "-");
     };
@@ -481,7 +501,9 @@ nothing sub origin() {
     {
         Program p = supplier(True);
         ArrayList l();
-        p.callFunction("hand", "deputy", "list", l, "host_fn");
+        if (sandbox_refuses_java(auto sub () { return p.callFunction("hand", "deputy", "list", l, "host_fn"); })) {
+            return;
+        }
         delete p;
         report("deleted-origin", auto sub () { return run_value(l.get(0), "direct"); });
     }

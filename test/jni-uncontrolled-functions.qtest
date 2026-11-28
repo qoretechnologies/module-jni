@@ -107,6 +107,12 @@ class JniUncontrolledFunctionsTest inherits QUnit::Test {
         set_return_value(main());
     }
 
+    #! Returns True if a sandbox that trusts its code with uncontrolled APIs but restricts the filesystem or the network
+    #! refuses Java code (qore#7832)
+    private static bool sandboxClassesRefused() {
+        return get_module_hash().jni.info.sandbox_uncontrolled_api_classes ?? False;
+    }
+
     #! Returns the error of parsing the call in a Program with the options given, or "parsed"
     private static string parseIn(int po, string call, *reference<string> desc) {
         Program p(PO_NEW_STYLE | po);
@@ -363,6 +369,29 @@ class JniUncontrolledFunctionsTest inherits QUnit::Test {
         p.setSandboxManager(sm);
         p.parse("auto sub through(code c) { return c(); }\n", "jni-uncontrolled-functions-trusting");
         hash<string, code> calls = getRunCalls();
+        if (sandboxClassesRefused()) {
+            # qore#7832: the sandbox restricts the filesystem and the network (the defaults of a new sandbox), which
+            # the uncontrolled APIs do not enforce, so it refuses every call although it trusts the code with them
+            foreach hash<auto> i in (calls.pairIterator()) {
+                try {
+                    p.callFunction("through", i.value);
+                    fail(i.key + ": no exception with a restricting sandbox");
+                } catch (hash<ExceptionInfo> ex) {
+                    assertEq("INVALID-FUNCTION-ACCESS", ex.err, i.key + ": restricting sandbox");
+                    assertRegex("restricts FILESYSTEM \\(PO_NO_FILESYSTEM\\), NETWORK \\(PO_NO_NETWORK\\), which "
+                        "uncontrolled API (function|method) '([A-Za-z:]+::)?" + Calls{i.key}.name + "\\(.*qore#7832",
+                        ex.desc, i.key + ": restricting sandbox (description)");
+                }
+            }
+            # a sandbox that trusts the code and restricts neither the filesystem nor the network allows every call
+            sm = new SandboxManager();
+            call_object_method(sm, "setUncontrolledApiPolicy", True);
+            sm.setFilesystemDefaultPolicy(True);
+            sm.setNetworkDefaultPolicy(True);
+            p = new Program(PO_NEW_STYLE);
+            p.setSandboxManager(sm);
+            p.parse("auto sub through(code c) { return c(); }\n", "jni-uncontrolled-functions-trusting-open");
+        }
         hash<string, hash<auto>> checks = getRunChecks();
         foreach hash<auto> i in (calls.pairIterator()) {
             hash<auto> check = checks{i.key};

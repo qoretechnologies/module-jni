@@ -35,6 +35,10 @@ string sub compile_source(string src) {
         compiler.compile({\"KOutput\": src});
         return \"compiled\";
     } catch (hash<ExceptionInfo> ex) {
+        # qore#7832: a sandbox that restricts the filesystem refuses Java code
+        if (ex.err == \"INVALID-FUNCTION-ACCESS\" && ex.desc =~ /qore#7832/) {
+            return \"refused by qore#7832: \" + ex.desc;
+        }
         return \"refused\";
     }
 }
@@ -50,6 +54,10 @@ string sub compile_user(string name) {
         compiler.compile(name, sprintf(\"public class %s { CurrentDirFixture d; }\", name));
         return \"compiled\";
     } catch (hash<ExceptionInfo> ex) {
+        # qore#7832: a sandbox that restricts the filesystem refuses Java code
+        if (ex.err == \"INVALID-FUNCTION-ACCESS\" && ex.desc =~ /qore#7832/) {
+            return \"refused by qore#7832: \" + ex.desc;
+        }
         return \"refused\";
     }
 }
@@ -77,6 +85,24 @@ Program sub make_tenant(string src) {
     return p;
 }
 
+#! Returns True if a sandbox that trusts its code with uncontrolled APIs but restricts the filesystem or the network
+#! refuses Java code (qore#7832)
+bool sub sandboxClassesRefused() {
+    return get_module_hash().jni.info.sandbox_uncontrolled_api_classes ?? False;
+}
+
+#! calls a function of the tenant; with qore#7832, returns the refusal of the tenant's Java code
+string sub call_tenant(Program p, string func) {
+    try {
+        return p.callFunction(func);
+    } catch (hash<ExceptionInfo> ex) {
+        if (!sandboxClassesRefused() || ex.err != "INVALID-FUNCTION-ACCESS") {
+            rethrow;
+        }
+        return sprintf("refused by qore#7832: %s: %s", ex.err, ex.desc);
+    }
+}
+
 sub result(string label, string value) {
     printf("result: %s: %s\n", label, value);
 }
@@ -90,8 +116,8 @@ switch (ARGV[0]) {
     case "thread-after": {
         Program p = make_tenant(TenantSource);
         # the tenant has used Java, and its Java thread does not know its caller
-        result("tenant thread", p.callFunction("tenant_thread"));
-        result("tenant captured", p.callFunction("tenant_captured"));
+        result("tenant thread", call_tenant(p, "tenant_thread"));
+        result("tenant captured", call_tenant(p, "tenant_captured"));
         result("host thread", ClassLoaderAccessProbe::threadRestrictsFilesystem());
         result("host captured", ClassLoaderAccessProbe::threadCapturedRestrictsFilesystem());
         break;
@@ -124,7 +150,7 @@ switch (ARGV[0]) {
         Program::issueModuleCmd("jni", "global-add-classpath " + ARGV[1]);
         Program::issueModuleCmd("jni", "global-add-classpath " + ARGV[2]);
         Program tenant = make_tenant(TenantSource);
-        tenant.callFunction("tenant_thread");
+        result("tenant", call_tenant(tenant, "tenant_thread"));
         Program host(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
         host.loadModule("jni");
         host.issueModuleCmd("jni", "add-classpath " + get_script_dir() + "/../build/qore-jni-compiler.jar");

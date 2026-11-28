@@ -539,6 +539,13 @@ nothing sub hold_context(Queue ready, Queue done) {
 
         #! the result of a call of a host function in the tenant's own Program, where the function does not exist
         const NoHostFn = "NO-FUNCTION";
+
+        #! the reason that a test case is skipped when the tenant's sandbox refuses Java code (qore#7832)
+        /** a sandbox that restricts nothing does not govern its code (qore#7041), so with qore#7832 no sandbox that
+            governs its code lets it use Java
+        */
+        const RefusedSkip = "qore#7832: a sandbox that trusts its code with uncontrolled APIs but restricts the "
+            + "filesystem or the network refuses Java code, so the tenant cannot use Java";
     }
 
     private {
@@ -576,6 +583,47 @@ nothing sub hold_context(Queue ready, Queue done) {
         set_return_value(main());
     }
 
+    #! Returns True if a sandbox that trusts its code with uncontrolled APIs but restricts the filesystem or the network
+    #! refuses Java code (qore#7832)
+    private static bool sandboxClassesRefused() {
+        return get_module_hash().jni.info.sandbox_uncontrolled_api_classes ?? False;
+    }
+
+    #! returns the regex of the description of the refusal of the given Java API by a sandbox that trusts its code with
+    #! uncontrolled APIs but restricts the filesystem and the network (qore#7832)
+    private static string refusedDesc(string api = "") {
+        return "the sandbox that governs the calling code restricts FILESYSTEM \\(PO_NO_FILESYSTEM\\), NETWORK "
+            + "\\(PO_NO_NETWORK\\), which uncontrolled API .*" + api + ".* does not enforce \\(qore#7832\\)";
+    }
+
+    #! returns the regex of a string result of the tenant that reports the refusal of the given Java API (qore#7832)
+    private static string refused(string api = "") {
+        return "^INVALID-FUNCTION-ACCESS: " + refusedDesc(api) + "$";
+    }
+
+    #! returns the regex of the result of the tenant's call that its sandbox refuses with this test's sandbox
+    /** with qore#7832, the tenant's sandbox refuses the Java code before Java runs; without it, the Java code's call
+        into another Program is refused
+    */
+    private static string refusedOrNotGoverned(string api = "") {
+        return sandboxClassesRefused() ? refused(api) : NotGoverned;
+    }
+
+    #! asserts that the tenant's sandbox refuses the Java API that the given function of the Program calls (qore#7832)
+    /** the tenant's sandbox trusts it with uncontrolled APIs but restricts the filesystem and the network, which Java
+        code does not enforce
+    */
+    private assertRefusedCall(string api, string fn, *softlist<auto> args, *Program p) {
+        list<auto> call_args = ();
+        push call_args, fn;
+        if (args) {
+            call_args += args;
+        }
+        Program prog = p ?? tenant;
+        assertThrows("INVALID-FUNCTION-ACCESS", refusedDesc(api), \prog.callFunction(), call_args,
+            fn + " (qore#7832)");
+    }
+
     globalSetUp() {
         tenant = getTenant();
         reenter_code = \reenter();
@@ -588,11 +636,17 @@ nothing sub hold_context(Queue ready, Queue done) {
     loaderTest() {
         auto host_loader = get_class_loader();
         # a method of the host's class loader generates a class in the host's Program
-        assertRegex(NotGoverned, tenant.callFunction("load", host_loader, "qore.HostSecret"));
+        assertRegex(refusedOrNotGoverned("loadClass"), tenant.callFunction("load", host_loader, "qore.HostSecret"));
         # an object of a host class, and its methods
-        assertRegex(NotGoverned, tenant.callFunction("instantiate", host_loader, "qore.HostSecretInstance"));
+        assertRegex(refusedOrNotGoverned("loadClass"), tenant.callFunction("instantiate", host_loader,
+            "qore.HostSecretInstance"));
         # a host function through QoreJavaApi with the class of the host's class loader
-        assertRegex(NotGoverned, tenant.callFunction("loader_call", host_loader, "host_fn"));
+        assertRegex(refusedOrNotGoverned("loadClass"), tenant.callFunction("loader_call", host_loader, "host_fn"));
+        if (sandboxClassesRefused()) {
+            # qore#7832: the tenant's own class loader is refused as well
+            assertRefusedCall("get_class_loader", "tenant_loader");
+            testSkip(RefusedSkip);
+        }
         # the tenant's own Program is reachable through the same calls
         object own = tenant.callFunction("tenant_loader");
         assertEq("OK: tenant", tenant.callFunction("loader_call", own, "tenant_fn"));
@@ -602,7 +656,14 @@ nothing sub hold_context(Queue ready, Queue done) {
     anyObjectTest() {
         # any Java object of the host reaches the class loader context of its Program
         string rv = tenant.callFunction("any_call", probe, "host_fn");
-        assertRegex(NotGoverned, rv);
+        assertRegex(refusedOrNotGoverned("getClass"), rv);
+        if (sandboxClassesRefused()) {
+            # qore#7832: the tenant's sandbox refuses every Java call of the tenant
+            assertRefusedCall("HostObjectProbe::callQore", "probe_call", (probe, "host_fn"));
+            assertRefusedCall("HostObjectProbe::", "echo_code_call", (probe, "host_fn"));
+            assertRefusedCall("get_class_loader", "tenant_loader");
+            testSkip(RefusedSkip);
+        }
         # a method of the host's object that calls into Qore
         rv = tenant.callFunction("probe_call", probe, "host_fn");
         assertRegex(NotGoverned, rv);
@@ -616,6 +677,14 @@ nothing sub hold_context(Queue ready, Queue done) {
     }
 
     propagationTest() {
+        if (sandboxClassesRefused()) {
+            # qore#7832: the tenant's sandbox refuses every Java call of the tenant
+            assertRefusedCall("HostObjectProbe::next", "chain_call", (probe, "host_fn"));
+            assertRefusedCall("HostObjectProbe::callQore", "probe_call", (probe, "host_fn"));
+            # the host still reaches its own Program
+            assertEq("ok: host", probe.callQore("host_fn"));
+            testSkip(RefusedSkip);
+        }
         # the objects returned by the host object's methods
         assertRegex(NotGoverned, tenant.callFunction("chain_call", probe, "host_fn"));
         # a field of the host object, written by the host: the object in it is the host's, of the host's class
@@ -637,10 +706,17 @@ nothing sub hold_context(Queue ready, Queue done) {
     staticTest() {
         HostObjectProbe sp();
         HostObjectProbe::staticField = sp;
-        assertRegex(NotGoverned, tenant.callFunction("static_field_call", "host_fn"));
-        # a static method and a constructor that the tenant calls with the host's object
-        assertRegex(NotGoverned, tenant.callFunction("static_method_call", probe, "host_fn"));
-        assertRegex(NotGoverned, tenant.callFunction("constructor_call", probe, "host_fn"));
+        if (sandboxClassesRefused()) {
+            # qore#7832: the tenant's sandbox refuses the Java calls before Java runs
+            assertRefusedCall("HostObjectProbe::callQore", "static_field_call", "host_fn");
+            assertRefusedCall("HostObjectProbe::staticCallVia", "static_method_call", (probe, "host_fn"));
+            assertRefusedCall("HostObjectProbe::constructor", "constructor_call", (probe, "host_fn"));
+        } else {
+            assertRegex(NotGoverned, tenant.callFunction("static_field_call", "host_fn"));
+            # a static method and a constructor that the tenant calls with the host's object
+            assertRegex(NotGoverned, tenant.callFunction("static_method_call", probe, "host_fn"));
+            assertRegex(NotGoverned, tenant.callFunction("constructor_call", probe, "host_fn"));
+        }
         # the host's own calls
         assertEq("ok: host", HostObjectProbe::staticCallVia(probe, "host_fn"));
         assertEq("ok: host", (new HostObjectProbe(probe, "host_fn")).created);
@@ -649,6 +725,11 @@ nothing sub hold_context(Queue ready, Queue done) {
     generatedTest() {
         # the classes that the host generated are defined by the parent of the tenant's class loader: their
         # constructors, static methods and functions are not called for the tenant
+        if (sandboxClassesRefused()) {
+            # qore#7832: the tenant's sandbox refuses its class loader
+            assertRefusedCall("get_class_loader", "parent_loader");
+            testSkip(RefusedSkip);
+        }
         auto parent = tenant.callFunction("parent_loader");
         auto host_loader = get_class_loader();
         assertEq(host_loader.getProgramPtr(), parent.getProgramPtr());
@@ -660,10 +741,20 @@ nothing sub hold_context(Queue ready, Queue done) {
     gadgetTest() {
         # every gadget is refused; compared as a whole, so that a failure shows each result
         list<string> gadgets = ("method-handle", "method-handle-proxy", "proxy");
-        hash<auto> rv = map {$1: tenant.callFunction("gadget_call", probe, $1, "host_fn")}, gadgets;
-        hash<auto> expected = map {$1: True}, gadgets;
-        hash<auto> actual = map {$1.key: regex($1.value, NotGoverned)}, rv.pairIterator();
-        assertEq(expected, actual, sprintf("%y", rv));
+        if (sandboxClassesRefused()) {
+            # qore#7832: the tenant's sandbox refuses the Java calls of the gadgets before Java runs
+            hash<string, string> api = {
+                "method-handle": "HostObjectProbe::methodHandleCall\\(",
+                "method-handle-proxy": "HostObjectProbe::methodHandleProxyCall\\(",
+                "proxy": "HostObjectProbe::proxyCall\\(",
+            };
+            map assertRefusedCall(api{$1}, "gadget_call", (probe, $1, "host_fn")), gadgets;
+        } else {
+            hash<auto> rv = map {$1: tenant.callFunction("gadget_call", probe, $1, "host_fn")}, gadgets;
+            hash<auto> expected = map {$1: True}, gadgets;
+            hash<auto> actual = map {$1.key: regex($1.value, NotGoverned)}, rv.pairIterator();
+            assertEq(expected, actual, sprintf("%y", rv));
+        }
         # the host's own use
         assertEq("ok: host", probe.methodHandleCall("host_fn"));
         assertEq("ok: host", probe.methodHandleProxyCall("host_fn"));
@@ -672,7 +763,8 @@ nothing sub hold_context(Queue ready, Queue done) {
         QoreInvocationHandler handler(auto sub (object method, *list<auto> args) { return host_fn(); });
         object supplier = implement_interface(get_class_loader(), handler,
             Class::forName("java.util.function.Supplier"));
-        assertRegex(NotGoverned, tenant.callFunction("proxy_loader_load", supplier, "qore.HostProxySecret"));
+        assertRegex(refusedOrNotGoverned("getClass"), tenant.callFunction("proxy_loader_load", supplier,
+            "qore.HostProxySecret"));
     }
 
     threadTest() {
@@ -683,10 +775,16 @@ nothing sub hold_context(Queue ready, Queue done) {
         HostObjectProbe::prestart(pool);
         # every mode is refused; compared as a whole, so that a failure shows each result
         list<string> modes = ("thread", "executor", "completable", "timer", "forkjoin", "pool");
-        hash<auto> rv = map {$1: tenant.callFunction("thread_call", probe, $1, "host_fn", pool)}, modes;
-        hash<auto> expected = map {$1: True}, modes;
-        hash<auto> actual = map {$1.key: regex($1.value, NotGoverned)}, rv.pairIterator();
-        assertEq(expected, actual, sprintf("%y", rv));
+        if (sandboxClassesRefused()) {
+            # qore#7832: the tenant's sandbox refuses the Java call before any Java thread is involved
+            map assertRefusedCall("HostObjectProbe::threadCall\\(", "thread_call", (probe, $1, "host_fn", pool)),
+                modes;
+        } else {
+            hash<auto> rv = map {$1: tenant.callFunction("thread_call", probe, $1, "host_fn", pool)}, modes;
+            hash<auto> expected = map {$1: True}, modes;
+            hash<auto> actual = map {$1.key: regex($1.value, NotGoverned)}, rv.pairIterator();
+            assertEq(expected, actual, sprintf("%y", rv));
+        }
         # a Qore closure that the host hands to a Java thread is a callback, which runs in its own Program
         assertEq("ok: host", HostObjectProbe::threadCallClosure(string sub () { return host_fn(); }));
     }
@@ -696,6 +794,24 @@ nothing sub hold_context(Queue ready, Queue done) {
         Program tenant_b = getTenant();
         tenant.callFunction("set_tenant_name", "A");
         tenant_b.callFunction("set_tenant_name", "B");
+        if (sandboxClassesRefused()) {
+            # qore#7832: the tenants' sandboxes refuse their Java calls before Java runs
+            assertRefusedCall("get_class_loader", "tenant_loader");
+            assertRefusedCall("get_class_loader", "tenant_loader", NOTHING, tenant_b);
+            assertRefusedCall("HostObjectProbe::callbackWithContext\\(", "callback_ctx", ("thread", host_loader));
+            assertRefusedCall("HostObjectProbe::callbackWithContext\\(", "callback_ctx", ("virtual", host_loader));
+            assertRefusedCall("HostObjectProbe::threadCallIn\\(", "thread_call_in", ("virtual", host_loader,
+                "host_fn"));
+            assertRefusedCall("HostObjectProbe::threadCallIn\\(", "thread_call_in", ("noinherit", host_loader,
+                "host_fn"));
+            ExecutorService pool = Executors::newSingleThreadExecutor();
+            on_exit pool.shutdown();
+            assertRefusedCall("HostObjectProbe::submitCallIn\\(", "submit_call_in", (pool, host_loader,
+                "tenant_name"), tenant_b);
+            assertRefusedCall("get_class_loader", "make_tenant_object", TenantProbeSource);
+            assertRefusedCall("HostObjectProbe::", "echo_code", probe);
+            testSkip(RefusedSkip);
+        }
         object a_loader = tenant.callFunction("tenant_loader");
         object b_loader = tenant_b.callFunction("tenant_loader");
         hash<auto> rv;
@@ -793,6 +909,16 @@ nothing sub hold_context(Queue ready, Queue done) {
                     p.parse(BaseSource, "base");
                 }
                 string label = sprintf("%s %s", c.name, pending ? "pending" : "committed");
+                if (c.restricting && sandboxClassesRefused()) {
+                    # qore#7832: the trusted command still defines the class, but the Program's own code cannot
+                    # reach its class loader, as its sandbox refuses Java code
+                    p.issueModuleCmd("jni", "define-class JavaChild " + b.toBase64());
+                    if (pending) {
+                        p.parseCommit();
+                    }
+                    assertRefusedCall("get_class_loader", "base_loader", NOTHING, p);
+                    continue;
+                }
                 try {
                     p.issueModuleCmd("jni", "define-class JavaChild " + b.toBase64());
                     if (pending) {
@@ -829,6 +955,15 @@ nothing sub hold_context(Queue ready, Queue done) {
             SandboxManager sm();
             sm.setUncontrolledApiPolicy(True);
             p.setSandboxManager(sm);
+            if (sandboxClassesRefused()) {
+                # qore#7832: the module command of the tenant, whose sandbox restricts the filesystem and the network,
+                # is refused as a command of code that may not use uncontrolled APIs, so no Java code of it runs
+                assertThrows("JNI-SANDBOX-ERROR", "cannot use the \"define-class\" module command.*parse options that "
+                    + "forbid it \\(0x200000000000, 0x0\\)", \p.parse(), ("%modern\n%requires jni\n" + c.src,
+                    "tenant-" + c.name), c.name + ": refused at parse time");
+                assertEq(0, host_count_calls, c.name + ": no host call at parse time");
+                continue;
+            }
             p.parse("%modern\n%requires jni\n" + c.src, "tenant-" + c.name);
             assertEq(0, host_count_calls, c.name + ": no host call at parse time");
             # the static initializer has run by now; every attempt to call the host was refused
@@ -842,6 +977,12 @@ nothing sub hold_context(Queue ready, Queue done) {
 
     tenantCodeTest() {
         auto host_loader = get_class_loader();
+        if (sandboxClassesRefused()) {
+            # qore#7832: the tenant cannot compile Java code, as its sandbox refuses Java code
+            assertRefusedCall("get_class_loader", "make_tenant_object", TenantProbeSource);
+            assertRefusedCall("get_class_loader", "compile_class", ("TenantClinit", TenantClinitSource));
+            testSkip(RefusedSkip);
+        }
         hash<auto> rv;
         # a wrapper of the host for a Java object of the tenant, made by a Java object of the host
         object tenant_obj = tenant.callFunction("make_tenant_object", TenantProbeSource);
@@ -891,13 +1032,19 @@ nothing sub hold_context(Queue ready, Queue done) {
             rv{how} = reflectCallIn(probe.echo(obj), host_loader);
         }
         hash<auto> expected = map {$1: True}, keys rv;
-        hash<auto> actual = map {$1.key: regex($1.value, NotGoverned)}, rv.pairIterator();
+        # qore#7832: each attempt is refused by the tenant's sandbox while the object is made
+        hash<auto> actual = map {$1.key: regex($1.value, refusedOrNotGoverned())}, rv.pairIterator();
         assertEq(expected, actual, sprintf("%y", rv));
     }
 
     deletedTenantTest() {
         # a Java object of a tenant that the host keeps after the tenant has been deleted
         Program t = getTenant();
+        if (sandboxClassesRefused()) {
+            # qore#7832: the tenant cannot compile Java code, as its sandbox refuses Java code
+            assertRefusedCall("get_class_loader", "make_tenant_object", TenantProbeSource, t);
+            testSkip(RefusedSkip);
+        }
         object obj = probe.echo(t.callFunction("make_tenant_object", TenantProbeSource));
         delete t;
         auto host_loader = get_class_loader();
@@ -948,7 +1095,7 @@ nothing sub hold_context(Queue ready, Queue done) {
         # the tenant cannot clear the pointer of the host's class loader, which would break the host's calls
         auto host_loader = get_class_loader();
         string rv = tenant.callFunction("clear_loader", host_loader);
-        assertRegex(NotGoverned, rv, rv);
+        assertRegex(refusedOrNotGoverned("clearProgramPtr"), rv, rv);
         assertEq("ok: host", HostObjectProbe::callIn(host_loader, "host_fn"));
     }
 
@@ -971,6 +1118,11 @@ nothing sub hold_context(Queue ready, Queue done) {
         on_exit done.push(True);
         int ptr = ready.get();
         # the tenant finds the class loader in the JVM's state and calls into the Program on the ForkJoin pool
+        if (sandboxClassesRefused()) {
+            # qore#7832: the tenant's sandbox refuses the Java call before Java runs
+            assertRefusedCall("HostObjectProbe::contextLoaderCall\\(", "context_loader_call", (ptr, "x_fn"));
+            return;
+        }
         string rv = tenant.callFunction("context_loader_call", ptr, "x_fn");
         assertRegex(NotGoverned, rv, rv);
     }
@@ -978,6 +1130,23 @@ nothing sub hold_context(Queue ready, Queue done) {
     callbackTest() {
         # a closure of the host runs in the host's Program, also when it uses the host's Java objects
         code hc = string sub () { return probe.callQore("host_fn"); };
+        if (sandboxClassesRefused()) {
+            # qore#7832: the tenant's sandbox governs the host's callbacks that the tenant calls, as for a sandbox that
+            # refuses uncontrolled APIs, so their Java calls are refused as well
+            assertRefusedCall("HostObjectProbe::callQore\\(", "call_code", hc);
+            HostCallback hcb();
+            HostObjectProbe holder();
+            holder.field = hcb;
+            assertRefusedCall("get_class_loader", "java_call_method", (holder, "secret"));
+            QoreInvocationHandler handler(auto sub (object method, *list<auto> args) { return host_fn(); });
+            object supplier = implement_interface(handler, Class::forName("java.util.function.Supplier"));
+            assertRefusedCall("HostObjectProbe::supply\\(", "supplier_get", supplier);
+            # the host's own calls
+            assertEq("ok: host", hc());
+            auto jc = HostObjectProbe::caller();
+            assertEq("ok: host", jc("host_fn"));
+            testSkip(RefusedSkip);
+        }
         assertEq("ok: host", tenant.callFunction("call_code", hc));
         # a Qore object of the host, whose method Java calls
         # the host keeps the object, which Java references weakly
@@ -999,6 +1168,23 @@ nothing sub hold_context(Queue ready, Queue done) {
         # the host calls Java, which calls back into the host, which calls the tenant: the tenant's calls into Java
         # are governed by the tenant, and the host's calls after it by the host again
         string rv = probe.callQore("host_reenter");
+        if (sandboxClassesRefused()) {
+            # qore#7832: the tenant's call into Java is refused by its sandbox, and the refusal is propagated to the
+            # host's Java code that called back into the host
+            assertRegex("^org\\.qore\\.jni\\.QoreExceptionWrapper: INVALID-FUNCTION-ACCESS: "
+                + refusedDesc("HostObjectProbe::callQore\\(") + "$", rv, rv);
+            # closures of the tenant that the host calls directly are governed by the tenant's sandbox, which refuses
+            # their Java calls
+            code tc = tenant.callFunction("tenant_closures", "static");
+            assertThrows("INVALID-FUNCTION-ACCESS", refusedDesc("GovernedProgramProbe::callIn\\("), tc,
+                (get_class_loader(), "host_fn"), "a static Java method (qore#7832)");
+            tc = tenant.callFunction("tenant_closures", "static-own");
+            assertThrows("INVALID-FUNCTION-ACCESS", refusedDesc("get_class_loader"), tc, "tenant_fn",
+                "the tenant's own class loader (qore#7832)");
+            # the host is not refused after the tenant's calls
+            assertEq("ok: host", probe.callQore("host_fn"));
+            return;
+        }
         assertRegex("^ok: ok: tenant: .*" + NotGoverned + ".*\\|ok: host\\|ok: host$", rv, rv);
         # a tenant callback that the host calls
         # closures of the tenant that the host calls directly: the Program context of the call is the host's

@@ -456,6 +456,13 @@ sub callers_case(string root) {
         result(l + ": an open sandbox is refused a special file that a Class-Path names", "JNI-CLASSPATH-ERROR",
             hs.err);
         result(l + ": the error names the special file", True, hs.desc =~ /is not a regular file/);
+        if (sandbox_classes_refused()) {
+            # qore#7832: a sandbox that restricts the network refuses Java code although it allows uncontrolled APIs,
+            # so its Program's first import is refused, and the location of no entry is checked
+            result(l + ": a network-only sandbox is refused Java code (qore#7832)", "OK",
+                refusal(get_open_sandbox(True)));
+            continue;
+        }
         # a sandbox that restricts only the network: the location of each entry is checked
         p = new_program(get_open_sandbox(True));
         result(l + ": a network-only sandbox adds a jar with a local Class-Path", "ok",
@@ -617,12 +624,42 @@ sub unverified_jdkgate_case(string root, int feature) {
     check_refused("jdkgate: the running version again", p, h, root, ("a/cp-ref.jar",), ref_classes, feature);
 }
 
+#! Returns True if a sandbox that trusts its code with uncontrolled APIs but restricts the filesystem or the network
+#! refuses Java code (qore#7832)
+bool sub sandbox_classes_refused() {
+    return get_module_hash().jni.info.sandbox_uncontrolled_api_classes ?? False;
+}
+
+#! returns "OK" if parsing the loader source in a new Program with the sandbox is refused at its first import because
+#! the sandbox refuses Java code (qore#7832), or what happened instead
+string sub refusal(SandboxManager sm) {
+    Program p(PO_NEW_STYLE);
+    p.setSandboxManager(sm);
+    try {
+        p.parse(LoaderSource, "loader");
+    } catch (hash<ExceptionInfo> ex) {
+        string rv = ex.err + ": " + ex.desc;
+        return rv =~ /^JNI-SANDBOX-ERROR: cannot use the "import" module command.*\(0x200000000000, / ? "OK" : rv;
+    }
+    return "parsed";
+}
+
 sub main() {
     string root = ARGV[1];
     # the same value that the product's check reads; it decides which behavior is expected (qore#7204)
     int feature = running_jdk_feature();
     bool verified = inlist(feature, VerifiedJdkFeatures);
     printf("jdk-gate: %s %d\n", verified ? "verified" : "refused", feature);
+    # qore#7832: the sandbox of every case but "unsandboxed" and "callers" restricts the filesystem, so it refuses Java
+    # code although it allows uncontrolled APIs: the Program's first import is refused, and no classpath is checked
+    # against the policy, on any JDK
+    if (ARGV[0] != "unsandboxed" && ARGV[0] != "callers" && sandbox_classes_refused()) {
+        result(ARGV[0] + ": refused (qore#7832)", "OK", refusal(get_sandbox(root, ("a",))));
+        printf("result: %s: skipped (qore#7832: a sandbox that restricts the filesystem refuses Java code)\n",
+            ARGV[0]);
+        printf("end\n");
+        return;
+    }
     # the check applies only to a sandboxed classpath, so the unsandboxed case is the same on every JDK
     # so are the callers that the manifest checks do not refuse on an unverified version (qore#7364)
     if (!verified && ARGV[0] != "unsandboxed" && ARGV[0] != "callers") {

@@ -226,9 +226,16 @@ sub env_case() {
     result("QORE_JNI_CLASSPATH: the class is loaded", TestClass, load_result_here());
 }
 
+#! Returns True if a sandbox that trusts its code with uncontrolled APIs but restricts the filesystem or the network
+#! refuses Java code (qore#7832)
+bool sub sandbox_classes_refused() {
+    return get_module_hash().jni.info.sandbox_uncontrolled_api_classes ?? False;
+}
+
 #! returns the error code of parsing SandboxSource in a new Program with a sandbox that allows reading only the given
-#! directory, or "parsed: " and the result of calling the class of the test jar
-string sub sandbox_result(string allowed) {
+#! directory, or "parsed: " and the result of calling the class of the test jar; with \a full, the error is returned
+#! as "<err>: <desc>"
+string sub sandbox_result(string allowed, *bool full) {
     SandboxManager sm();
     call_object_method(sm, "setUncontrolledApiPolicy", True);
     sm.setFilesystemDefaultPolicy(False);
@@ -238,7 +245,7 @@ string sub sandbox_result(string allowed) {
     try {
         p.parse(SandboxSource, "sandboxed");
     } catch (hash<ExceptionInfo> ex) {
-        return ex.err;
+        return full ? ex.err + ": " + ex.desc : ex.err;
     }
     return "parsed: " + p.callFunction("map_of").key;
 }
@@ -251,6 +258,18 @@ sub sandbox_case() {
     }
     string user_dir = get_user_dir();
     string other = user_dir + "/other";
+    if (sandbox_classes_refused()) {
+        # qore#7832: the sandbox restricts the filesystem, so it refuses Java code although it allows uncontrolled
+        # APIs: the add-classpath command is refused before the entry is checked against the sandbox
+        string rv = sandbox_result(user_dir, True);
+        printf("result: sandbox: refused (qore#7832): %s\n",
+            rv =~ /^JNI-SANDBOX-ERROR: cannot use the "add-classpath" module command.*\(0x200000000000, /
+                ? "OK"
+                : sprintf("found %y", rv));
+        printf("result: sandbox: skipped (qore#7832: a sandbox that restricts the filesystem refuses Java code, so the "
+            "entry is not checked against it)\n");
+        return;
+    }
     result("sandbox: allowed user.dir", "parsed: 1", sandbox_result(user_dir));
     result("sandbox: user.dir not allowed", "FILESYSTEM-ACCESS-DENIED", sandbox_result(other));
     # the JVM's user.dir is checked, not the current directory of the process

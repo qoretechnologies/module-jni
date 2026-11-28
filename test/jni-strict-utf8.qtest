@@ -476,6 +476,17 @@ public class %s {
     classpathSandboxCheck() {
         string out = runInTempDir("QORE_CHARSET=ISO-8859-1 LC_ALL=en_US.iso88591", "classpath");
         list<string> lines = select out.split("\n"), $1 =~ /^result: /;
+        if (sandboxClassesRefused()) {
+            # qore#7832: the child's sandbox allows uncontrolled APIs but restricts the filesystem, so it refuses Java
+            # code: the add-classpath command is refused before any entry is checked against the sandbox
+            assertEq(("result: classpath entry in an allowed directory: refused (qore#7832): OK",), lines, out);
+            out = runInTempDir("QORE_CHARSET=UTF-8 LC_ALL=en_US.iso88591", "classpath-unmappable");
+            lines = select out.split("\n"), $1 =~ /^result: /;
+            assertEq(("result: classpath entry that the JVM cannot represent: refused (qore#7832): OK",), lines,
+                out);
+            testSkip("qore#7832: a sandbox that restricts the filesystem refuses Java code, so classpath entries are "
+                "not checked against it");
+        }
         assertEq((
             "result: classpath entry in an allowed directory: OK",
             "result: classpath entry outside the allowed directory: OK",
@@ -489,6 +500,12 @@ public class %s {
         out = runInTempDir("QORE_CHARSET=UTF-8 LC_ALL=en_US.iso88591", "classpath-unmappable");
         lines = select out.split("\n"), $1 =~ /^result: /;
         assertEq(("result: classpath entry that the JVM cannot represent: OK",), lines, out);
+    }
+
+    #! Returns True if a sandbox that trusts its code with uncontrolled APIs but restricts the filesystem or the network
+    #! refuses Java code (qore#7832)
+    private static bool sandboxClassesRefused() {
+        return get_module_hash().jni.info.sandbox_uncontrolled_api_classes ?? False;
     }
 
     #! runs test/jni-strict-utf8-child.q in a new empty directory, which the JVM's user.dir is, and returns its output
