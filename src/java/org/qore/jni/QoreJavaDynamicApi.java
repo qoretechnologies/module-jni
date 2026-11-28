@@ -38,6 +38,7 @@ import java.lang.invoke.MethodHandles;
 // for DriverManager.getConnection() as called from Qore Datasource* classes through Qore DBI drivers
 import java.util.ServiceLoader;
 import java.util.Properties;
+import java.sql.Driver;
 import java.sql.DriverManager;
 import java.sql.Connection;
 import java.sql.SQLException;
@@ -203,7 +204,71 @@ public class QoreJavaDynamicApi {
     }
 
     //! sets the Java caller context and runs DriverManager.getConnection()
-    public static Connection getConnection(String url, Properties props) throws Throwable {
+    /** private: called only through JNI, which ignores the access modifiers
+    */
+    private static Connection getConnection(String url, Properties props) throws Throwable {
         return QoreJavaApi.openJdbcConnection(() -> DriverManager.getConnection(url, props));
+    }
+
+    //! sets the Java caller context and connects with the driver that DriverManager selects for the URL
+    /** The driver must be of one of the given classes, each given as \c "<class>@<major>.<minor>" with the minimum
+        version of the driver, as reported by Driver.getMajorVersion() and Driver.getMinorVersion(): the connection of
+        code that is restricted to the allow-listed drivers is not made by another driver that accepts the URL, nor by
+        an older version of the driver that ignores the properties of the connection (qore#7867).  The driver is
+        selected as DriverManager.getConnection() selects it, for this caller (the class loader of the Program), and
+        connects itself, so no other driver can accept the URL after the check.
+
+        private: called only through JNI, which ignores the access modifiers
+
+        @throws SecurityException if the driver is not of one of the given classes, or is older than its minimum
+        version
+    */
+    private static Connection getRestrictedConnection(String url, Properties props, String[] driverClasses)
+            throws Throwable {
+        return QoreJavaApi.openJdbcConnection(() -> {
+            Driver driver = DriverManager.getDriver(url);
+            String name = driver.getClass().getName();
+            StringBuilder names = new StringBuilder();
+            boolean expected = false;
+            for (String driverClass : driverClasses) {
+                int at = driverClass.indexOf('@');
+                String cls = driverClass.substring(0, at);
+                int dot = driverClass.indexOf('.', at);
+                int major = Integer.parseInt(driverClass.substring(at + 1, dot));
+                int minor = Integer.parseInt(driverClass.substring(dot + 1));
+                if (names.length() > 0) {
+                    names.append(", ");
+                }
+                names.append(cls);
+                if (major > 0 || minor > 0) {
+                    names.append(" ").append(major).append(".").append(minor).append(" or later");
+                }
+                if (!cls.equals(name)) {
+                    continue;
+                }
+                int dmajor = driver.getMajorVersion();
+                if (dmajor < major || (dmajor == major && driver.getMinorVersion() < minor)) {
+                    throw new SecurityException("the JDBC driver of class '" + name + "' that accepts the URL has "
+                        + "version " + dmajor + "." + driver.getMinorVersion() + ", which is older than version "
+                        + major + "." + minor + ", the first that has the properties that turn off the features "
+                        + "that reach local files or the credentials of the host for code restricted from the "
+                        + "filesystem, the network, external processes, uncontrolled APIs or embedded logic");
+                }
+                expected = true;
+                break;
+            }
+            if (!expected) {
+                throw new SecurityException("the JDBC driver of class '" + name + "' that accepts the URL is not "
+                    + "one of the allow-listed drivers for code restricted from the filesystem, the network, "
+                    + "external processes, uncontrolled APIs or embedded logic: " + names);
+            }
+            Connection connection = driver.connect(url, props);
+            if (connection == null) {
+                // a java.base exception: this class is verified when it is defined, before its class loader can see
+                // the java.sql module, and the verifier loads the class of an exception that it creates
+                throw new IllegalArgumentException("the JDBC driver of class '" + name + "' did not accept the URL");
+            }
+            return connection;
+        });
     }
 }

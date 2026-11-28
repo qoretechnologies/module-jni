@@ -24,6 +24,7 @@
 #include "QoreJdbcConnection.h"
 #include "QoreJdbcStatement.h"
 #include "QoreJdbcDriver.h"
+#include "QoreJdbcUrlPolicy.h"
 #include "LocalReference.h"
 #include "Globals.h"
 #include "QoreToJava.h"
@@ -696,10 +697,19 @@ static bool jdbc_chooser_refused(bool trusted, const QoreSandboxManager* mgr) {
 #endif
 }
 
-int QoreJdbcConnection::checkChoosers(ExceptionSink* xsink) {
+int QoreJdbcConnection::checkChoosers(bool& restricted, ExceptionSink* xsink) {
     // the url option and the database name choose the destination of the connection and carry the driver properties
     // that make a JDBC driver instantiate classes, so they are judged by the code that set them, as the classpath
-    // option is: trusted code that opens a datasource that sandboxed code configured is otherwise refused nothing
+    // option is: trusted code that opens a datasource that sandboxed code configured is otherwise refused nothing.
+    //
+    // The parse options of the same code limit the connection to the allow-listed drivers and URLs (qore#7867): code
+    // restricted from the filesystem, the network, external processes, uncontrolled APIs or embedded logic cannot
+    // choose a driver that can reach them for it (an embedded database's files, code that its SQL defines).  The code
+    // that opens the connection is not judged by them: a connection that trusted code chose is a capability that it
+    // can lend to restricted code, which can also open it (a DatasourcePool grows on the thread that needs a
+    // connection)
+    restricted = false;
+    const QoreParseOptions restricting_options(JDBC_RESTRICTING_OPTIONS);
 #ifdef _QORE_HAS_DATASOURCE_CONNECT_CHOOSERS
     // the code that chose the connection (qore#6142): the creators of the datasource, the setters of the connection
     // values in use (also the database name), and the setter of the url option
@@ -710,6 +720,10 @@ int QoreJdbcConnection::checkChoosers(ExceptionSink* xsink) {
     if (!db.empty() && ds->addOptionChooser(JDBC_OPT_URL, choosers, xsink) < 0) {
         return -1;
     }
+    // a missing record is never a permission: a datasource always has a creator
+    if (!choosers.size()) {
+        restricted = true;
+    }
     for (size_t i = 0, e = choosers.size(); i < e; ++i) {
         ReferenceHolder<QoreSandboxManager> mgr(choosers.getPolicyManagerRef(i), xsink);
         if (jdbc_chooser_refused(choosers.allowsUncontrolledApis(i), *mgr)) {
@@ -717,6 +731,11 @@ int QoreJdbcConnection::checkChoosers(ExceptionSink* xsink) {
                 "chose that a sandbox does not trust with uncontrolled APIs (the code that created the datasource, or "
                 "set its database name, connection values or '%s' option)", JDBC_OPT_URL);
             return -1;
+        }
+        if (!restricted) {
+            QoreModuleCommandRestrictions r;
+            // a missing record is not a permission
+            restricted = !choosers.getRestrictions(i, r) || r.hasAny(restricting_options);
         }
     }
 #elif defined(_QORE_HAS_DATASOURCE_OPTION_RESTRICTIONS) && defined(QORE_JNI_HAS_COMMAND_CONTEXT)
@@ -747,8 +766,16 @@ int QoreJdbcConnection::checkChoosers(ExceptionSink* xsink) {
                     JDBC_OPT_URL);
                 return -1;
             }
+            restricted = setter.hasAny(restricting_options);
         }
     }
+    // this Qore library records no other code that chose the connection: it is judged by the code that opens it
+    if (!restricted) {
+        restricted = QoreModuleCommandRestrictions::getCallerRestrictions().hasAny(restricting_options);
+    }
+#else
+    // this Qore library records no code that chose the connection: it is judged by the code that opens it
+    restricted = QoreReflectionCaller().getParseOptions().hasAny(restricting_options);
 #endif
     return 0;
 }
@@ -756,7 +783,8 @@ int QoreJdbcConnection::checkChoosers(ExceptionSink* xsink) {
 int QoreJdbcConnection::connect(Env& env, ExceptionSink* xsink) {
     assert(!connection);
     // also for a reconnect, which can be made for other code than the code that opened the connection
-    if (checkSandbox(xsink) || checkChoosers(xsink)) {
+    bool restricted;
+    if (checkSandbox(xsink) || checkChoosers(restricted, xsink)) {
         return -1;
     }
 
@@ -768,7 +796,29 @@ int QoreJdbcConnection::connect(Env& env, ExceptionSink* xsink) {
         return -1;
     }
     // the url option is in UTF-8, and the database name in the datasource's encoding (see ds_string())
-    std::string url = !str.rfind("jdbc:", 0) ? str : "jdbc:" + str;
+    std::string url;
+    // the drivers that may serve a connection that restricted code chose and its properties (qore#7867); no driver
+    // classes if not restricted
+    QoreJdbcRestrictedUrl allowed;
+    const std::vector<std::string>& driver_classes = allowed.driver_classes;
+    // no C++ exception may reach libqore, which calls the driver (ex: std::bad_alloc)
+    try {
+        url = !str.rfind("jdbc:", 0) ? str : "jdbc:" + str;
+        if (restricted) {
+            std::string error;
+            if (!qore_jdbc_check_restricted_url(url, allowed, error)) {
+                xsink->raiseException("JNI-SANDBOX-ERROR", "the jdbc driver cannot connect for code that chose the "
+                    "connection and is restricted from the filesystem, the network, external processes, uncontrolled "
+                    "APIs or embedded logic, except with an allow-listed client/server driver and URL: %s",
+                    error.c_str());
+                return -1;
+            }
+            assert(!driver_classes.empty());
+        }
+    } catch (std::exception& e) {
+        xsink->raiseException("JDBC-CONNECTION-ERROR", "error building the JDBC URL: %s", e.what());
+        return -1;
+    }
 
     // the URL is masked in the text of the Java exceptions of the connection also after the url option changes
     // (qore#7344)
@@ -791,6 +841,11 @@ int QoreJdbcConnection::connect(Env& env, ExceptionSink* xsink) {
                 set_prop(env, props, "password", ds, str);
             }
         }
+        // the properties that turn off the features of an allowed driver that reach local files or the credentials
+        // of the host (qore#7867)
+        for (const auto& i : allowed.properties) {
+            set_prop(env, props, i.first.c_str(), ds, i.second);
+        }
 
         // use the dynamic API to ensure that the DriverManager.getConnection() call is made in the right context
         LocalReference<jstring> jurl = db.empty()
@@ -800,8 +855,23 @@ int QoreJdbcConnection::connect(Env& env, ExceptionSink* xsink) {
         jargs[0].l = jurl;
         jargs[1].l = props;
 
-        connection = env.callStaticObjectMethod(jpc->getDynamicApi(), jpc->getGetConnectionMethodId(), &jargs[0])
-            .makeGlobal();
+        if (driver_classes.empty()) {
+            connection = env.callStaticObjectMethod(jpc->getDynamicApi(), jpc->getGetConnectionMethodId(),
+                &jargs[0]).makeGlobal();
+        } else {
+            // the connection is made with the driver that DriverManager selects for the URL, which must be one of
+            // the expected classes, so that no other driver on the classpath that accepts the URL serves it
+            LocalReference<jobjectArray> jclasses = env.newObjectArray(static_cast<jsize>(driver_classes.size()),
+                Globals::classString);
+            for (size_t i = 0, e = driver_classes.size(); i < e; ++i) {
+                LocalReference<jstring> name = env.newString(driver_classes[i].c_str());
+                env.setObjectArrayElement(jclasses, static_cast<jsize>(i), name);
+            }
+            jargs.resize(3);
+            jargs[2].l = jclasses;
+            connection = env.callStaticObjectMethod(jpc->getDynamicApi(),
+                jpc->getGetRestrictedConnectionMethodId(), &jargs[0]).makeGlobal();
+        }
 
         printd(5, "QoreJdbcConnection::connect() got connection: %p\n", (jobject)connection);
 

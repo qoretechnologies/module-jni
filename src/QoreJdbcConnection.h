@@ -480,8 +480,12 @@ private:
     /** Judges the code that set the values that choose the destination (the \c url option and, with a %Qore library
         that records them, the database name and the other connection values and the creators of the datasource), not
         the code that opens the connection; called by connect() for every connection
+
+        @param restricted set to true if code that chose the connection has a parse option of
+        JDBC_RESTRICTING_OPTIONS, which limits the connection to the allow-listed drivers and URLs (qore#7867)
+        @param xsink exception sink
     */
-    DLLLOCAL int checkChoosers(ExceptionSink* xsink);
+    DLLLOCAL int checkChoosers(bool& restricted, ExceptionSink* xsink);
 
     //! Parse options passed through the Datasource
     /** @param xsink exception sink
