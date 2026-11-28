@@ -33,32 +33,27 @@ if (!inlist(module, Modules) || !Kinds.hasKey(kind)) {
 }
 
 Program p(PO_NEW_STYLE | Kinds{kind});
-if (ARGV[2] == "caller-only") {
-    # this (trusted) script loads the module first; the Program of the kind only calls its code
-    try {
-        load_module(module);
-        p.loadModule(module);
-        p.parse(sprintf("string sub t() { return %s::run(); }", module), "jni-uncontrolled-api-classes-child");
-        printf("%s\n", p.callFunction("t"));
-    } catch (hash<ExceptionInfo> ex) {
-        printf("%s: %s\n", ex.err, ex.desc);
-    }
-    exit(0);
-}
-if (ARGV[2] == "first-load") {
-    try {
-        p.loadModule(module);
-        load_module(module);
-        printf("%s\n", call_function(module + "::run"));
-    } catch (hash<ExceptionInfo> ex) {
-        printf("%s: %s\n", ex.err, ex.desc);
-    }
-    exit(0);
-}
 try {
-    p.loadModule(module);
-    p.parse(sprintf("string sub t() { return %s::run(); }", module), "jni-uncontrolled-api-classes-child");
-    printf("%s\n", p.callFunction("t"));
+    switch (ARGV[2] ?? "") {
+        case "caller-only":
+            # this (trusted) script loads the module first; the Program of the kind only calls its code
+            load_module(module);
+            p.loadModule(module);
+            p.parse(sprintf("string sub t() { return %s::run(); }", module), "jni-uncontrolled-api-classes-child");
+            printf("%s\n", p.callFunction("t"));
+            break;
+        case "first-load":
+            # the Program of the kind only loads the module first; this (trusted) script calls its code
+            p.loadModule(module);
+            load_module(module);
+            printf("%s\n", call_function(module + "::run"));
+            break;
+        default:
+            p.loadModule(module);
+            p.parse(sprintf("string sub t() { return %s::run(); }", module), "jni-uncontrolled-api-classes-child");
+            printf("%s\n", p.callFunction("t"));
+            break;
+    }
 } catch (hash<ExceptionInfo> ex) {
     printf("%s: %s\n", ex.err, ex.desc);
 }

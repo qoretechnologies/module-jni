@@ -431,14 +431,18 @@ class JniUncontrolledApiClassesTest inherits QUnit::Test {
     jdbcClasspathTest() {
         # the classpath option of the jdbc driver loads jars, whose Java code the driver runs: it is refused to a
         # setter that restricts a class that Java code does not respect, as to one with PO_NO_UNCONTROLLED_APIS,
-        # whether the code that set it opens the connection or trusted code does (the recorded setter); JNI-ERROR is
-        # the error of the jdbc driver that is not found once the option was accepted
+        # whether the code that set it opens the connection or trusted code does (the recorded setter).  An accepted
+        # option is followed by the other checks of the connection: the error of the jdbc driver that is not found
+        # (JNI-ERROR), or, for a datasource that restricted code chose, the allow-list of the drivers that it may use
+        # (qore#7867), which is not the classpath option's refusal
         hash<string, int> kinds = {"none": 0, "no-uncontrolled": PO_NO_UNCONTROLLED_APIS} + ClassKinds + OtherKinds;
+        string classpath_refusal = "^JNI-SANDBOX-ERROR: the jdbc 'classpath' option adds to the Program's classpath";
         foreach hash<auto> kind in (kinds.pairIterator()) {
             Program p(PO_NEW_STYLE | kind.value);
             p.parse("%requires jni\n"
                 "string sub open() { Datasource ds(\"jdbc:u/p@jdbc:qore-none://x{classpath=/nonexistent-qore-test-dir}"
-                "\"); try { ds.open(); return \"ok\"; } catch (hash<ExceptionInfo> ex) { return ex.err; } }\n"
+                "\"); try { ds.open(); return \"ok\"; } catch (hash<ExceptionInfo> ex) { return ex.err + \": \" "
+                "+ ex.desc; } }\n"
                 "Datasource sub make() { Datasource ds(\"jdbc:u/p@jdbc:qore-none://x\"); "
                 "ds.setOption(\"classpath\", \"/nonexistent-qore-test-dir\"); return ds; }\n",
                 "jni-uncontrolled-api-jdbc-" + kind.key);
@@ -448,13 +452,22 @@ class JniUncontrolledApiClassesTest inherits QUnit::Test {
                 ds.open();
                 set_for = "ok";
             } catch (hash<ExceptionInfo> ex) {
-                set_for = ex.err;
+                set_for = ex.err + ": " + ex.desc;
             }
+            string opened = p.callFunction("open");
             bool refused = kind.key == "no-uncontrolled" || kind.key == "no-filesystem"
                 || (enforced() && ClassKinds{kind.key});
-            string expected = refused ? "JNI-SANDBOX-ERROR" : "JNI-ERROR";
-            assertEq(expected, p.callFunction("open"), kind.key + ": opened by the code that set it");
-            assertEq(expected, set_for, kind.key + ": set for trusted code to open");
+            if (refused) {
+                assertRegex(classpath_refusal, opened, kind.key + ": opened by the code that set it");
+                assertRegex(classpath_refusal, set_for, kind.key + ": set for trusted code to open");
+            } else {
+                assertFalse(opened =~ /the jdbc 'classpath' option/, kind.key + ": opened by the code that set it: "
+                    + opened);
+                assertRegex("^JNI-(SANDBOX-)?ERROR: ", opened, kind.key + ": opened by the code that set it");
+                assertFalse(set_for =~ /the jdbc 'classpath' option/, kind.key + ": set for trusted code to open: "
+                    + set_for);
+                assertRegex("^JNI-(SANDBOX-)?ERROR: ", set_for, kind.key + ": set for trusted code to open");
+            }
         }
     }
 }
