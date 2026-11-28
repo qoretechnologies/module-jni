@@ -315,9 +315,12 @@ string sub kotlin_compile(string src) {
         SandboxManager sm();
         sm.setUncontrolledApiPolicy(True);
         sm.setFilesystemDefaultPolicy(True);
-        # a sandbox that restricts nothing: a new sandbox restricts the network by default, which would refuse its
-        # Java code (qore#7832)
-        sm.setNetworkDefaultPolicy(True);
+        # a sandbox that restricts nothing: a new sandbox restricts the network by default, which, with the
+        # restriction classes of sandboxes, refuses its Java code (qore#7832); without them, the network policy is
+        # left as before
+        if (sandboxClassesRefused()) {
+            sm.setNetworkDefaultPolicy(True);
+        }
         Program p = newProgram(sm);
         addClasspath(p, "allowed");
         assertAllFound(p, ("pkg.Ok", "denied.Hidden", "linked.S"),

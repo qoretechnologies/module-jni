@@ -180,8 +180,11 @@ string sub own() {
         string rv = attempt(string sub () { return t.callFunction("own"); });
         if (sandboxClassesRefused()) {
             # qore#7832: the tenant's sandbox restricts the filesystem and the network, so it refuses its own Java
-            # call; no restricting sandbox can use Java, and the "after" cases run with no governed Java used
+            # call; no restricting sandbox can use Java, so the state that governed Java leaves is set with the module
+            # command that sets it (the Java threads of the process reach no Program by a Program pointer from now on),
+            # and the "after" cases run in it
             assertRegex(SandboxRefused, rv, rv);
+            Program::issueModuleCmd("jni", "set-java-thread-policy strict");
             return;
         }
         assertEq("ok: tenant", rv);

@@ -110,6 +110,12 @@ public class JvmPrimarySandboxTrust {
             h.tenant = tcall(t, "benign");
             h.trusted_after = JvmPrimarySandboxTrust::callCurrent();
             h.tenant_reach = tcall(t, "reach_host");
+            # with the restriction classes of sandboxes (qore#7832), the tenant cannot use Java, so the state that a
+            # sandboxed Program's Java leaves (Java code of an unknown class loader is judged as possibly that code's,
+            # qore#7023) is set with the module command that sets it
+            if (h.sandbox_classes) {
+                Program::issueModuleCmd("jni", "set-java-thread-policy strict");
+            }
             h.unknown_loader = JvmPrimarySandboxTrust::callUnknownLoader();
             h.parent_path = tcall(t, "add_parent", "/nonexistent/qore-7131");
             h.register_host = tcall(t, "register_loader", host_loader);
@@ -403,11 +409,11 @@ public class JvmPrimarySandboxTrust {
                 checkRefused7832(key, h.get(key));
             }
             check(after.startsWith("ok: "), "trusted call after the tenant was refused Java", after);
-            // no code that a sandbox governs has used Java, so Java code of an unknown class loader is not judged
-            // as possibly that code's (qore#7023): it reaches the host's Program
+            // the driver set the strict policy of the Java threads that governed Java would leave, so Java code of
+            // an unknown class loader is refused, as it is once sandboxed code has used Java (qore#7023)
             String unknown7832 = (String)h.get("unknown_loader");
-            check(unknown7832.startsWith("ok: "), "Java code of an unknown class loader before any sandboxed code "
-                + "used Java", unknown7832);
+            check(unknown7832.startsWith("refused: ") && unknown7832.contains("JNI-ERROR"),
+                "Java code of an unknown class loader reaching the host's Program", unknown7832);
             check(((String)h.get("trusted_foreign")).startsWith("ok: "), "trusted class loader",
                 h.get("trusted_foreign"));
             check("ok: registered".equals(h.get("trusted_register")), "trusted shared class registration",
