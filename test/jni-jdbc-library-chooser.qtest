@@ -1,0 +1,141 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# A jdbc datasource that a library module creates or configures from a value that restricted code gives is judged by
+# the restricted code (qore#7910): library module code has no parse options of its own, so the jdbc driver uses the
+# functional domains of the code that the library code acted for, which the Qore library records with the code that
+# chose the connection (QoreDatasourceConnectChoosers::getCallerDomainRestrictions()).  Code restricted from the
+# filesystem, the network, external processes, uncontrolled APIs or embedded logic is then limited to the allow-listed
+# drivers (qore#7867), also through DbDataProvider; a datasource that trusted code creates, also through a library
+# module, and lends to restricted code is not.
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../build"
+%requires jni
+%requires QUnit
+%requires DbDataProvider
+
+%exec-class JniJdbcLibraryChooserTest
+
+class JniJdbcLibraryChooserTest inherits QUnit::Test {
+    private:internal {
+        #! the error of a refused connection
+        const Refused = "JNI-SANDBOX-ERROR";
+
+        #! the code of the caller Programs
+        const Source = "%modern
+AbstractDatasource sub dbdp_get(string str) {
+    return DbDataProvider::getDatasource(str);
+}
+
+# gets and opens the datasource of a connection object and returns the error, or NOTHING
+*hash<ExceptionInfo> sub conn_open(object c) {
+    try {
+        Datasource ds = c.get(True);
+        ds.close();
+    } catch (hash<ExceptionInfo> ex) {
+        return ex;
+    }
+}
+
+# creates a connection object of its own
+object sub own_conn(string url) {
+    return new DatasourceConnection(\"own7910\", \"test\", url);
+}
+
+# opens a datasource that other code chose and returns the error, or NOTHING
+*hash<ExceptionInfo> sub use(Datasource ds) {
+    try {
+        ds.open();
+        ds.close();
+    } catch (hash<ExceptionInfo> ex) {
+        return ex;
+    }
+}
+";
+    }
+
+    constructor() : QUnit::Test("JNI jdbc datasources that library modules create", "1.0", \ARGV) {
+        addTestCase("a library module creates a datasource for restricted code", \libraryTest());
+        addTestCase("trusted code lends a datasource that a library module created", \lendTest());
+        set_return_value(main());
+    }
+
+    #! skips the test if the jni module or the Qore library does not record the domains of the choosers' callers
+    private:internal skipIfUnsupported() {
+        if (!get_module_hash().jni.info.jdbc_chooser_caller_domains) {
+            testSkip("the jni module was built with a Qore library that does not record the functional domains of "
+                "the code that library code acts for (QoreDatasourceConnectChoosers::getCallerDomainRestrictions())");
+        }
+    }
+
+    #! returns a caller Program with the given parse options
+    private:internal static Program caller(int opts) {
+        Program p(PO_NEW_STYLE | opts);
+        # found in the module path: a library module
+        p.loadModule("DbDataProvider");
+        p.parse(Source, "jni-jdbc-library-chooser");
+        return p;
+    }
+
+    #! opens the datasource and returns the exception, or NOTHING
+    private:internal static *hash<ExceptionInfo> open(AbstractDatasource ds) {
+        try {
+            Datasource d = cast<Datasource>(ds);
+            d.open();
+            d.close();
+        } catch (hash<ExceptionInfo> ex) {
+            return ex;
+        }
+    }
+
+    libraryTest() {
+        skipIfUnsupported();
+        # the restrictions of a Qorus mapper that is not sandboxed, and each of the jdbc restricting options
+        foreach int opts in ((PO_NO_FILESYSTEM | PO_NO_NETWORK | PO_NO_EXTERNAL_PROCESS, PO_NO_FILESYSTEM,
+                PO_NO_NETWORK, PO_NO_EXTERNAL_PROCESS, PO_NO_UNCONTROLLED_APIS, PO_NO_EMBEDDED_LOGIC)) {
+            Program p = caller(opts);
+            string label = sprintf("0x%x", opts);
+            # an embedded driver: refused, also when trusted code opens the datasource
+            *hash<ExceptionInfo> ex = open(p.callFunction("dbdp_get", "jdbc:u/p@h2:mem:x"));
+            assertEq(Refused, ex.err, label);
+            assertRegex("'h2' JDBC driver is not on the list", ex.desc ?? "", label);
+            # the url option of the connection string that the library module parses: the creator chose it
+            ex = open(p.callFunction("dbdp_get", "jdbc:u/p@ignored{url=h2:mem:x}"));
+            assertEq(Refused, ex.err, label + ": url option");
+            # an allowed driver: the connection is attempted (no driver serves it in the test)
+            ex = open(p.callFunction("dbdp_get", "jdbc:u/p@ignored{url=postgresql://127.0.0.1:1/x}"));
+            assertNeq(Refused, ex.err, label + ": allowed");
+            assertRegex("No suitable driver", ex.desc ?? "", label + ": allowed");
+        }
+        # code without a restricting option
+        Program p = caller(PO_NO_TERMINAL_IO);
+        *hash<ExceptionInfo> ex = open(p.callFunction("dbdp_get", "jdbc:u/p@h2:mem:x"));
+        assertNeq(Refused, ex.err, "unrestricted");
+        assertRegex("No suitable driver", ex.desc ?? "", "unrestricted");
+    }
+
+    lendTest() {
+        skipIfUnsupported();
+        Program p = caller(PO_NO_FILESYSTEM | PO_NO_NETWORK | PO_NO_EXTERNAL_PROCESS);
+        # trusted code creates the datasource through the library module and lends it to the restricted code, which
+        # opens it: using is not choosing
+        AbstractDatasource ds = DbDataProvider::getDatasource("jdbc:u/p@h2:mem:x");
+        *hash<ExceptionInfo> ex = p.callFunction("use", ds);
+        assertNeq(Refused, ex.err, "lent");
+        assertRegex("No suitable driver", ex.desc ?? "", "lent");
+
+        # a connection object that trusted code created and lends (as Qorus lends its connections): the datasource is
+        # created from the creator's target on behalf of the creator
+        DatasourceConnection conn("lent7910", "test", "db://jdbc:u/p@h2:mem:x");
+        ex = p.callFunction("conn_open", conn);
+        assertNeq(Refused, ex.err, "lent connection");
+        assertRegex("No suitable driver", ex.desc ?? "", "lent connection");
+
+        # a connection object that the restricted code created itself is its own choice
+        ex = p.callFunction("conn_open", p.callFunction("own_conn", "db://jdbc:u/p@h2:mem:x"));
+        assertEq(Refused, ex.err, "own connection");
+    }
+}

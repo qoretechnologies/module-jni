@@ -610,7 +610,11 @@ foreach hash<auto> column in (result.schemaV2()) {
     The code that opens the connection is not judged by its parse options: a connection that trusted code chose is a
     capability that trusted code can lend to restricted code, which can then use it, also to open new connections of
     a \c DatasourcePool on its own threads.  Library module code has no parse options of its own, as everywhere in
-    %Qore, so a datasource that a module creates for restricted code is judged by the sandbox only.  Without a %Qore
+    %Qore; with a %Qore library that records the functional domains of the code that library code acts for (the
+    \c jdbc_chooser_caller_domains key of the \c info hash of the jni module in \c get_module_hash()), a datasource
+    that a library module (such as DbDataProvider) creates or configures for restricted code is judged by those
+    domains too (qore#7910), while a connection that the host lends (a \c DatasourceConnection) is the host's choice;
+    without it, such a datasource is judged by the sandbox only.  Without a %Qore
     library that records the code that chose a connection, the connection is judged by the setter of the \c url
     option, and otherwise by the code that opens it.
 */

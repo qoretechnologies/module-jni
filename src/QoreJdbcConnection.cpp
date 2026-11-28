@@ -737,6 +737,15 @@ int QoreJdbcConnection::checkChoosers(bool& restricted, ExceptionSink* xsink) {
             // a missing record is not a permission
             restricted = !choosers.getRestrictions(i, r) || r.hasAny(restricting_options);
         }
+#ifdef _QORE_HAS_DATASOURCE_CHOOSER_CALLER_DOMAINS
+        // the domains of the code that the chooser acted for (qore#7910): library module code has no parse options
+        // of its own, so a datasource that a library module creates or configures from a value that restricted code
+        // gives is judged by the restricted code
+        if (!restricted) {
+            QoreParseOptions dom;
+            restricted = !choosers.getCallerDomainRestrictions(i, dom) || dom.hasAny(restricting_options);
+        }
+#endif
     }
 #elif defined(_QORE_HAS_DATASOURCE_OPTION_RESTRICTIONS) && defined(QORE_JNI_HAS_COMMAND_CONTEXT)
     // the setter of the url option (qore#5741); the database name has no recorded setter with this Qore library, so
