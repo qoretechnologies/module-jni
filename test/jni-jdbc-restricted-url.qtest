@@ -1,0 +1,598 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+# Code restricted from the filesystem, the network, external processes, uncontrolled APIs or embedded logic that
+# chooses a jdbc connection (creates the datasource, or sets its url option, database name or another connection
+# value) is limited to the allow-listed client/server drivers, in their network URL form with allow-listed parameters
+# and the expected driver class (qore#7867): an embedded or file driver (H2, Derby, SQLite, ...) would reach the
+# filesystem or run Java that its SQL defines for it.  The code that opens the connection is not judged by its parse
+# options: a connection that trusted code chose can be lent to restricted code, which can also open it (a pool grows
+# on the thread that needs a connection)
+
+%modern
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../build"
+%requires jni
+%requires QUnit
+%requires FsUtil
+
+%module-cmd(jni) add-relative-classpath qore-jni-test.jar
+%module-cmd(jni) add-relative-classpath ../build/qore-jni-compiler.jar
+%module-cmd(jni) import org.qore.jni.compiler.QoreJavaCompiler
+%module-cmd(jni) import org.qore.jni.compiler.CompilerOutput
+%module-cmd(jni) import java.lang.System
+%module-cmd(jni) import org.qore.jni.test.JdbcTransactionDriver
+%module-cmd(jni) import org.qore.jni.test.JdbcRestrictedUrlDriver
+
+%exec-class JniJdbcRestrictedUrlTest
+
+class JniJdbcRestrictedUrlTest inherits QUnit::Test {
+    private:internal {
+        #! the error of a refused connection
+        const Refused = "JNI-SANDBOX-ERROR";
+
+        #! the URL of the fixture driver, which is not on the allow-list
+        const FixtureUrl = "qore-transaction-test:fixture";
+
+        #! the host of the URLs that the echo drivers accept
+        const EchoHost = "qore-echo-7867";
+
+        #! the host of the URLs that the legacy echo drivers accept, which no other echo driver accepts
+        const LegacyEchoHost = "qore-legacy-7867";
+
+        #! the source of an echo driver, which has the class name of an allow-listed driver and reports the
+        #! properties of a connection in its exception; %s: the package, the class, the URL prefix; its version is
+        #! that of the system properties qore.echo7867.<class>.major and .minor (default: %d.%d)
+        const EchoDriverSource = "package %s;
+
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.DriverPropertyInfo;
+import java.sql.SQLException;
+import java.sql.SQLFeatureNotSupportedException;
+import java.util.Properties;
+import java.util.TreeMap;
+import java.util.logging.Logger;
+
+// java.sql.Driver is qualified: the class of two of the drivers is named Driver
+public class %s implements java.sql.Driver {
+    static {
+        try {
+            DriverManager.registerDriver(new %s());
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public boolean acceptsURL(String url) {
+        return url != null && url.startsWith(\"%s\");
+    }
+
+    public Connection connect(String url, Properties info) throws SQLException {
+        if (!acceptsURL(url)) {
+            return null;
+        }
+        TreeMap<String, String> props = new TreeMap<>();
+        for (String name : info.stringPropertyNames()) {
+            props.put(name, info.getProperty(name));
+        }
+        StringBuilder sb = new StringBuilder();
+        for (var e : props.entrySet()) {
+            if (sb.length() > 0) {
+                sb.append(' ');
+            }
+            sb.append(e.getKey()).append('=').append(e.getValue());
+        }
+        throw new SQLException(\"qore-echo-props: [\" + sb + \"]\");
+    }
+
+    public DriverPropertyInfo[] getPropertyInfo(String url, Properties info) {
+        return new DriverPropertyInfo[0];
+    }
+    public int getMajorVersion() {
+        return Integer.getInteger(\"qore.echo7867.\" + %s.class.getName() + \".major\", %d);
+    }
+    public int getMinorVersion() {
+        return Integer.getInteger(\"qore.echo7867.\" + %s.class.getName() + \".minor\", %d);
+    }
+    public boolean jdbcCompliant() { return false; }
+    public Logger getParentLogger() throws SQLFeatureNotSupportedException {
+        throw new SQLFeatureNotSupportedException();
+    }
+}
+";
+
+        #! the echo drivers: subprotocol -> class name and the properties that a restricted connection has
+        const EchoDrivers = {
+            "postgresql": {
+                "class": "org.postgresql.Driver",
+                "version": (42, 7),
+                "props": "gssEncMode=disable gsslib=gssapi jaasLogin=false",
+            },
+            "mysql": {
+                "class": "com.mysql.cj.jdbc.Driver",
+                "version": (8, 4),
+                "props": "allowLoadLocalInfile=false allowUrlInLocalInfile=false "
+                    "disabledAuthenticationPlugins=authentication_kerberos_client,authentication_ldap_sasl_client,"
+                    "authentication_oci_client,authentication_openid_connect_client,authentication_webauthn_client",
+            },
+            "mariadb": {
+                "class": "org.mariadb.jdbc.Driver",
+                "version": (3, 5),
+                "props": "allowLocalInfile=false restrictedAuth=mysql_native_password,mysql_clear_password,"
+                    "dialog,client_ed25519,sha256_password,caching_sha2_password,parsec",
+            },
+            # a driver without a minimum version or properties
+            "sqlserver": {
+                "class": "com.microsoft.sqlserver.jdbc.SQLServerDriver",
+                "version": (12, 8),
+                "props": "",
+            },
+        };
+
+        #! echo drivers of classes that are not allowed: subprotocol -> class name; their URLs have the host
+        #! LegacyEchoHost
+        const LegacyEchoDrivers = {
+            # the class of the Connector/J 5.1 drivers, whose properties differ
+            "mysql": "com.mysql.jdbc.Driver",
+        };
+
+        #! the code of the restricted Programs that choose the connections
+        const ChooserSource = "%modern
+Datasource sub new_ds(string db) {
+    return new Datasource({\"type\": \"jdbc\", \"db\": db});
+}
+
+Datasource sub new_ds_string(string db) {
+    return new Datasource(\"jdbc:u/p@\" + db);
+}
+
+DatasourcePool sub new_pool(string db) {
+    return new DatasourcePool({\"type\": \"jdbc\", \"db\": db, \"options\": {\"min\": 0, \"max\": 2}});
+}
+
+nothing sub set_url(Datasource ds, string url) {
+    ds.setOption(\"url\", url);
+}
+
+nothing sub set_db(Datasource ds, string db) {
+    ds.setDBName(db);
+}
+
+nothing sub set_user(Datasource ds, string user) {
+    ds.setUserName(user);
+}
+
+# uses a pool that other code chose in a thread of this Program
+int sub use_pool(DatasourcePool pool) {
+    Queue q();
+    background sub () {
+        try {
+            q.push(pool.select(\"read\"));
+        } catch (hash<ExceptionInfo> ex) {
+            q.push(ex.err + \": \" + ex.desc);
+        }
+    }();
+    auto v = q.get();
+    if (v.typeCode() != NT_INT) {
+        throw \"POOL-ERROR\", v;
+    }
+    return v;
+}
+";
+
+        #! the parse options that restrict the code that chooses a connection, with their names
+        const RestrictingOptions = {
+            "PO_NO_FILESYSTEM": PO_NO_FILESYSTEM,
+            "PO_NO_NETWORK": PO_NO_NETWORK,
+            "PO_NO_EXTERNAL_PROCESS": PO_NO_EXTERNAL_PROCESS,
+            "PO_NO_UNCONTROLLED_APIS": PO_NO_UNCONTROLLED_APIS,
+            "PO_NO_EMBEDDED_LOGIC": PO_NO_EMBEDDED_LOGIC,
+        };
+
+        #! URLs that a restricted chooser is refused, with a regular expression for the reason
+        const RefusedUrls = {
+            # embedded and file drivers, and unknown drivers
+            "h2:mem:x": "'h2' JDBC driver is not on the list",
+            "h2:file:/tmp/qore-7867": "'h2' JDBC driver is not on the list",
+            "derby:memory:x;create=true": "'derby' JDBC driver is not on the list",
+            "sqlite:/tmp/qore-7867.db": "'sqlite' JDBC driver is not on the list",
+            "hsqldb:file:/tmp/qore-7867": "'hsqldb' JDBC driver is not on the list",
+            FixtureUrl: "'qore-transaction-test' JDBC driver is not on the list",
+            "Postgresql://h/db": "'Postgresql' JDBC driver is not on the list",
+            "noprotocol": "no subprotocol",
+            # the other forms of the allowed drivers
+            "postgresql:db": "network form of 'postgresql'",
+            "postgresql:///db": "host of the 'postgresql' JDBC URL",
+            "postgresql://user@h/db": "host of the 'postgresql' JDBC URL",
+            "postgresql://h:abc/db": "host of the 'postgresql' JDBC URL",
+            "postgresql://h:123456/db": "host of the 'postgresql' JDBC URL",
+            "postgresql://h/db#frag": "database name of the 'postgresql' JDBC URL has a '#'",
+            "postgresql://h/a/b": "database name of the 'postgresql' JDBC URL has a '/'",
+            "postgresql://h/db?ssl=true#x": "fragment",
+            "mysql:loadbalance://h/db": "network form of 'mysql'",
+            "mysql://address=(host=h)(socketFactory=x)/db": "host of the 'mysql' JDBC URL",
+            "mysql://(host=h,port=3306)/db": "host of the 'mysql' JDBC URL",
+            "mariadb:sequential://h/db": "network form of 'mariadb'",
+            "oracle:oci:@h:1521:sid": "only the 'thin' driver",
+            "oracle:thin:@alias": "TNS alias",
+            "oracle:thin:@(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=h)(PORT=1521)))": "connect descriptor",
+            "oracle:thin:@ldap://h:389/svc,cn=OracleContext": "protocol",
+            "oracle:thin:@tcps://h:2484/svc": "protocol",
+            "oracle:thin:@h:1521/svc?TNS_ADMIN=/tmp": "with parameters",
+            "oracle:thin:@h:1521:sid:extra": "SID of the 'oracle' JDBC URL",
+            "oracle:thin:h:1521:sid": "no '@'",
+            "oracle:thin:(x)@h:1521:sid": "user or password of the 'oracle' JDBC URL has a '\\('",
+            "oracle:thin:u?TNS_ADMIN=/tmp/p@h:1521:sid": "user or password of the 'oracle' JDBC URL has a '\\?'",
+            "oracle:thin:u/p;x=y@h:1521:sid": "user or password of the 'oracle' JDBC URL has a ';'",
+            "oracle:thin:a@h:1521:S@h2:1521:T": "SID of the 'oracle' JDBC URL",
+            "oracle:thin://x:1/y@h:1521:sid": "user or password of the 'oracle' JDBC URL has a '/'",
+            "oracle:thin:a/b/c@h:1521:sid": "user or password of the 'oracle' JDBC URL has a '/'",
+            "oracle:thin:u:p@h:1521:sid": "user or password of the 'oracle' JDBC URL has a ':'",
+            "oracle:thin:u/@h:1521:sid": "user or password of the 'oracle' JDBC URL has a '/'",
+            "sqlserver:h;databaseName=x": "network form of 'sqlserver'",
+            "sqlserver://h;integratedSecurity=true": "parameter 'integratedSecurity'",
+            "sqlserver://h;trustStore=/tmp/ts": "parameter 'trustStore'",
+            "sqlserver://h;socketFactoryClass=x.Y": "parameter 'socketFactoryClass'",
+            "sqlserver://h;authentication=ActiveDirectoryPassword": "parameter 'authentication'",
+            "sqlserver://h;password={a;trustStore=/tmp/ts": "braced values",
+            "sqlserver://h;password={a}x": "braced values",
+            "sqlserver://h;password= {a;b}": "braced values",
+            "sqlserver://h;password={a;b}}c}": "braced values",
+            # other bypass attempts
+            "postgresql://[fe80::1%eth0]:5432/db": "host of the 'postgresql' JDBC URL",
+            "postgresql://h/db? sslmode=require": "parameter ' sslmode'",
+            "mysql+srv://h/db": "'mysql\\+srv' JDBC driver is not on the list",
+            "jdbc:jdbc:postgresql://h/db": "'jdbc' JDBC driver is not on the list",
+            "oracle:thin:@config-file://x": "protocol",
+            "sqlserver://h;databaseName": "has no value",
+            "sqlserver://h\\;databaseName=x": "instance name",
+            "db2:db": "network form of 'db2'",
+            "db2://h:50000": "form '//host\\[:port\\]/database'",
+            "db2://h:50000/db:traceFile=/tmp/t;": "parameter 'traceFile'",
+            "db2://h:50000/db;x": "database name of the 'db2' JDBC URL is invalid",
+            # parameters that are not on the drivers' allow-lists
+            "postgresql://h/db?sslfactory=org.example.F": "parameter 'sslfactory'",
+            "postgresql://h/db?ssl=true&sslrootcert=/etc/passwd": "parameter 'sslrootcert'",
+            "postgresql://h/db?socketFactory=x": "parameter 'socketFactory'",
+            "postgresql://h/db?loggerFile=/tmp/x": "parameter 'loggerFile'",
+            "postgresql://h/db?service=x": "parameter 'service'",
+            "postgresql://h/db?ssl%66actory=x": "parameter 'ssl%66actory'",
+            "postgresql://h/db?SSLFACTORY=x": "parameter 'SSLFACTORY'",
+            "postgresql://h/db?sslmode=require&unknownParam=1": "parameter 'unknownParam'",
+            "postgresql://h/db?xmlFactoryFactory=x": "parameter 'xmlFactoryFactory'",
+            "mysql://h/db?allowLoadLocalInfile=true": "parameter 'allowLoadLocalInfile'",
+            "mysql://h/db?autoDeserialize=true": "parameter 'autoDeserialize'",
+            "mysql://h/db?queryInterceptors=x.Y": "parameter 'queryInterceptors'",
+            "mysql://h/db?serverRSAPublicKeyFile=/etc/passwd": "parameter 'serverRSAPublicKeyFile'",
+            "mysql://h/db?useConfigs=x": "parameter 'useConfigs'",
+            "mariadb://h/db?localSocket=/tmp/s": "parameter 'localSocket'",
+            "mariadb://h/db?allowLocalInfile=true": "parameter 'allowLocalInfile'",
+            "mariadb://h/db?serverSslCert=/tmp/c": "parameter 'serverSslCert'",
+            # the properties that the connection forces
+            "postgresql://h/db?jaasLogin=true": "parameter 'jaasLogin'",
+            "postgresql://h/db?gssEncMode=prefer": "parameter 'gssEncMode'",
+            "postgresql://h/db?gsslib=sspi": "parameter 'gsslib'",
+            "mysql://h/db?disabledAuthenticationPlugins=x": "parameter 'disabledAuthenticationPlugins'",
+            "mysql://h/db?allowUrlInLocalInfile=true": "parameter 'allowUrlInLocalInfile'",
+            "mariadb://h/db?restrictedAuth=auth_gssapi_client": "parameter 'restrictedAuth'",
+            # control and non-ASCII characters
+            "postgresql://h/db\n": "control character",
+            "postgresql://h/dé": "non-ASCII",
+        };
+
+        #! URLs that a restricted chooser may use: the connection is attempted (and fails without a driver)
+        const AllowedUrls = (
+            "postgresql://db.example.com/db",
+            "postgresql://db.example.com:5432/db?sslmode=verify-full&connectTimeout=5&ApplicationName=x",
+            "jdbc:postgresql://h1:5432,h2:5433/db?targetServerType=primary",
+            "postgresql://[::1]:5432/db",
+            "postgresql://127.0.0.1",
+            "mysql://h:3306/db?useSSL=true&serverTimezone=UTC",
+            "mariadb://h/db?sslMode=verify-full&connectTimeout=5",
+            "oracle:thin:@h:1521:ORCL",
+            "oracle:thin:@h:1521/svc.example.com",
+            "oracle:thin:@//h:1521/svc",
+            "oracle:thin:@h/svc",
+            "oracle:thin:scott/tiger@h:1521:ORCL",
+            "sqlserver://h:1433;databaseName=x;encrypt=true;trustServerCertificate=false",
+            "sqlserver://h\\inst;DatabaseName=x; loginTimeout =5;password=abc;",
+            "sqlserver://;serverName=h;databaseName=x",
+            "db2://h:50000/SAMPLE",
+            "db2://h:50000/SAMPLE:currentSchema=S;sslConnection=true;",
+        );
+    }
+
+    constructor() : QUnit::Test("JNI jdbc URLs of restricted code", "1.0", \ARGV) {
+        addTestCase("each restricting parse option limits the drivers", \restrictingOptionsTest());
+        addTestCase("other parse options and trusted code do not limit the drivers", \unrestrictedTest());
+        addTestCase("refused URLs", \refusedUrlsTest());
+        addTestCase("allowed URLs", \allowedUrlsTest());
+        addTestCase("the url option, database name and connection values", \settersTest());
+        addTestCase("the driver of an allowed URL must be the expected class", \driverClassTest());
+        addTestCase("pools and other threads", \poolTest());
+        addTestCase("the properties of a connection to an allowed driver", \propertiesTest());
+        set_return_value(main());
+    }
+
+    private:internal {
+        #! the classpath directory of the echo drivers
+        TmpDir tmp("jni-jdbc-restricted-url-");
+    }
+
+    globalSetUp() {
+        # the echo drivers are compiled into a classpath directory with their service file, as a driver jar has it
+        QoreJavaCompiler compiler();
+        list<string> classes;
+        list<hash<auto>> drivers = map ("subprotocol": $1.key, "host": EchoHost) + $1.value, EchoDrivers.pairIterator();
+        drivers += map ("subprotocol": $1.key, "host": LegacyEchoHost, "class": $1.value, "version": (8, 4)),
+            LegacyEchoDrivers.pairIterator();
+        foreach hash<auto> i in (drivers) {
+            string cls = i."class";
+            list<*string> parts = (cls =~ x/^(.*)\.([^.]+)$/);
+            string pkg = parts[0];
+            string name = parts[1];
+            CompilerOutput out;
+            try {
+                out = compiler.compile(cls, sprintf(EchoDriverSource, pkg, name, name,
+                    sprintf("jdbc:%s://%s", i.subprotocol, i.host), name, i.version[0], name, i.version[1]));
+            } catch (hash<ExceptionInfo> ex) {
+                # the compiler's diagnostics, for the error
+                if (ex.arg.typeCode() == NT_OBJECT && ex.arg.hasCallableMethod("getDiagnosticMessages")) {
+                    throw ex.err, sprintf("%s: %y", ex.desc, ex.arg.getDiagnosticMessages());
+                }
+                rethrow;
+            }
+            binary b = out.file.openInputStream().readAllBytes();
+            string dir = join_paths(tmp.path, replace(pkg, ".", DirSep));
+            mkdir(dir, 0755, True);
+            File f();
+            f.open2(join_paths(dir, name + ".class"), O_CREAT | O_WRONLY | O_TRUNC);
+            f.write(b);
+            f.close();
+            classes += cls;
+        }
+        string dir = join_paths(tmp.path, "META-INF", "services");
+        mkdir(dir, 0755, True);
+        File f();
+        f.open2(join_paths(dir, "java.sql.Driver"), O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(foldl $1 + "\n" + $2, classes);
+        f.write("\n");
+        f.close();
+    }
+
+    #! returns a Program with the given parse options and the code that chooses connections
+    private:internal static Program chooser(int opts) {
+        Program p(opts);
+        p.parse(ChooserSource, "jdbc-restricted-url-chooser");
+        return p;
+    }
+
+    #! opens the datasource and returns the exception, or NOTHING if it was opened
+    private:internal static *hash<ExceptionInfo> open(Datasource ds) {
+        try {
+            ds.open();
+            ds.close();
+        } catch (hash<ExceptionInfo> ex) {
+            return ex;
+        }
+    }
+
+    #! asserts that the datasource cannot be opened, for the given reason
+    private:internal assertRefused(Datasource ds, string reason, string label) {
+        *hash<ExceptionInfo> ex = open(ds);
+        assertEq(Refused, ex.err, label);
+        assertRegex(reason, ex.desc ?? "", label);
+    }
+
+    #! asserts that the connection is attempted: the error is not a refusal
+    private:internal assertAttempted(Datasource ds, string label) {
+        *hash<ExceptionInfo> ex = open(ds);
+        # no driver serves these URLs in the test: DriverManager finds none
+        assertNeq(Refused, ex.err, label);
+        assertRegex("No suitable driver", ex.desc ?? "", label);
+    }
+
+    restrictingOptionsTest() {
+        foreach hash<auto> i in (RestrictingOptions.pairIterator()) {
+            Program p = chooser(i.value);
+            assertRefused(p.callFunction("new_ds", "h2:mem:x"), "'h2' JDBC driver is not on the list", i.key);
+            assertRefused(p.callFunction("new_ds", FixtureUrl), "'qore-transaction-test' JDBC driver", i.key);
+            assertAttempted(p.callFunction("new_ds", "postgresql://127.0.0.1:1/x"), i.key);
+        }
+        # all of them together
+        Program p = chooser(PO_NO_FILESYSTEM | PO_NO_NETWORK | PO_NO_EXTERNAL_PROCESS | PO_NO_UNCONTROLLED_APIS
+            | PO_NO_EMBEDDED_LOGIC);
+        assertRefused(p.callFunction("new_ds", "h2:mem:x"), "'h2' JDBC driver", "all");
+        # the connection string form
+        p = chooser(PO_NO_FILESYSTEM);
+        assertRefused(p.callFunction("new_ds_string", "h2:mem:x"), "'h2' JDBC driver", "string");
+    }
+
+    unrestrictedTest() {
+        JdbcTransactionDriver::reset();
+        # a parse option that does not restrict the code that chooses a connection
+        Program p = chooser(PO_NO_TERMINAL_IO);
+        Datasource ds = p.callFunction("new_ds", FixtureUrl);
+        assertNothing(open(ds), "PO_NO_TERMINAL_IO");
+        ds = p.callFunction("new_ds", "h2:mem:x");
+        assertAttempted(ds, "h2 PO_NO_TERMINAL_IO");
+        # trusted code
+        ds = new Datasource({"type": "jdbc", "db": FixtureUrl});
+        assertNothing(open(ds), "trusted");
+        ds = new Datasource({"type": "jdbc", "db": "h2:mem:x"});
+        assertAttempted(ds, "h2 trusted");
+    }
+
+    refusedUrlsTest() {
+        Program p = chooser(PO_NO_FILESYSTEM);
+        foreach hash<auto> i in (RefusedUrls.pairIterator()) {
+            assertRefused(p.callFunction("new_ds", i.key), i.value, i.key);
+        }
+    }
+
+    allowedUrlsTest() {
+        Program p = chooser(PO_NO_FILESYSTEM | PO_NO_NETWORK);
+        foreach string url in (AllowedUrls) {
+            assertAttempted(p.callFunction("new_ds", url), url);
+        }
+    }
+
+    settersTest() {
+        JdbcTransactionDriver::reset();
+        Program p = chooser(PO_NO_FILESYSTEM);
+
+        # the url option set by restricted code
+        Datasource ds({"type": "jdbc", "db": "ignored"});
+        p.callFunction("set_url", ds, "h2:mem:x");
+        assertRefused(ds, "'h2' JDBC driver", "url option");
+        # an allowed url option
+        ds = new Datasource({"type": "jdbc", "db": "ignored"});
+        p.callFunction("set_url", ds, "postgresql://127.0.0.1:1/x");
+        assertAttempted(ds, "allowed url option");
+
+        # the database name set by restricted code
+        ds = new Datasource({"type": "jdbc", "db": "ignored"});
+        p.callFunction("set_db", ds, "h2:mem:x");
+        assertRefused(ds, "'h2' JDBC driver", "database name");
+
+        # a connection value set by restricted code: the URL that trusted code chose is then judged by its parse
+        # options too
+        ds = new Datasource({"type": "jdbc", "db": FixtureUrl});
+        assertNothing(open(ds), "trusted fixture");
+        p.callFunction("set_user", ds, "u");
+        assertRefused(ds, "'qore-transaction-test' JDBC driver", "connection value");
+    }
+
+    driverClassTest() {
+        JdbcRestrictedUrlDriver::install();
+        JdbcTransactionDriver::reset();
+        string url = JdbcRestrictedUrlDriver::PREFIX + "/db?sslmode=disable";
+        assertEq("jdbc:", url.substr(0, 5));
+        url = url.substr(5);
+
+        # trusted code connects with the driver that accepts the URL
+        int connects = JdbcRestrictedUrlDriver::connects();
+        Datasource ds({"type": "jdbc", "db": url});
+        assertNothing(open(ds), "trusted");
+        assertEq(connects + 1, JdbcRestrictedUrlDriver::connects());
+
+        # restricted code is refused it, as it is not the PostgreSQL driver
+        Program p = chooser(PO_NO_FILESYSTEM);
+        ds = p.callFunction("new_ds", url);
+        *hash<ExceptionInfo> ex = open(ds);
+        assertRegex("JdbcRestrictedUrlDriver.*is not one of the allow-listed drivers.*org\\.postgresql\\.Driver",
+            ex.desc ?? "");
+        assertEq(connects + 1, JdbcRestrictedUrlDriver::connects(), "the driver did not connect");
+    }
+
+    poolTest() {
+        JdbcTransactionDriver::reset();
+        Program p = chooser(PO_NO_FILESYSTEM | PO_NO_NETWORK | PO_NO_EXTERNAL_PROCESS);
+
+        # a pool that restricted code chose: its first connection, which the pool opens when it is created, is
+        # refused
+        try {
+            p.callFunction("new_pool", FixtureUrl);
+            assertTrue(False, "the pool was created");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq(Refused, ex.err);
+            assertRegex("'qore-transaction-test' JDBC driver", ex.desc);
+        }
+
+        # a datasource that restricted code chose, opened by trusted code on another thread: it is refused
+        Datasource ds = p.callFunction("new_ds", FixtureUrl);
+        Queue q();
+        background sub () {
+            q.push(open(ds));
+        }();
+        *hash<ExceptionInfo> ex = q.get();
+        assertEq(Refused, ex.err);
+        assertRegex("'qore-transaction-test' JDBC driver", ex.desc ?? "");
+
+        # a pool that trusted code chose is lent to restricted code, which grows it on its own thread
+        DatasourcePool pool = new DatasourcePool({"type": "jdbc", "db": FixtureUrl,
+            "options": {"min": 0, "max": 2}});
+        assertEq(1, p.callFunction("use_pool", pool));
+    }
+    propertiesTest() {
+        Program p = chooser(PO_NO_FILESYSTEM);
+        foreach hash<auto> i in (EchoDrivers.pairIterator()) {
+            string url = i.key == "sqlserver"
+                ? sprintf("sqlserver://%s;databaseName=db", EchoHost)
+                : sprintf("%s://%s/db", i.key, EchoHost);
+            # trusted code configures the datasource with the classpath of the driver
+            Datasource ds({"type": "jdbc", "db": "ignored", "options": {"classpath": tmp.path}});
+            # the url that trusted code chose: the connection has no other properties
+            ds.setOption("url", url);
+            *hash<ExceptionInfo> ex = open(ds);
+            assertRegex("qore-echo-props: \\[\\]", ex.desc ?? "", i.key + ": trusted");
+
+            # restricted code chooses the url: the driver is of the expected class and the connection has the
+            # properties that turn off the features that reach local files or the credentials of the host
+            ds = new Datasource({"type": "jdbc", "db": "ignored", "options": {"classpath": tmp.path}});
+            p.callFunction("set_url", ds, url);
+            ex = open(ds);
+            assertNeq(Refused, ex.err, i.key);
+            assertTrue((ex.desc ?? "").find("qore-echo-props: [" + i.value.props + "]") >= 0,
+                i.key + ": " + (ex.desc ?? ""));
+            # the user and password of the datasource are added
+            ds = new Datasource({"type": "jdbc", "db": "ignored", "user": "u7867", "options": {"classpath": tmp.path}});
+            p.callFunction("set_url", ds, url);
+            ex = open(ds);
+            assertRegex("qore-echo-props: \\[.*user=u7867", ex.desc ?? "", i.key + ": user");
+
+            # a driver without a minimum version
+            if (!i.value.props) {
+                continue;
+            }
+            # an older version of the driver, which does not know the properties, is refused to restricted code
+            string prop = "qore.echo7867." + i.value."class" + ".major";
+            System::setProperty(prop, string(i.value.version[0] - 1));
+            on_exit System::clearProperty(prop);
+            ds = new Datasource({"type": "jdbc", "db": "ignored", "options": {"classpath": tmp.path}});
+            p.callFunction("set_url", ds, url);
+            ex = open(ds);
+            assertRegex("has version " + (i.value.version[0] - 1) + "\\.[0-9]+, which is older than version",
+                ex.desc ?? "", i.key + ": old version");
+            # trusted code can use it
+            ds = new Datasource({"type": "jdbc", "db": "ignored", "options": {"classpath": tmp.path}});
+            ds.setOption("url", url);
+            ex = open(ds);
+            assertRegex("qore-echo-props: \\[\\]", ex.desc ?? "", i.key + ": old version, trusted");
+        }
+
+        # the minor version: 42.2 is older than 42.3, the minimum version of the PostgreSQL driver
+        string url = sprintf("postgresql://%s/db", EchoHost);
+        {
+            string prop = "qore.echo7867.org.postgresql.Driver.minor";
+            System::setProperty(prop, "2");
+            on_exit System::clearProperty(prop);
+            Datasource ds({"type": "jdbc", "db": "ignored", "options": {"classpath": tmp.path}});
+            p.callFunction("set_url", ds, url);
+            *hash<ExceptionInfo> ex = open(ds);
+            assertRegex("has version 42\\.2, which is older than version 42\\.3", ex.desc ?? "", "42.2");
+            # 42.3 is the minimum
+            System::setProperty(prop, "3");
+            ds = new Datasource({"type": "jdbc", "db": "ignored", "options": {"classpath": tmp.path}});
+            p.callFunction("set_url", ds, url);
+            ex = open(ds);
+            assertRegex("qore-echo-props: \\[gssEncMode=disable", ex.desc ?? "", "42.3");
+        }
+
+        # a driver of a class that is not allowed is refused to restricted code, and trusted code can use it
+        foreach hash<auto> i in (LegacyEchoDrivers.pairIterator()) {
+            url = sprintf("%s://%s/db", i.key, LegacyEchoHost);
+            Datasource ds({"type": "jdbc", "db": "ignored", "options": {"classpath": tmp.path}});
+            p.callFunction("set_url", ds, url);
+            *hash<ExceptionInfo> ex = open(ds);
+            assertRegex("class '" + i.value + "' that accepts the URL is not one of the allow-listed drivers",
+                ex.desc ?? "", i.value);
+            ds = new Datasource({"type": "jdbc", "db": "ignored", "options": {"classpath": tmp.path}});
+            ds.setOption("url", url);
+            ex = open(ds);
+            assertRegex("qore-echo-props: \\[\\]", ex.desc ?? "", i.value + ": trusted");
+        }
+    }
+}
