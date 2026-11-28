@@ -46,11 +46,15 @@ string sub issue_barrier(string cmd) {
 ";
 
         #! the code of a child process in which a sandbox that allows uncontrolled APIs adds the jar to the shared
-        #! classpath; ARGV: the jar, the test class, the file with IssueSource; prints the result of the command, then
-        #! whether a new trusted Program can import the class
+        #! classpath; ARGV: the jar, the test class, the file with IssueSource, and optionally "open-network" to allow
+        #! all network access too; prints the result of the command, then whether a new trusted Program can import the
+        #! class
         const TrustingSandboxSource = "
 SandboxManager sm();
 sm.setFilesystemDefaultPolicy(True);
+if (ARGV[3] == \"open-network\") {
+    sm.setNetworkDefaultPolicy(True);
+}
 if (sm.hasCallableMethod(\"setUncontrolledApiPolicy\")) {
     call_object_method(sm, \"setUncontrolledApiPolicy\", True);
 }
@@ -160,6 +164,12 @@ try {
         return jh.api_major > 2 || (jh.api_major == 2 && jh.api_minor >= 3);
     }
 
+    #! Returns True if a sandbox that trusts its code with uncontrolled APIs but restricts the filesystem or the network
+    #! refuses Java code (qore#7832)
+    private static bool sandboxClassesRefused() {
+        return get_module_hash().jni.info.sandbox_uncontrolled_api_classes ?? False;
+    }
+
     beforeTest() {
         assertTrue(is_file(getJar()), "the test jar exists: " + getJar());
         assertFalse(trustedCanLoad(), "the class is not on any classpath yet");
@@ -215,7 +225,15 @@ code sub make_capability(string cmd) {
         usm.setFilesystemDefaultPolicy(False);
         allowUncontrolledApis(usm);
         Program up = getSandboxed(usm);
-        assertFilesystemDenied(up.callFunction("issue", cmd), cmd, "add-classpath, uncontrolled APIs allowed");
+        if (sandboxClassesRefused()) {
+            # qore#7832: a sandbox that restricts the filesystem refuses Java code even though it allows uncontrolled
+            # APIs, so the issuer is refused the command before the module's path check
+            string urv = up.callFunction("issue", cmd);
+            assertModuleRefused(urv, cmd, "add-classpath, uncontrolled APIs allowed");
+            assertRegex("forbid it \\(0x200000000000, ", urv, "add-classpath, uncontrolled APIs allowed (options)");
+        } else {
+            assertFilesystemDenied(up.callFunction("issue", cmd), cmd, "add-classpath, uncontrolled APIs allowed");
+        }
         assertFalse(trustedCanLoad(), "a Program's own classpath is not shared");
     }
 
@@ -223,6 +241,11 @@ code sub make_capability(string cmd) {
     #! class loaders directly, so a global-* classpath command is not refused to it
     /** The command changes the classpath of every Program, so the case runs in a child process, and the test process's
         classpath stays as the other cases expect it
+
+        qore#7832: a sandbox that restricts the filesystem or the network refuses Java code even though it allows
+        uncontrolled APIs; the sandbox of the child allows all filesystem access but restricts the network by default,
+        so with that rule the command is refused, and only a sandbox that also allows all network access adds to the
+        shared classpath
     */
     trustingSandboxTest() {
         if (!(new SandboxManager()).hasCallableMethod("setUncontrolledApiPolicy")) {
@@ -243,6 +266,16 @@ code sub make_capability(string cmd) {
         string out = backquote(sprintf("'%s' '%s' '%s' '%s' '%s' 2>&1", QORE_ARGV[0], script, getJar(), TestClass,
             issue_file), \rc);
         assertEq(0, rc, "the child process's exit status: " + out);
+        if (sandboxClassesRefused()) {
+            # qore#7832: the sandbox restricts the network, so its code is refused the command
+            assertRegex("(^|\n)issue: JNI-SANDBOX-ERROR: cannot use the \"global-add-classpath\" module command.*"
+                "forbid it \\(0x200000000000, ", out, "a sandbox that restricts the network is refused the command");
+            assertRegex("(^|\n)import: JNI-ERROR\n", out, "the class was not added to the shared classpath");
+            # a sandbox that allows all filesystem and network access is not refused
+            out = backquote(sprintf("'%s' '%s' '%s' '%s' '%s' open-network 2>&1", QORE_ARGV[0], script, getJar(),
+                TestClass, issue_file), \rc);
+            assertEq(0, rc, "the child process's exit status (open network): " + out);
+        }
         assertRegex("(^|\n)issue: ok\n", out, "the sandbox adds to the shared classpath");
         assertRegex("(^|\n)import: ok\n", out, "a trusted Program of the child process loads the class");
         assertFalse(trustedCanLoad(), "the classpath of the test process is unchanged");

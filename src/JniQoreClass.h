@@ -5,7 +5,7 @@
 
     Qore Programming Language JNI Module
 
-    Copyright (C) 2016 - 2022 Qore Technologies, s.r.o.
+    Copyright (C) 2016 - 2026 Qore Technologies, s.r.o.
 
     This library is free software; you can redistribute it and/or
     modify it under the terms of the GNU Lesser General Public
@@ -28,6 +28,10 @@
 
 #include <string>
 
+// QORE_JNI_ENFORCED_DOMAINS and the feature macros of the Qore library, so that the inline constructor below is
+// compiled the same way in every translation unit (qore#7832)
+#include "defs.h"
+
 namespace jni {
 
 class QoreJniPrivateData;
@@ -39,6 +43,21 @@ public:
         // the Program's jni data is not checked here: the class is created under the class-map lock, a leaf, and
         // QoreProgram::getExternalData() takes the Program's lock
         assert(pgm);
+#ifdef QORE_HAVE_UNCONTROLLED_API_ENFORCEMENT
+        // the restriction classes that the Java code enforces itself: none (qore#7832); set before the class is
+        // published (added to a namespace) or any object of it is created, and shared by the copies of the class.
+        // The call fails only for a class in a namespace or for bits outside the classes, neither of which a new
+        // class with 0 can have; a failure would leave the value of a class that a Program owns, which the Qore
+        // library never stamps with a module default, at 0, the most restrictive value (fail closed).  The
+        // constructor does not throw: the base class's private data and its reference to the Program are released
+        // only by derefClass(), not by the destructor that a throw would run
+        {
+            int rc = setEnforcedDomains(QORE_JNI_ENFORCED_DOMAINS);
+            assert(!rc);
+            (void)rc;
+            assert(getEnforcedDomains() == QORE_JNI_ENFORCED_DOMAINS);
+        }
+#endif
         addMethod(nullptr, "memberGate", (q_external_method_t)memberGate, Public, 0, QDOM_UNCONTROLLED_API,
             autoTypeInfo, paramTypeInfo);
 

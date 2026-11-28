@@ -19,6 +19,17 @@
     Java threads that run work for a Qore caller
 */
 class JniSandboxIoTest inherits QUnit::Test {
+    public {
+        #! the policies of a sandbox that restricts the filesystem and the network, as named in a refusal (qore#7832)
+        const BothRestricted = "FILESYSTEM \\(PO_NO_FILESYSTEM\\), NETWORK \\(PO_NO_NETWORK\\)";
+        #! the policy of a sandbox that restricts the filesystem only, as named in a refusal (qore#7832)
+        const FilesystemRestricted = "FILESYSTEM \\(PO_NO_FILESYSTEM\\)";
+
+        #! the reason that a test case is skipped when the sandbox refuses Java code (qore#7832)
+        const RefusedSkip = "qore#7832: a sandbox that trusts its code with uncontrolled APIs but restricts the "
+            + "filesystem or the network refuses Java code, so the Java checks of sandboxed code are not reached";
+    }
+
     private {
         #! a directory that the filesystem sandbox allows reading
         string dir;
@@ -110,6 +121,28 @@ class JniSandboxIoTest inherits QUnit::Test {
         return getSandboxed(sm);
     }
 
+    #! Returns True if a sandbox that trusts its code with uncontrolled APIs but restricts the filesystem or the network
+    #! refuses Java code (qore#7832)
+    private static bool sandboxClassesRefused() {
+        return get_module_hash().jni.info.sandbox_uncontrolled_api_classes ?? False;
+    }
+
+    #! returns the regex of the refusal of the given Java API by a sandbox that trusts its code with uncontrolled APIs
+    #! but restricts the given policies (qore#7832)
+    private static string refusedFor(string api, string restricts = BothRestricted) {
+        return "the sandbox that governs the calling code restricts " + restricts + ", which uncontrolled API .*" + api
+            + ".* does not enforce \\(qore#7832\\)";
+    }
+
+    #! asserts that the sandbox of the Program refuses the Java API that the code calls (qore#7832)
+    /** the sandbox trusts its code with uncontrolled APIs, but restricts the filesystem or the network, which Java code
+        does not enforce
+    */
+    private assertJavaRefused(Program p, code c, string api, string label, string restricts = BothRestricted) {
+        assertDenied("INVALID-FUNCTION-ACCESS", sub () { p.callFunction("through", c); }, refusedFor(api, restricts),
+            label + " (qore#7832)");
+    }
+
     #! asserts that the code raises the exception and that its description contains the text
     private assertDenied(string err, code c, string text, string label) {
         try {
@@ -135,6 +168,14 @@ class JniSandboxIoTest inherits QUnit::Test {
 
     testPrivateNetworks() {
         Program p = getPrivateBlocked();
+        if (sandboxClassesRefused()) {
+            assertJavaRefused(p, \SandboxIo::isSandboxed(), "SandboxIo::isSandboxed\\(", "isSandboxed()");
+            assertJavaRefused(p, sub () { SandboxIo::checkNetwork("8.8.8.8", 80); }, "SandboxIo::checkNetwork\\(",
+                "a public address");
+            # trusted code is not affected
+            assertEq(("10.1.2.3",), SandboxIo::checkNetwork("10.1.2.3", 80));
+            testSkip(RefusedSkip);
+        }
         code check = auto sub (string host, int port = 80) {
             return p.callFunction("through", auto sub () { return SandboxIo::checkNetwork(host, port); });
         };
@@ -164,6 +205,17 @@ class JniSandboxIoTest inherits QUnit::Test {
             sm.setNetworkDefaultPolicy(False);
             sm.addNetworkAllowedHost("localhost");
             Program p = getSandboxed(sm);
+            if (sandboxClassesRefused()) {
+                assertJavaRefused(p, sub () { SandboxIo::checkNetwork("localhost", 80); },
+                    "SandboxIo::checkNetwork\\(", "an allowed host name");
+                # the second sandbox allows the network by default, but restricts it with an allowed port
+                SandboxManager port_sm();
+                port_sm.setNetworkDefaultPolicy(True);
+                port_sm.addNetworkAllowedPort(443, QSEC_NET_TCP);
+                assertJavaRefused(getSandboxed(port_sm), sub () { SandboxIo::checkNetwork("8.8.8.8", 443); },
+                    "SandboxIo::checkNetwork\\(", "an allowed port");
+                testSkip(RefusedSkip);
+            }
             list<string> addrs = p.callFunction("through", auto sub () { return SandboxIo::checkNetwork("localhost", 80); });
             assertTrue(inlist("127.0.0.1", addrs), "an allowed host name is allowed");
             assertThrows("NETWORK-ACCESS-DENIED", \p.callFunction(), ("through", sub () {
@@ -190,6 +242,12 @@ class JniSandboxIoTest inherits QUnit::Test {
         sm.setNetworkDefaultPolicy(True);
         sm.addNetworkAllowedPort(53, QSEC_NET_TCP);
         Program p = getSandboxed(sm);
+        if (sandboxClassesRefused()) {
+            assertJavaRefused(p, sub () { SandboxIo::checkNetworkProto("8.8.8.8", 53, QoreSandbox::TCP); },
+                "SandboxIo::checkNetworkProto\\(", "TCP port 53");
+            assertEq(("8.8.8.8",), SandboxIo::checkNetworkProto("8.8.8.8", 53, QoreSandbox::UDP), "trusted UDP");
+            testSkip(RefusedSkip);
+        }
         assertEq(("8.8.8.8",), p.callFunction("through", auto sub () {
             return SandboxIo::checkNetworkProto("8.8.8.8", 53, QoreSandbox::TCP);
         }), "TCP port 53 is allowed");
@@ -216,6 +274,12 @@ class JniSandboxIoTest inherits QUnit::Test {
         on_exit call_function("dbg_cares_set_hosts_file", prev);
 
         Program p = getPrivateBlocked();
+        if (sandboxClassesRefused()) {
+            assertJavaRefused(p, sub () { SandboxIo::checkNetwork("public.test", 80); }, "SandboxIo::checkNetwork\\(",
+                "a name that resolves to a public address");
+            assertEq("public.test", SandboxIo::checkedHostName("public.test", 80), "the address carries the name");
+            testSkip(RefusedSkip);
+        }
         code check = auto sub (string host) {
             return p.callFunction("through", auto sub () { return SandboxIo::checkNetwork(host, 80); });
         };
@@ -229,6 +293,13 @@ class JniSandboxIoTest inherits QUnit::Test {
 
     testFilesystem() {
         Program p = getFilesystemSandboxed();
+        if (sandboxClassesRefused()) {
+            assertJavaRefused(p, sub () { SandboxIo::checkFileMode(file, QoreSandbox::READ); },
+                "SandboxIo::checkFileMode\\(", "an allowed file");
+            # trusted code is not affected
+            SandboxIo::checkFileMode(other_dir, QoreSandbox::ALL);
+            testSkip(RefusedSkip);
+        }
         code check = sub (string path, int mode) {
             p.callFunction("through", sub () { SandboxIo::checkFileMode(path, mode); });
         };
@@ -262,7 +333,11 @@ class JniSandboxIoTest inherits QUnit::Test {
         code check = list<string> sub () {
             return SandboxIo::checkNetwork("127.0.0.1", 80);
         };
-        assertThrows("NETWORK-ACCESS-DENIED", \p.callFunction(), ("through", check), "called directly");
+        if (sandboxClassesRefused()) {
+            assertJavaRefused(p, check, "SandboxIo::checkNetwork\\(", "called directly");
+        } else {
+            assertThrows("NETWORK-ACCESS-DENIED", \p.callFunction(), ("through", check), "called directly");
+        }
         assertEq(("127.0.0.1",), p.callFunction("through", SandboxManager::createSystemPolicyCall(check)),
             "called in a system-policy capability");
     }
@@ -292,7 +367,19 @@ class JniSandboxIoTest inherits QUnit::Test {
     testUncapturedThread() {
         # a Java thread has no Qore caller: the check is refused, for a trusted and for a sandboxed caller
         Program p = getPrivateBlocked();
-        foreach code call in (sub (code c) { c(); }, sub (code c) { p.callFunction("through", c); }) {
+        if (sandboxClassesRefused()) {
+            # qore#7832: the sandboxed caller's sandbox refuses the Java code before a Java thread is started
+            assertJavaRefused(p, sub () { SandboxIo::checkNetworkOnJavaThread("8.8.8.8", 80); },
+                "SandboxIo::checkNetworkOnJavaThread\\(", "network check");
+            assertJavaRefused(p, sub () { SandboxIo::checkFileOnJavaThread(file, False); },
+                "SandboxIo::checkFileOnJavaThread\\(", "file check");
+            assertJavaRefused(p, \SandboxIo::isSandboxedOnJavaThread(), "SandboxIo::isSandboxedOnJavaThread\\(",
+                "isSandboxed()");
+            assertJavaRefused(p, \SandboxIo::captureOnJavaThread(), "SandboxIo::captureOnJavaThread\\(", "capture()");
+        }
+        foreach code call in (sandboxClassesRefused()
+            ? (sub (code c) { c(); },)
+            : (sub (code c) { c(); }, sub (code c) { p.callFunction("through", c); })) {
             assertDenied("JNI-SANDBOX-ERROR", sub () {
                 call(sub () { SandboxIo::checkNetworkOnJavaThread("8.8.8.8", 80); });
             }, "no Qore caller", "network check");
@@ -307,6 +394,20 @@ class JniSandboxIoTest inherits QUnit::Test {
     testCapturedPolicy() {
         Program p = getPrivateBlocked();
         code through = auto sub (code c) { return p.callFunction("through", c); };
+
+        if (sandboxClassesRefused()) {
+            assertJavaRefused(p, sub () { SandboxIo::checkNetworkWithPolicy("8.8.8.8", 80); },
+                "SandboxIo::checkNetworkWithPolicy\\(", "the Policy object");
+            assertJavaRefused(p, sub () { SandboxIo::checkNetworkWrapped("8.8.8.8", 80); },
+                "SandboxIo::checkNetworkWrapped\\(", "a wrapped task");
+            assertJavaRefused(getFilesystemSandboxed(), sub () { SandboxIo::checkFileWithPolicy(file, False); },
+                "SandboxIo::checkFileWithPolicy\\(", "a filesystem check");
+            # trusted code is not affected
+            assertEq(("127.0.0.1",), SandboxIo::checkNetworkWithPolicy("127.0.0.1", 80), "trusted");
+            assertEq(("127.0.0.1",), SandboxIo::checkNetworkWrapped("127.0.0.1", 80), "trusted");
+            assertEq((False, False), SandboxIo::isSandboxedCaptured());
+            testSkip(RefusedSkip);
+        }
 
         # the Policy object
         assertThrows("NETWORK-ACCESS-DENIED", sub () { through(sub () { SandboxIo::checkNetworkWithPolicy("127.0.0.1", 80); }); });
@@ -341,6 +442,11 @@ class JniSandboxIoTest inherits QUnit::Test {
     #! a policy captured in tenant A's sandbox decides checks on Qore threads that run other code (qore#5644)
     testPolicyOnQoreThread() {
         Program a = getPrivateBlocked();
+        if (sandboxClassesRefused()) {
+            # qore#7832: tenant A cannot capture a policy, as its sandbox refuses Java code
+            assertJavaRefused(a, \SandboxIo::capture(), "SandboxIo::capture\\(", "tenant A's capture()");
+            testSkip(RefusedSkip);
+        }
         object policy = a.callFunction("through", \SandboxIo::capture());
         on_exit policy.close();
         # tenant B: a looser sandbox, whose Program runs on the thread
@@ -410,6 +516,15 @@ class JniSandboxIoTest inherits QUnit::Test {
         SandboxManager sm_c();
         sm_c.setNetworkDefaultPolicy(True);
         Program c = getSandboxed(sm_c);
+        if (sandboxClassesRefused()) {
+            # qore#7832: the looser tenant cannot capture a policy, as its sandbox, which allows the network, still
+            # restricts the filesystem, and so refuses Java code
+            assertJavaRefused(c, \SandboxIo::capture(), "SandboxIo::capture\\(", "the looser tenant's capture()",
+                FilesystemRestricted);
+            assertJavaRefused(b, sub () { SandboxIo::checkNetwork("127.0.0.1", 80); }, "SandboxIo::checkNetwork\\(",
+                "tenant B's check");
+            testSkip(RefusedSkip);
+        }
         object looser = c.callFunction("through", \SandboxIo::capture());
         on_exit looser.close();
         object trusted = SandboxIo::capture();
@@ -450,6 +565,11 @@ class JniSandboxIoTest inherits QUnit::Test {
 
     testPolicyScope() {
         Program p = getPrivateBlocked();
+        if (sandboxClassesRefused()) {
+            assertJavaRefused(p, sub () { SandboxIo::checkNetworkAfterRun("8.8.8.8", 80); },
+                "SandboxIo::checkNetworkAfterRun\\(", "after the task");
+            testSkip(RefusedSkip);
+        }
         # after a task returns, the static methods of its thread no longer have a policy
         assertDenied("JNI-SANDBOX-ERROR", sub () {
             p.callFunction("through", sub () { SandboxIo::checkNetworkAfterRun("8.8.8.8", 80); });
@@ -471,6 +591,14 @@ class JniSandboxIoTest inherits QUnit::Test {
         assertDenied("JNI-SANDBOX-ERROR", \SandboxIo::captureFromClosedPolicy(), "closed", "capture");
         # policies that are not closed are released by native cleanup (checked by valgrind)
         Program p = getPrivateBlocked();
+        if (sandboxClassesRefused()) {
+            # qore#7832: sandboxed code cannot capture policies, as its sandbox refuses Java code
+            assertJavaRefused(p, sub () { SandboxIo::leakPolicies(50); }, "SandboxIo::leakPolicies\\(",
+                "sandboxed leaked policies");
+            SandboxIo::leakPolicies(50);
+            assertEq(("8.8.8.8",), SandboxIo::checkNetworkWithPolicy("8.8.8.8", 80), "capturing still works");
+            return;
+        }
         p.callFunction("through", sub () { SandboxIo::leakPolicies(50); });
         SandboxIo::leakPolicies(50);
         assertEq(("8.8.8.8",), p.callFunction("through", auto sub () { return SandboxIo::checkNetworkWithPolicy("8.8.8.8", 80); }),
@@ -479,6 +607,11 @@ class JniSandboxIoTest inherits QUnit::Test {
 
     testConcurrent() {
         Program p = getPrivateBlocked();
+        if (sandboxClassesRefused()) {
+            assertJavaRefused(p, sub () { SandboxIo::checkNetworkConcurrently("8.8.8.8", 80, 8); },
+                "SandboxIo::checkNetworkConcurrently\\(", "concurrent checks");
+            testSkip(RefusedSkip);
+        }
         assertEq(8, p.callFunction("through", auto sub () { return SandboxIo::checkNetworkConcurrently("8.8.8.8", 80, 8); }));
         assertThrows("NETWORK-ACCESS-DENIED", sub () {
             p.callFunction("through", sub () { SandboxIo::checkNetworkConcurrently("127.0.0.1", 80, 8); });
@@ -489,6 +622,16 @@ class JniSandboxIoTest inherits QUnit::Test {
         # the closure is handed to Java by the sandboxed Program, so it runs under its sandbox on the Java thread,
         # and the check that it makes through Java is made with that sandbox
         Program p = getPrivateBlocked();
+        if (sandboxClassesRefused()) {
+            assertJavaRefused(p, sub () {
+                SandboxIo::callOnJavaThread(auto sub () { return SandboxIo::checkNetwork("8.8.8.8", 80); });
+            }, "SandboxIo::callOnJavaThread\\(", "a callback on a Java thread");
+            # a trusted closure on a Java thread is trusted
+            assertEq(("127.0.0.1",), SandboxIo::callOnJavaThread(auto sub () {
+                return SandboxIo::checkNetwork("127.0.0.1", 80);
+            }));
+            testSkip(RefusedSkip);
+        }
         code check = auto sub (string host) {
             return p.callFunction("through", auto sub () {
                 return SandboxIo::callOnJavaThread(auto sub () { return SandboxIo::checkNetwork(host, 80); });
@@ -509,6 +652,11 @@ class JniSandboxIoTest inherits QUnit::Test {
         sm.setNetworkDefaultPolicy(False);
         sm.addNetworkAllowedHost("localhost");
         Program p = getSandboxed(sm);
+        if (sandboxClassesRefused()) {
+            assertJavaRefused(p, sub () { SandboxIo::connectChecked("localhost"); }, "SandboxIo::connectChecked\\(",
+                "a connection to an allowed host name");
+            testSkip(RefusedSkip);
+        }
         assertEq(("127.0.0.1", "127.0.0.1", "127.0.0.1"), p.callFunction("through", auto sub () {
             return SandboxIo::connectChecked("localhost");
         }));

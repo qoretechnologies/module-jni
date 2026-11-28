@@ -192,8 +192,10 @@ nothing check_network_bind(string address, int port, *object owner) [flags=NAMED
     info key \c sandbox_restricts_api), it is refused unless the governing sandbox (resolved for a policy check, so a
     system-policy capability of trusted code is not refused) trusts the code with uncontrolled APIs
     (\c SandboxManager::setUncontrolledApiPolicy()), whatever the sandbox restricts; for a composition of sandboxes,
-    every member must trust it.  Without it, it is refused to code that any sandbox governs, also through a policy
-    barrier or a system-policy capability.
+    every member must trust it.  With a %Qore library that has the restriction classes of sandboxes (qore#7832), a
+    sandbox that trusts the code but restricts the filesystem or the network refuses it as well, as the Java code
+    does its file and network I/O itself.  Without the trust API, it is refused to code that any sandbox governs, also
+    through a policy barrier or a system-policy capability.
 
     The sandbox is the run-time boundary for module code: module code runs with its own Program's parse options, and
     with its caller's only when the caller is sandboxed, so a Program that is restricted only with parse options is
@@ -225,7 +227,8 @@ nothing check_class_option(string provider, string option, *string what) [flags=
     // (jni_sandbox_refuses_uncontrolled_code())
     if (jni_sandbox_refuses_uncontrolled_code(QoreSandboxManagerHelper::Policy)) {
         xsink->raiseException("JNI-SANDBOX-ERROR", "%s option '%s' %s, which code that a sandbox does not trust "
-            "with uncontrolled APIs cannot use", provider->c_str(), option->c_str(), desc);
+            "with uncontrolled APIs" JNI_SANDBOX_CLASSES_CLAUSE " cannot use", provider->c_str(), option->c_str(),
+            desc);
     }
 #else
     // without the restriction API, module code cannot judge a composition of sandboxes, so the check keeps its

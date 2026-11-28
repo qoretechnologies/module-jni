@@ -54,11 +54,28 @@ string sub own() {
         sm.setUncontrolledApiPolicy(True);
         p.setSandboxManager(sm);
         object host_loader = get_class_loader();
+        if (sandboxClassesRefused()) {
+            # qore#7832: a sandbox that restricts the filesystem or the network refuses Java code even when it trusts
+            # its code with uncontrolled APIs, because Java code does not enforce those policies
+            assertThrows("INVALID-FUNCTION-ACCESS", "restricts FILESYSTEM.*NETWORK.*does not enforce \\(qore#7832\\)",
+                \p.callFunction(), ("reach", host_loader));
+            assertThrows("INVALID-FUNCTION-ACCESS", "restricts FILESYSTEM.*NETWORK.*does not enforce \\(qore#7832\\)",
+                \p.callFunction(), "own");
+            # a sandbox that restricts nothing does not govern its code (qore#7041), so no sandbox that governs its
+            # code lets it call Java code anymore, and the Program reach check below cannot be reached
+            testSkip("qore#7832: a sandbox that governs its code refuses Java code");
+        }
         string rv = p.callFunction("reach", host_loader);
         assertRegex(NotGoverned, rv, rv);
         # the tenant's own Program is reachable
         string own_rv = p.callFunction("own");
         assertEq("ok: tenant", own_rv, own_rv);
+    }
+
+    #! Returns True if a sandbox that trusts its code with uncontrolled APIs but restricts the filesystem or the network
+    #! refuses Java code (qore#7832)
+    private static bool sandboxClassesRefused() {
+        return get_module_hash().jni.info.sandbox_uncontrolled_api_classes ?? False;
     }
 }
 

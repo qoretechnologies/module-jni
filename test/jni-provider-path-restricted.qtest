@@ -1133,6 +1133,12 @@ string sub probe(object c) {
         }
     }
 
+    #! Returns True if a sandbox that trusts its code with uncontrolled APIs but restricts the filesystem or the network
+    #! refuses Java code (qore#7832)
+    private static bool sandboxClassesRefused() {
+        return get_module_hash().jni.info.sandbox_uncontrolled_api_classes ?? False;
+    }
+
     sandboxTest() {
         # a sandbox that trusts the code with uncontrolled APIs and denies the file system by default
         SandboxManager sm();
@@ -1147,12 +1153,25 @@ string sub probe(object c) {
         sm.addFilesystemAllowedPath(normalize_dir(script_dir + "/../build"), QSEC_READ);
         int refused = markerCount("Refused");
         Program p = getProgram(0, sm);
+        # qore#7832: the sandbox restricts the filesystem, which Java code does not enforce, so the class options are
+        # refused before their entries are checked against its policy, although the sandbox trusts the code with
+        # uncontrolled APIs
+        string cp_exp = sandboxClassesRefused()
+            ? "^JNI-SANDBOX-ERROR: .*names a Java class or classpath to load, which code that a sandbox does not trust "
+                "with uncontrolled APIs, or whose sandbox restricts the filesystem or the network, cannot use"
+            : "^FILESYSTEM-ACCESS-DENIED: .*not allowed by the sandbox filesystem policy";
         string rv = p.callFunction("jdbc", jarOf("Refused"), classOf("Refused"));
-        assertRegex("^FILESYSTEM-ACCESS-DENIED: .*not allowed by the sandbox filesystem policy", rv,
-            "trusting sandbox: jdbc classpath");
+        assertRegex(cp_exp, rv, "trusting sandbox: jdbc classpath");
+        if (sandboxClassesRefused()) {
+            assertRegex("^JNI-SANDBOX-ERROR: jdbc-dp option 'classpath'", rv,
+                "trusting sandbox: jdbc classpath option");
+        }
         rv = p.callFunction("jms", jarOf("Refused"), classOf("Refused"));
-        assertRegex("^FILESYSTEM-ACCESS-DENIED: .*not allowed by the sandbox filesystem policy", rv,
-            "trusting sandbox: jms provider_classpath");
+        assertRegex(cp_exp, rv, "trusting sandbox: jms provider_classpath");
+        if (sandboxClassesRefused()) {
+            assertRegex("^JNI-SANDBOX-ERROR: jakarta-jms option 'provider_classpath'", rv,
+                "trusting sandbox: jms provider_classpath option");
+        }
         rv = p.callFunction("ods_list", ods);
         assertRegex("^FILESYSTEM-ACCESS-DENIED: .*not permitted by security policy", rv,
             "trusting sandbox: ods list-worksheets path");

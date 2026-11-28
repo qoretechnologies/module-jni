@@ -6,6 +6,33 @@
 
     @section jni_3_0_0 jni Module Version 3.0.0
 
+    - <b>Security</b>, <b>behavior change</b> (qore#7832): with a %Qore library that has
+      \c QORE_HAVE_UNCONTROLLED_API_ENFORCEMENT, Java code is refused to code with \c PO_NO_FILESYSTEM, \c PO_NO_NETWORK
+      or \c PO_NO_EXTERNAL_PROCESS exactly as to code with \c PO_NO_UNCONTROLLED_APIS, because the JVM does its file,
+      network and process I/O itself (see @ref jni_sandbox): the Java classes, the module's functions
+      (\c Jni::load_class(), \c Jni::invoke(), ...), and the module commands that run Java code (\c import,
+      \c define-class, \c define-pending-class, \c kotlin-eval, ...) are refused to such code.  The module's own checks
+      of the Program that a command is issued into (\c define-class, \c define-pending-class, \c kotlin-eval,
+      \c set-property, \c register-shared-class, \c set-java-thread-policy, the \c global-* classpath commands), of the
+      Program of its exported import functions, of a Java call that creates a %Qore object, of the code that set the
+      \c classpath option of the \c jdbc driver, and the class handler of wildcard imports, which loads no Java class
+      for such a Program, refuse such Programs too.  A library module that its header trusts with uncontrolled APIs
+      keeps its Java code: the restrictions that its own Program imposes (inherited from the code that loaded it first),
+      external processes included, are relieved for its code, but not those that a restricted caller imposes.  Every
+      Java class declares that it enforces none of the classes (\c QoreClass::setEnforcedDomains(0)).
+      \c PO_NO_PROCESS_CONTROL and \c PO_NO_THREAD_CONTROL do not refuse Java code.  The module reports the feature with
+      the \c uncontrolled_api_enforcement key of its \c info hash in \c get_module_hash()
+
+    - <b>Security</b>, <b>behavior change</b> (qore#7832): with a %Qore library that has
+      \c QORE_HAVE_SANDBOX_UNCONTROLLED_API_CLASSES, a sandbox that trusts its code with uncontrolled APIs but restricts
+      the filesystem or the network refuses Java code as a sandbox that refuses uncontrolled APIs does: the Java classes
+      and functions, the module commands of an issuer that it governs, and the module's own sandbox checks (the \c jdbc
+      driver and its choosers, \c check_class_option(), the commands that change the JVM or the shared classpath, a
+      class definition in another Program's class loader, the call of a Java object used as a %Qore closure, and the
+      class handler of wildcard imports, which loads no Java class for a Program whose own sandbox refuses Java code,
+      also when trusted code parses its code, or while code whose sandbox refuses Java code resolves a name), so such
+      code no longer reaches the file-system policy checks of classpath entries and lookups.  The module reports it with
+      the \c sandbox_uncontrolled_api_classes key of its \c info hash in \c get_module_hash()
     - <b>Security</b> (qore#7867): code restricted from the filesystem, the network, external processes,
       uncontrolled APIs or embedded logic by parse options that chooses a \c jdbc connection can only use the
       allow-listed client/server drivers, URL forms and parameters (see @ref jdbc_restricted_choosers)

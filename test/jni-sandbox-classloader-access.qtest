@@ -117,6 +117,32 @@ string sub compile_error(object compiler) {
         assertRegex("^refused: .*" + NotGoverned, rv, rv);
     }
 
+    #! returns the regex of the refusal of the given Java API by a sandbox that trusts its code with uncontrolled APIs
+    #! but restricts the filesystem and the network (qore#7832)
+    private static string refusedFor(string api) {
+        return "restricts FILESYSTEM \\(PO_NO_FILESYSTEM\\), NETWORK \\(PO_NO_NETWORK\\), which uncontrolled API .*"
+            + api + ".* does not enforce \\(qore#7832\\)";
+    }
+
+    #! asserts that the tenant's sandbox refuses the Java API that the given tenant function calls first (qore#7832)
+    /** the tenant's sandbox trusts it with uncontrolled APIs but restricts the filesystem and the network, which Java
+        code does not enforce
+    */
+    private assertTenantRefused(string api, string fn, *softlist<auto> args) {
+        list<auto> call_args = ();
+        push call_args, fn;
+        if (args) {
+            call_args += args;
+        }
+        assertThrows("INVALID-FUNCTION-ACCESS", refusedFor(api), \getTenant().callFunction(), call_args);
+    }
+
+    #! Returns True if a sandbox that trusts its code with uncontrolled APIs but restricts the filesystem or the network
+    #! refuses Java code (qore#7832)
+    private static bool sandboxClassesRefused() {
+        return get_module_hash().jni.info.sandbox_uncontrolled_api_classes ?? False;
+    }
+
     #! a process with trusted code only is not affected; runs before sandboxed code has used Java
     trustedOnlyTest() {
         assertNothing(tenant);
@@ -128,10 +154,17 @@ string sub compile_error(object compiler) {
 
     parentPathTest() {
         string denied = normalize_dir(get_script_dir() + "/java");
-        object own = getTenant().callFunction("own_loader");
-        assertFalse(ClassLoaderAccessProbe::parentHasPath(own, denied));
-        assertRefused(getTenant().callFunction("add_parent", denied));
-        assertFalse(ClassLoaderAccessProbe::parentHasPath(own, denied));
+        if (sandboxClassesRefused()) {
+            # qore#7832: the tenant's sandbox refuses Java code, so it cannot reach its class loader to change it
+            assertTenantRefused("get_class_loader", "own_loader");
+            assertTenantRefused("get_class_loader", "add_parent", denied);
+            assertFalse(ClassLoaderAccessProbe::parentHasPath(host_loader, denied));
+        } else {
+            object own = getTenant().callFunction("own_loader");
+            assertFalse(ClassLoaderAccessProbe::parentHasPath(own, denied));
+            assertRefused(getTenant().callFunction("add_parent", denied));
+            assertFalse(ClassLoaderAccessProbe::parentHasPath(own, denied));
+        }
 
         # trusted code changes the classpath of the parent of its own class loader
         string allowed = normalize_dir(get_script_dir() + "/docker_test");
@@ -142,14 +175,24 @@ string sub compile_error(object compiler) {
 
     sharedRegistryTest() {
         # sandboxed code cannot name a class loader as the owner, neither another Program's nor its own, as the
-        # registry is process-wide
-        assertRefused(getTenant().callFunction("register_loader", host_loader));
-        assertRefused(getTenant().callFunction("register_own"));
+        # registry is process-wide; with qore#7832, the tenant's sandbox refuses the Java code already
+        bool refused = sandboxClassesRefused();
+        if (refused) {
+            assertTenantRefused("registerShared", "register_loader", host_loader);
+            assertTenantRefused("get_class_loader", "register_own");
+        } else {
+            assertRefused(getTenant().callFunction("register_loader", host_loader));
+            assertRefused(getTenant().callFunction("register_own"));
+        }
 
         # a class that trusted code shares is not defined in its owner with the bytes of sandboxed code
         string rv = ClassLoaderAccessProbe::registerShared(host_loader);
         assertEq("ok: registered", rv, rv);
-        assertRefused(getTenant().callFunction("define_own"));
+        if (refused) {
+            assertTenantRefused("get_class_loader", "define_own");
+        } else {
+            assertRefused(getTenant().callFunction("define_own"));
+        }
 
         # the owner defines the class
         rv = ClassLoaderAccessProbe::defineShared(host_loader);
@@ -157,6 +200,14 @@ string sub compile_error(object compiler) {
     }
 
     foreignLoaderTest() {
+        if (sandboxClassesRefused()) {
+            # qore#7832: the tenant's sandbox refuses Java code, so it cannot create a class loader
+            assertTenantRefused("newForeignCall", "foreign_call", host_loader);
+            # the host's own Java code still reaches its Program
+            assertEq("ok: host", GovernedProgramProbe::callIn(host_loader, "host_fn"));
+            testSkip("qore#7832: a sandbox that trusts its code with uncontrolled APIs but restricts the filesystem "
+                + "or the network refuses Java code, so sandboxed code cannot use Java");
+        }
         # the class of a class loader that sandboxed code created below the host's is not the host's code
         auto call = getTenant().callFunction("foreign_call", host_loader);
         assertRefused(ClassLoaderAccessProbe::runCall(call));
@@ -171,6 +222,14 @@ string sub compile_error(object compiler) {
     refusedConstructorTest() {
         # each public constructor
         for (int ctor = 0; ctor < 3; ++ctor) {
+            if (sandboxClassesRefused()) {
+                # qore#7832: the tenant's sandbox refuses Java code, so it cannot call the constructor
+                assertTenantRefused("tryRecordingLoader", "try_recording", (ctor, host_loader));
+                assertTenantRefused("recordedCall", "recorded_call");
+                string rv = ClassLoaderAccessProbe::tryRecordingLoader(ctor, host_loader);
+                assertRegex("^ok: true ", rv, rv);
+                continue;
+            }
             string rv = getTenant().callFunction("try_recording", ctor, host_loader);
             # no object of the refused constructor can define classes that count as the host's
             auto call = getTenant().callFunction("recorded_call");
@@ -199,6 +258,13 @@ string sub compile_error(object compiler) {
         }
         on_exit call_function(SetHook, NOTHING);
 
+        if (sandboxClassesRefused()) {
+            # qore#7832: the tenant's sandbox refuses Java code, so there is no class loader of the tenant
+            assertTenantRefused("get_class_loader", "own_loader");
+            testSkip("qore#7832: a sandbox that trusts its code with uncontrolled APIs but restricts the filesystem "
+                + "or the network refuses Java code, so the tenant has no class loader to change the pointer to");
+        }
+
         # the pointer changes to another Program: refused, and nothing is cleared
         object loader = ClassLoaderAccessProbe::newDerived(host_loader);
         ClassLoaderAccessProbe::addCompilationEntry(loader);
@@ -221,19 +287,30 @@ string sub compile_error(object compiler) {
         QoreJavaCompiler compiler(host_loader, NOTHING);
         on_exit compiler.close();
 
-        # the error of a compilation is not replaced by a refusal of its cleanup
-        string rv = getTenant().callFunction("compile_error", compiler);
-        assertRegex("Compilation failed", rv, rv);
+        if (sandboxClassesRefused()) {
+            # qore#7832: the tenant's sandbox refuses Java code, so it cannot compile, nor close the compiler
+            string rv = getTenant().callFunction("compile_error", compiler);
+            assertRegex("^INVALID-FUNCTION-ACCESS: .*" + refusedFor("QoreJavaCompiler::compile\\("), rv, rv);
+            rv = getTenant().callFunction("close_compiler", compiler);
+            assertRegex("^refused: INVALID-FUNCTION-ACCESS: .*" + refusedFor("QoreJavaCompiler::close\\("), rv, rv);
+            assertFalse(compiler.isClosed());
+            assertTenantRefused("closeWithJdkProxy", "close_with_proxy", compiler);
+            assertFalse(compiler.isClosed());
+        } else {
+            # the error of a compilation is not replaced by a refusal of its cleanup
+            string rv = getTenant().callFunction("compile_error", compiler);
+            assertRegex("Compilation failed", rv, rv);
 
-        # a refused close leaves the compiler open for its owner
-        rv = getTenant().callFunction("close_compiler", compiler);
-        assertRegex("^refused: .*" + NotGoverned, rv, rv);
-        assertFalse(compiler.isClosed());
+            # a refused close leaves the compiler open for its owner
+            rv = getTenant().callFunction("close_compiler", compiler);
+            assertRegex("^refused: .*" + NotGoverned, rv, rv);
+            assertFalse(compiler.isClosed());
 
-        # also on a thread of its own, with no class of the sandboxed Program on the stack
-        rv = getTenant().callFunction("close_with_proxy", compiler);
-        assertRegex("^refused: .*" + NotGoverned, rv, rv);
-        assertFalse(compiler.isClosed());
+            # also on a thread of its own, with no class of the sandboxed Program on the stack
+            rv = getTenant().callFunction("close_with_proxy", compiler);
+            assertRegex("^refused: .*" + NotGoverned, rv, rv);
+            assertFalse(compiler.isClosed());
+        }
 
         # the owner closes it
         compiler.close();
@@ -242,9 +319,16 @@ string sub compile_error(object compiler) {
 
     loaderStateTest() {
         object victim = ClassLoaderAccessProbe::newDerived(host_loader);
-        assertRefused(getTenant().callFunction("close_loader", victim));
-        assertRefused(getTenant().callFunction("clear_loader", victim));
-        assertRefused(getTenant().callFunction("assert_loader", victim));
+        if (sandboxClassesRefused()) {
+            # qore#7832: the tenant's sandbox refuses Java code, so it cannot change another class loader's state
+            assertTenantRefused("ClassLoaderAccessProbe::close\\(", "close_loader", victim);
+            assertTenantRefused("clearCompilationCache", "clear_loader", victim);
+            assertTenantRefused("setAssertionStatus", "assert_loader", victim);
+        } else {
+            assertRefused(getTenant().callFunction("close_loader", victim));
+            assertRefused(getTenant().callFunction("clear_loader", victim));
+            assertRefused(getTenant().callFunction("assert_loader", victim));
+        }
 
         # the Program's own code can do so
         string rv = ClassLoaderAccessProbe::clearCompilationCache(victim);

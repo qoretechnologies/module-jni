@@ -11,7 +11,10 @@
 # - "uncontrolled": a Program with a sandbox that denies the filesystem but trusts the code with uncontrolled APIs
 #   (SandboxManager::setUncontrolledApiPolicy(), as test/jni-sandbox.qtest models sandboxed code) uses JDK classes to
 #   keep the QoreExceptionWrapper of a Qore exception that its own closure raises, makes Java throw the wrapper back
-#   to Qore, and gets its message again; it prints "tenant: <result>"
+#   to Qore, and gets its message again; it prints "tenant: <result>" (a sandbox that restricts the filesystem refuses
+#   Java code with a Qore library that has the rule of qore#7832, which it prints first as "classes-refused: <bool>")
+# - "open": the same with a sandbox that trusts the code with uncontrolled APIs and restricts neither the filesystem
+#   nor the network, which no Qore library refuses Java code; it prints "tenant: <result>"
 # it then prints "after: <case>"
 
 %modern
@@ -55,6 +58,12 @@ string sub run() {
 }
 ";
 
+#! Returns True if a sandbox that trusts its code with uncontrolled APIs but restricts the filesystem or the network
+#! refuses Java code (qore#7832)
+bool sub sandbox_classes_refused() {
+    return get_module_hash().jni.info.sandbox_uncontrolled_api_classes ?? False;
+}
+
 string sub try_parse(SandboxManager sm, string src) {
     Program p(PO_NEW_STYLE);
     p.setSandboxManager(sm);
@@ -84,6 +93,16 @@ switch (case_name) {
     case "uncontrolled": {
         SandboxManager sm();
         sm.setFilesystemDefaultPolicy(False);
+        call_object_method(sm, "setUncontrolledApiPolicy", True);
+        printf("classes-refused: %y\n", sandbox_classes_refused());
+        printf("tenant: %s\n", try_parse(sm, TenantSource));
+        break;
+    }
+
+    case "open": {
+        SandboxManager sm();
+        sm.setFilesystemDefaultPolicy(True);
+        sm.setNetworkDefaultPolicy(True);
         call_object_method(sm, "setUncontrolledApiPolicy", True);
         printf("tenant: %s\n", try_parse(sm, TenantSource));
         break;

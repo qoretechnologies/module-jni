@@ -185,6 +185,11 @@ string sub background_via(string op) {
         #! the error of state that library code would create for code that is not known
         const CallerNotKnown = "cannot hold Java state for its caller, which is not known";
 
+        #! the refusal of a Java call to code whose sandbox restricts the filesystem and the network (qore#7832)
+        const ClassesRefused = "^INVALID-FUNCTION-ACCESS: the sandbox that governs the calling code restricts "
+            "FILESYSTEM \\(PO_NO_FILESYSTEM\\), NETWORK \\(PO_NO_NETWORK\\), which uncontrolled API .* does not "
+            "enforce \\(qore#7832\\)";
+
         #! the ways that the tenants call the library
         const Hows = ("function", "static");
     }
@@ -210,6 +215,36 @@ string sub background_via(string op) {
         set_return_value(main());
     }
 
+    #! Returns True if a sandbox that trusts its code with uncontrolled APIs but restricts the filesystem or the network
+    #! refuses Java code (qore#7832)
+    private static bool sandboxClassesRefused() {
+        return get_module_hash().jni.info.sandbox_uncontrolled_api_classes ?? False;
+    }
+
+    #! with the rule of qore#7832, asserts that the first Java step of a case is refused to the tenant, and skips the
+    #! rest of the case
+    /** the tenants' sandbox trusts them with uncontrolled APIs but restricts the filesystem and the network, which
+        Java code does not enforce, so every Java call that the library makes for them is refused: no Java state is
+        created for them, in any Program
+
+        @param step the first step of the case; returns the error (\c "<err>: <desc>") or the result of the step
+        @param label the label of the assertion
+    */
+    private skipIfClassesRefused(code step, string label) {
+        if (!sandboxClassesRefused()) {
+            return;
+        }
+        string rv;
+        try {
+            rv = sprintf("%s", step());
+        } catch (hash<ExceptionInfo> ex) {
+            rv = sprintf("%s: %s", ex.err, ex.desc);
+        }
+        assertRegex(ClassesRefused, rv, label + ": refused with a restricting sandbox");
+        testSkip("qore#7832: the sandbox of the tenants restricts the filesystem and the network, so it refuses the "
+            "Java code that the library calls for them; no Java state is created for them");
+    }
+
     #! returns a new sandboxed Program with the library, by name
     private Program tenant(string name) {
         Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
@@ -217,7 +252,9 @@ string sub background_via(string op) {
         p.callFunction("set_tenant_name", name);
         SandboxManager sm();
         # only a tenant trusted with uncontrolled APIs can call Java code; the filesystem and the network stay
-        # restricted, so the sandbox restricts
+        # restricted, so the sandbox restricts; with the rule of qore#7832, a sandbox that restricts the filesystem or
+        # the network refuses Java code although it trusts the code with uncontrolled APIs (see
+        # skipIfClassesRefused())
         sm.setUncontrolledApiPolicy(True);
         p.setSandboxManager(sm);
         return p;
@@ -259,6 +296,9 @@ string sub background_via(string op) {
 
     defineClassTest() {
         binary bytecode = parse_hex_string(DefinedByteCode);
+        skipIfClassesRefused(auto sub () {
+            return tenant("A").callFunction("define_class_via", "function", DefinedName, bytecode).err;
+        }, "define_class_via");
         foreach string how in (Hows) {
             # two tenants define a class of the same name: each in its own class loader, so neither is refused as a
             # duplicate in a class loader that they share
@@ -278,6 +318,7 @@ string sub background_via(string op) {
         foreach hash<auto> i in (ts.pairIterator()) {
             i.value.callFunction("set_callback");
         }
+        skipIfClassesRefused(auto sub () { return ts.A.callFunction("new_object_direct"); }, "new_object_direct");
         # each tenant's callback is its own: the objects that Java creates in its Program, also for library code, are
         # given to its callback only
         foreach hash<auto> i in (ts.pairIterator()) {
@@ -290,6 +331,8 @@ string sub background_via(string op) {
     }
 
     newObjectTest() {
+        skipIfClassesRefused(auto sub () { return tenant("A").callFunction("new_object_via", "function"); },
+            "new_object_via");
         foreach string how in (Hows) {
             foreach hash<auto> i in (tenants().pairIterator()) {
                 assertEq("OK: " + i.key, i.value.callFunction("new_object_via", how), how + " " + i.key);
@@ -301,6 +344,8 @@ string sub background_via(string op) {
         if (!exists objectProgramId(new Mutex())) {
             testSkip("the module has no dbg_jni_object_program_id() (not a debug build)");
         }
+        skipIfClassesRefused(auto sub () { return tenant("A").callFunction("byte_array_via", "function"); },
+            "byte_array_via");
         foreach string how in (Hows) {
             foreach hash<auto> i in (tenants().pairIterator()) {
                 object array = i.value.callFunction("byte_array_via", how);
@@ -314,6 +359,13 @@ string sub background_via(string op) {
     }
 
     backgroundTest() {
+        if (sandboxClassesRefused()) {
+            # trusted code that calls the library has the state placed as libqore names the Program
+            assertEq("2", call_function("JniLibraryCallerProgram::jlcp_byte_array_background", <0102>));
+            assertEq("2", call_function("JniLibraryCallerProgram::jlcp_background", "new_array"));
+        }
+        skipIfClassesRefused(auto sub () { return tenant("A").callFunction("byte_array_background"); },
+            "byte_array_background");
         # a thread that library code starts for a sandboxed Program does not run in that Program: the state is
         # refused, not placed in the library's Program
         foreach hash<auto> i in (tenants().pairIterator()) {
@@ -333,6 +385,8 @@ string sub background_via(string op) {
     }
 
     javaClosureTest() {
+        skipIfClassesRefused(auto sub () { return tenant("A").callFunction("java_closure_via", "function"); },
+            "java_closure_via");
         # the closure runs in the Program of the code that obtained it, which Java's calls into Qore reach
         foreach string how in (Hows) {
             foreach hash<auto> i in (tenants().pairIterator()) {
@@ -343,6 +397,8 @@ string sub background_via(string op) {
 
     fieldTest() {
         hash<string, Program> ts = tenants();
+        skipIfClassesRefused(auto sub () { return ts.A.callFunction("field_closure_via", "instance"); },
+            "field_closure_via");
         # a Java closure read from a field is the calling code's: it runs in that code's Program and reaches it
         foreach string which in ("instance", "static") {
             foreach hash<auto> i in (ts.pairIterator()) {
@@ -365,6 +421,7 @@ string sub background_via(string op) {
         if (!exists objectProgramId(new Mutex())) {
             testSkip("the module has no dbg_jni_object_program_id() (not a debug build)");
         }
+        skipIfClassesRefused(auto sub () { return tenant("A").callFunction("new_array_via"); }, "new_array_via");
         foreach hash<auto> i in (tenants().pairIterator()) {
             object array = i.value.callFunction("new_array_via");
             assertEq(2, array.length(), i.key + ": length");
@@ -373,6 +430,8 @@ string sub background_via(string op) {
     }
 
     nestedTest() {
+        skipIfClassesRefused(auto sub () { return tenant("A").callFunction("nested_byte_array_via", "static"); },
+            "nested_byte_array_via");
         # through a static method of the same library
         foreach hash<auto> i in (tenants().pairIterator()) {
             object array = i.value.callFunction("nested_byte_array_via", "static");
@@ -401,6 +460,7 @@ string sub background_via(string op) {
 
     storedClosureTest() {
         hash<string, Program> ts = tenants();
+        skipIfClassesRefused(auto sub () { return ts.A.callFunction("store_closure"); }, "store_closure");
         ts.A.callFunction("store_closure");
         # the closure that the library keeps is the code's that obtained it, whoever calls it later: its Program, not
         # the library's
@@ -431,6 +491,7 @@ string sub background_via(string op) {
     }
 
     callQoreTest() {
+        skipIfClassesRefused(auto sub () { return tenant("A").callFunction("call_qore_via"); }, "call_qore_via");
         # Java code that the library code calls for a sandboxed Program reaches only that Program: not the library's
         foreach hash<auto> i in (tenants().pairIterator()) {
             string rv = i.value.callFunction("call_qore_via");

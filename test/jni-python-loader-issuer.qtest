@@ -28,6 +28,8 @@ class JniPythonLoaderIssuerTest inherits QUnit::Test {
             \restrictedProgramTest());
         addTestCase("trusted code cannot import Java classes into a Program without uncontrolled APIs",
             \restrictedTargetTest());
+        addTestCase("trusted code cannot import Java classes into a Program that restricts a class that Java code "
+            "does not respect", \restrictedClassTargetTest());
         set_return_value(main());
     }
 
@@ -55,8 +57,23 @@ class JniPythonLoaderIssuerTest inherits QUnit::Test {
     restrictedTargetTest() {
         checkPython();
     }
+
+    restrictedClassTargetTest() {
+        checkPython();
+    }
 %else
     private:internal {
+        #! the restriction classes that Java code does not respect (qore#7832), with the reason of the refusal and the
+        #! Java class and package that each case imports (a Python module that was imported stays in the import cache)
+        const ClassTargets = {
+            "no-filesystem": {"po": PO_NO_FILESYSTEM, "reason": "the filesystem", "cls": "java.time.Period",
+                "pkg": "java.time.chrono", "pkg_name": "chrono"},
+            "no-network": {"po": PO_NO_NETWORK, "reason": "the network", "cls": "java.time.Instant",
+                "pkg": "java.time.temporal", "pkg_name": "temporal"},
+            "no-external-process": {"po": PO_NO_EXTERNAL_PROCESS, "reason": "external processes",
+                "cls": "java.time.Year", "pkg": "java.time.zone", "pkg_name": "zone"},
+        };
+
         #! Python code calling each exported function
         const PySource = "import importlib
 import qoreloader
@@ -177,6 +194,39 @@ def imp(name):
         assertEq("ok", trusted.callFunction("load", "java.time.Duration"), "load_java into a trusted Program");
         assertEq("ok", trusted.callFunction("imp", "java.time.format"), "import of a java module into a trusted "
             "Program");
+    }
+
+    #! Returns True if the jni module refuses Java code in a Program that restricts a class that Java code does not
+    #! respect, as in a Program with PO_NO_UNCONTROLLED_APIS (qore#7832)
+    private static bool uncontrolledApiEnforcement() {
+        return get_module_hash().jni.info.uncontrolled_api_enforcement ?? False;
+    }
+
+    restrictedClassTargetTest() {
+        # as restrictedTargetTest(), for a Program that restricts the filesystem, the network or external processes:
+        # with the restriction classes of uncontrolled APIs, the module's check of the Program that the classes are
+        # imported into (jni_exported_import_allowed()) refuses it as a Program with PO_NO_UNCONTROLLED_APIS
+        foreach hash<auto> c in (ClassTargets.pairIterator()) {
+            Program p(PO_NEW_STYLE);
+            p.parse("%requires python\n"
+                "object sub make(string src) { return new Python::PythonProgram(src, 'jni-python-loader-class.py'); }",
+                "jni-python-loader-class-target-" + c.key);
+            object pp = p.callFunction("make", PySource);
+            code load = pp.getAttribute("load");
+            code imp = pp.getAttribute("imp");
+            p.setParseOptions(c.value.po);
+            assertEq(c.value.po, p.getParseOptions() & c.value.po, c.key + ": the Program is restricted");
+            if (uncontrolledApiEnforcement()) {
+                assertThrows("JNI-SANDBOX-ERROR", "a Program that restricts " + c.value.reason + " \\(which Java code "
+                    "does not respect\\) cannot import Java classes", load, (c.value.cls,), c.key + ": load_java");
+                # the first package of the path that is not imported yet is the one refused
+                assertThrows("builtins.ValueError", "failed to create Java namespace '(time|" + c.value.pkg_name
+                    + ")'", imp, (c.value.pkg,), c.key + ": import of a java module");
+            } else {
+                assertEq("ok", load(c.value.cls), c.key + ": load_java without the feature");
+                assertEq("ok", imp(c.value.pkg), c.key + ": import of a java module without the feature");
+            }
+        }
     }
 %endif
 }

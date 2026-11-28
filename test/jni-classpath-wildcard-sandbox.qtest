@@ -163,9 +163,22 @@ class JniClasspathWildcardSandboxTest inherits QUnit::Test {
         string out = backquote(cmd, \rc);
         assertEq(0, rc, "exit code: " + out);
         list<string> lines = select out.split("\n"), $1 =~ /^result: /;
+        # qore#7832: with a jni module that reports it, the sandbox of a sandboxed case, which restricts the
+        # filesystem, refuses Java code although it allows uncontrolled APIs; this process does not load the module,
+        # so the child checks it, checks the refusal of the case's first Java use and skips the rest
+        bool refused = boolean(out =~ /^result: [^:]+: skipped \(qore#7832/m);
+        if (refused) {
+            expected = (sprintf("result: %s: refused (qore#7832): OK", name),
+                sprintf("result: %s: skipped (qore#7832: a sandbox that restricts the filesystem refuses Java code)",
+                    name));
+        }
         assertEq(expected, lines, out);
         assertTrue(out =~ /^end$/m, "the child did not reach its end: " + out);
         assertFalse(out =~ /unhandled QORE System exception/, "an unhandled exception was printed: " + out);
+        if (refused) {
+            testSkip("qore#7832: a sandbox that restricts the filesystem refuses Java code, so the case's classpath "
+                "entries are not checked against it");
+        }
     }
 
     private makeDir(string dir) {

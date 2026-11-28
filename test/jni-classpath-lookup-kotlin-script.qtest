@@ -40,6 +40,11 @@ string sub ev(string script) {
         const UsesDenied = "val x: denied.Hidden? = null\n1";
         const UsesJar = "val x: jarpkg.InJar? = null\n2";
         const Plain = "3";
+
+        #! the reason of the core's refusal of Java code to a sandbox that restricts the filesystem (qore#7832)
+        const RefusedDescRx = "restricts FILESYSTEM \\(PO_NO_FILESYSTEM\\).*\\(qore#7832\\)";
+        #! the result of ev() for a script that the core refuses (qore#7832)
+        const RefusedRx = "^INVALID-FUNCTION-ACCESS: .*" + RefusedDescRx;
     }
 
     private {
@@ -155,6 +160,12 @@ string sub ev(string script) {
         return sm;
     }
 
+    #! Returns True if a sandbox that trusts its code with uncontrolled APIs but restricts the filesystem or the network
+    #! refuses Java code (qore#7832)
+    private static bool sandboxClassesRefused() {
+        return get_module_hash().jni.info.sandbox_uncontrolled_api_classes ?? False;
+    }
+
     trustedTest() {
         checkKotlin();
         Program p = newProgram(NOTHING, "dir");
@@ -164,6 +175,19 @@ string sub ev(string script) {
     directoryTest() {
         checkKotlin();
         Program p = newProgram(getPolicy(), "dir");
+        if (sandboxClassesRefused()) {
+            # qore#7832: the sandbox allows uncontrolled APIs but restricts the filesystem, so the core refuses the
+            # script function and the Java class to its code before the module checks the classpath
+            foreach string script in (UsesDenied, Plain) {
+                string rv = p.callFunction("ev", script);
+                assertRegex(RefusedRx, rv, rv);
+                foreach bool bindings in (False, True) {
+                    assertThrows("INVALID-FUNCTION-ACCESS", RefusedDescRx, \p.callFunction(), ("ev_other_context",
+                        script, bindings));
+                }
+            }
+            return;
+        }
         foreach string script in (UsesDenied, Plain) {
             string rv = p.callFunction("ev", script);
             assertRegex("cannot be evaluated by code that a sandbox filesystem policy restricts", rv, rv);
@@ -178,6 +202,14 @@ string sub ev(string script) {
     jarTest() {
         checkKotlin();
         Program p = newProgram(getPolicy(), "jars/app.jar");
+        if (sandboxClassesRefused()) {
+            # qore#7832: the sandbox allows uncontrolled APIs but restricts the filesystem, so the core refuses the
+            # script function to its code
+            string rv = p.callFunction("ev", UsesJar);
+            assertRegex(RefusedRx, rv, rv);
+            testSkip("qore#7832: a sandbox that restricts the filesystem refuses Java code, so its scripts are not "
+                "evaluated");
+        }
         assertEq("result: 2", p.callFunction("ev", UsesJar));
     }
 }

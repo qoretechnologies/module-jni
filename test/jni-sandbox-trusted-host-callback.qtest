@@ -20,6 +20,12 @@ class JniSandboxTrustedHostCallback inherits QUnit::Test {
     public {
         const NotGoverned = "cannot call into a Qore Program other than the one of the calling code";
 
+        #! the refusal of Java code under the tenant's sandbox, which trusts its code with uncontrolled APIs but
+        #! restricts the filesystem and the network (qore#7832)
+        const SandboxRefused = "^ERR: INVALID-FUNCTION-ACCESS: the sandbox that governs the calling code restricts "
+            "FILESYSTEM \\(PO_NO_FILESYSTEM\\), NETWORK \\(PO_NO_NETWORK\\), which uncontrolled API .* "
+            "\\(qore#7832\\)$";
+
         const SvcSource = "package q1088;
 import org.qore.jni.QoreJavaApi;
 public class Svc {
@@ -171,12 +177,29 @@ string sub own() {
     poison() {
         Program t = getTenant();
         # a restricting sandbox's own Java call: this marks governed Java as used in the process
-        assertEq("ok: tenant", attempt(string sub () { return t.callFunction("own"); }));
+        string rv = attempt(string sub () { return t.callFunction("own"); });
+        if (sandboxClassesRefused()) {
+            # qore#7832: the tenant's sandbox restricts the filesystem and the network, so it refuses its own Java
+            # call; no restricting sandbox can use Java, so the state that governed Java leaves is set with the module
+            # command that sets it (the Java threads of the process reach no Program by a Program pointer from now on),
+            # and the "after" cases run in it
+            assertRegex(SandboxRefused, rv, rv);
+            Program::issueModuleCmd("jni", "set-java-thread-policy strict");
+            return;
+        }
+        assertEq("ok: tenant", rv);
     }
 
     negHost() {
         Program t = getTenant();
         string rv = attempt(string sub () { return t.callFunction("reach", get_class_loader(), "host_fn"); });
+        if (sandboxClassesRefused()) {
+            # qore#7832: the tenant's sandbox refuses the Java call before it can reach the host, and also its own
+            assertRegex(SandboxRefused, rv, rv);
+            rv = attempt(string sub () { return t.callFunction("own"); });
+            assertRegex(SandboxRefused, rv, rv);
+            return;
+        }
         assertRegex(NotGoverned, rv, rv);
         assertEq("ok: tenant", attempt(string sub () { return t.callFunction("own"); }));
     }
@@ -184,6 +207,14 @@ string sub own() {
     negTenant() {
         Program t = getTenant();
         Program other = getTenant();
+        if (sandboxClassesRefused()) {
+            # qore#7832: the other tenant's sandbox refuses get_class_loader(), so no tenant loader can be handed to
+            # the first tenant
+            string rv = attempt(string sub () { return other.callFunction("tenant_loader").className(); });
+            assertRegex(SandboxRefused, rv, rv);
+            testSkip("qore#7832: the tenants' sandbox trusts them with uncontrolled APIs but restricts the filesystem "
+                "and the network, so it refuses their Java code; no tenant can reach another through Java");
+        }
         object loader = other.callFunction("tenant_loader");
         string rv = attempt(string sub () { return t.callFunction("reach", loader, "tenant_fn"); });
         assertRegex(NotGoverned, rv, rv);
@@ -202,6 +233,12 @@ string sub own() {
             return p.callFunction("f");
         });
         assertRegex("^ERR: INVALID-FUNCTION-ACCESS: ", rv, rv);
+    }
+
+    #! Returns True if a sandbox that trusts its code with uncontrolled APIs but restricts the filesystem or the network
+    #! refuses Java code (qore#7832)
+    private static bool sandboxClassesRefused() {
+        return get_module_hash().jni.info.sandbox_uncontrolled_api_classes ?? False;
     }
 
     private string className() {

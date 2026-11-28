@@ -70,6 +70,9 @@ string sub kotlin_compile(string src) {
         const ClassOps = ("forName", "loadClass");
         #! the lookups of a resource
         const ResourceOps = ("getResource", "getResourceAsStream", "getResources", "findResource", "findResources");
+
+        #! the reason of the core's refusal of Java code to a sandbox that restricts the filesystem (qore#7832)
+        const RefusedDesc = "restricts FILESYSTEM \\(PO_NO_FILESYSTEM\\).*\\(qore#7832\\)";
     }
 
     private {
@@ -239,6 +242,23 @@ string sub kotlin_compile(string src) {
         return rv;
     }
 
+    #! Returns True if a sandbox that trusts its code with uncontrolled APIs but restricts the filesystem or the network
+    #! refuses Java code (qore#7832)
+    private static bool sandboxClassesRefused() {
+        return get_module_hash().jni.info.sandbox_uncontrolled_api_classes ?? False;
+    }
+
+    #! with qore#7832, asserts that the core refuses Java code to the Program, whose sandbox restricts the filesystem,
+    #! and skips the rest of the test case, whose lookups cannot be made
+    private checkRefused(Program p) {
+        if (!sandboxClassesRefused()) {
+            return;
+        }
+        assertThrows("INVALID-FUNCTION-ACCESS", RefusedDesc, \p.callFunction(), ("lookup", "loadClass", "pkg.Ok"));
+        testSkip("qore#7832: a sandbox that restricts the filesystem refuses Java code, so its classpath lookups "
+            "cannot be made");
+    }
+
     private Program newProgram(*SandboxManager sm) {
         Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
         p.parse(TenantSource + (kotlin_jars ? KotlinSource : ""), "tenant");
@@ -295,6 +315,12 @@ string sub kotlin_compile(string src) {
         SandboxManager sm();
         sm.setUncontrolledApiPolicy(True);
         sm.setFilesystemDefaultPolicy(True);
+        # a sandbox that restricts nothing: a new sandbox restricts the network by default, which, with the
+        # restriction classes of sandboxes, refuses its Java code (qore#7832); without them, the network policy is
+        # left as before
+        if (sandboxClassesRefused()) {
+            sm.setNetworkDefaultPolicy(True);
+        }
         Program p = newProgram(sm);
         addClasspath(p, "allowed");
         assertAllFound(p, ("pkg.Ok", "denied.Hidden", "linked.S"),
@@ -303,6 +329,7 @@ string sub kotlin_compile(string src) {
 
     nestedDeniedTest() {
         Program p = restricted();
+        checkRefused(p);
         assertAllFound(p, "pkg.Ok", "pkg/ok.txt", "allowed");
         assertNoneFound(p, "denied.Hidden", "denied/hidden.txt", "nested denied");
 
@@ -313,6 +340,7 @@ string sub kotlin_compile(string src) {
 
     symlinkTest() {
         Program p = restricted();
+        checkRefused(p);
         assertNoneFound(p, ("linked.S", "LinkedS", "pkg.LinkedPkg"),
             ("linked/s.txt", "deep/a/linked/s.txt", "pkg/link.txt", "LinkedS.class"), "symlink");
         p = restricted("allowed/deep");
@@ -321,6 +349,7 @@ string sub kotlin_compile(string src) {
 
     dotDotTest() {
         Program p = restricted();
+        checkRefused(p);
         foreach string name in (("pkg/../denied/hidden.txt", "deep/../denied/hidden.txt", "../secret/s.txt",
                 "pkg/../../secret/s.txt", "linked/../secret/s.txt")) {
             map assertEq("missing", p.callFunction("lookup", $1, name), sprintf("%s %s", $1, name)), ResourceOps;
@@ -330,6 +359,7 @@ string sub kotlin_compile(string src) {
 
     sameAsMissingTest() {
         Program p = restricted();
+        checkRefused(p);
         foreach string op in (ClassOps) {
             assertEq(p.callFunction("lookup", op, "denied.NoSuchClass"), p.callFunction("lookup", op, "denied.Hidden"),
                 op + " nested");
@@ -346,6 +376,7 @@ string sub kotlin_compile(string src) {
 
     laterEntryTest() {
         Program p = restricted("allowed:second");
+        checkRefused(p);
         string location = p.callFunction("lookup", "location", "denied.Both");
         assertRegex("/second/$", location, location);
         assertEq("found", p.callFunction("lookup", "getResource", "denied/Both.class"));
@@ -353,6 +384,7 @@ string sub kotlin_compile(string src) {
 
     jarTest() {
         Program p = restricted("jars/app.jar");
+        checkRefused(p);
         assertAllFound(p, "jarpkg.InJar", "jarpkg/r.txt", "jar");
         # a jar with a manifest Class-Path attribute is refused on a JDK whose handling of it has not been verified
         if (!ClasspathLookupProbe::manifestClassPathVerified()) {
@@ -366,6 +398,7 @@ string sub kotlin_compile(string src) {
 
     delegationTest() {
         Program p = restricted();
+        checkRefused(p);
         object child = p.callFunction("derived");
         assertEq("found", p.callFunction("lookup_with", child, "loadClass", "pkg.Ok"));
         assertRegex("^missing", p.callFunction("lookup_with", child, "loadClass", "denied.Hidden"));
@@ -377,6 +410,7 @@ string sub kotlin_compile(string src) {
         # sandboxed code cannot make a class loader: trusted code makes it, and adds an entry under the captured policy
         # of the sandboxed code
         Program p = newProgram(getPolicy());
+        checkRefused(p);
         object policy = p.callFunction("capture_policy");
         object sub_loader = ClasspathLookupProbe::newSubLoader(p.callFunction("own_loader"));
         assertEq("ok", ClasspathLookupProbe::addUrlUnder(policy, sub_loader, root + "/allowed/"));
@@ -395,6 +429,7 @@ string sub kotlin_compile(string src) {
 
     javaThreadTest() {
         Program p = restricted();
+        checkRefused(p);
         assertEq("found", p.callFunction("lookup_on_thread", "loadClass", "pkg.Ok"));
         assertRegex("^missing", p.callFunction("lookup_on_thread", "loadClass", "denied.Hidden"));
         assertEq("missing", p.callFunction("lookup_on_thread", "getResource", "linked/s.txt"));
@@ -407,6 +442,14 @@ string sub kotlin_compile(string src) {
     routesTest() {
         # the class loader's Java API
         Program p = newProgram(getPolicy());
+        if (sandboxClassesRefused()) {
+            # qore#7832: the sandbox restricts the filesystem, so the core refuses its Java code, and the commands
+            # that change the classpath of every Program are still refused to it
+            assertThrows("INVALID-FUNCTION-ACCESS", RefusedDesc, \p.callFunction(), ("add_path", root + "/allowed"));
+            assertGlobalCommandsRefused();
+            testSkip("qore#7832: a sandbox that restricts the filesystem refuses Java code, so its routes cannot "
+                "add entries");
+        }
         assertEq("ok", p.callFunction("add_path", root + "/allowed"));
         assertEq("found", p.callFunction("lookup", "loadClass", "pkg.Ok"));
         assertRegex("^missing", p.callFunction("lookup", "loadClass", "denied.Hidden"));
@@ -418,7 +461,12 @@ string sub kotlin_compile(string src) {
         p = restricted();
         assertEq("ok", p.callFunction("add_path", root + "/allowed"));
         assertRegex("^missing", p.callFunction("lookup", "loadClass", "denied.Hidden"));
-        # the commands that change the classpath of every Program would add an entry with no policy: they are refused
+        assertGlobalCommandsRefused();
+        assertRegex("^missing", p.callFunction("lookup", "loadClass", "denied.Hidden"));
+    }
+
+    #! the commands that change the classpath of every Program would add an entry with no policy: they are refused
+    private assertGlobalCommandsRefused() {
         foreach string cmd in ("global-add-classpath " + root + "/allowed",
                 "global-add-relative-classpath ../allowed") {
             Program issuer(PO_NEW_STYLE);
@@ -426,12 +474,12 @@ string sub kotlin_compile(string src) {
             assertThrows("JNI-SANDBOX-ERROR", \issuer.parse(), ("%requires jni\n%module-cmd(jni) " + cmd + "\n", "cmd"),
                 cmd);
         }
-        assertRegex("^missing", p.callFunction("lookup", "loadClass", "denied.Hidden"));
     }
 
     hostGrantTest() {
         # trusted code adds the entry to the class loader of a sandboxed Program
         Program p = newProgram(getPolicy());
+        checkRefused(p);
         assertEq("ok", ClasspathLookupProbe::addPath(p.callFunction("own_loader"), root + "/granted"));
         assertEq("found", p.callFunction("lookup", "loadClass", "gpkg.Granted"));
         # an entry of restricted code next to it is still checked
@@ -442,6 +490,7 @@ string sub kotlin_compile(string src) {
 
     twoPoliciesTest() {
         Program a = restricted();
+        checkRefused(a);
         Program b = newProgram(getPolicy(("other",)));
         addClasspath(b, "other");
         assertEq("found", b.callFunction("lookup", "loadClass", "opkg.OtherOnly"));
@@ -457,6 +506,7 @@ string sub kotlin_compile(string src) {
             testSkip("Kotlin compiler JAR not available");
         }
         Program p = restricted();
+        checkRefused(p);
         # a second policy, which allows the nested directory, adds it as an entry of the same class loader
         SandboxManager wide();
         wide.setUncontrolledApiPolicy(True);
@@ -487,6 +537,7 @@ string sub kotlin_compile(string src) {
         assertEq("compiled", trusted.callFunction("kotlin_compile", Linked));
 
         Program p = restricted();
+        checkRefused(p);
         assertEq("compiled", p.callFunction("kotlin_compile", Allowed));
         assertEq("unresolved", p.callFunction("kotlin_compile", Nested));
         assertEq("unresolved", p.callFunction("kotlin_compile", Linked));

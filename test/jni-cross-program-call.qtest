@@ -293,6 +293,39 @@ class JniCrossProgramCallTest inherits QUnit::Test {
         return p;
     }
 
+    #! Returns True if a sandbox that trusts its code with uncontrolled APIs but restricts the filesystem or the network
+    #! refuses Java code (qore#7832)
+    private static bool sandboxClassesRefused() {
+        return get_module_hash().jni.info.sandbox_uncontrolled_api_classes ?? False;
+    }
+
+    #! returns a sandboxed Program that may use uncontrolled APIs and whose sandbox allows all I/O
+    /** with qore#7832, a sandbox that trusts its code with uncontrolled APIs but restricts the filesystem or the
+        network (as a new SandboxManager does) refuses Java code; the test cases whose subject is which sandbox governs
+        the code, not what it restricts, use this sandbox with the feature
+    */
+    private Program getSandboxedAllowAll() {
+        return getSandboxed(sub (SandboxManager sm) {
+            sm.setFilesystemDefaultPolicy(True);
+            sm.setNetworkDefaultPolicy(True);
+        });
+    }
+
+    #! returns the sandboxed Program of the test cases whose subject is which sandbox governs the code
+    /** with qore#7832, asserts first that the sandbox of getSandboxed(), which restricts the filesystem and the
+        network, refuses the Java method that the function calls with the arguments, and returns a Program whose
+        sandbox allows all I/O
+    */
+    private Program getGovernedSandboxed(string func, softlist<auto> args, string method) {
+        Program sandboxed = getSandboxed();
+        if (!sandboxClassesRefused()) {
+            return sandboxed;
+        }
+        assertThrows("INVALID-FUNCTION-ACCESS", "restricts FILESYSTEM.*NETWORK.*" + method + ".*qore#7832",
+            \sandboxed.callFunction(), (func,) + args, "qore#7832: a sandbox that restricts I/O refuses " + method);
+        return getSandboxedAllowAll();
+    }
+
     testThreadLocal() {
         Program owner = getOwner();
         Program caller = getCaller();
@@ -352,10 +385,10 @@ class JniCrossProgramCallTest inherits QUnit::Test {
     }
 
     testSandboxedCallback() {
-        Program sandboxed = getSandboxed();
         Program owner = getOwner();
         object l = owner.callFunction("make_list");
         object c = owner.callFunction("make_consumer", "probe");
+        Program sandboxed = getGovernedSandboxed("call_via_java", (l, c), "ArrayList::forEach");
 
         sandboxed.callFunction("call_via_java", l, c);
         hash<auto> h = owner.callFunction("get_probe");
@@ -386,7 +419,7 @@ class JniCrossProgramCallTest inherits QUnit::Test {
     }
 
     testJavaQuery() {
-        Program sandboxed = getSandboxed();
+        Program sandboxed = getGovernedSandboxed("query_static", (), "SandboxIo::isSandboxed");
         Method is_sandboxed = load_class("org.qore.jni.test.SandboxIo").getMethod("isSandboxed");
         Method capture = load_class("org.qore.jni.test.SandboxIo").getMethod("capture");
 
@@ -416,6 +449,17 @@ class JniCrossProgramCallTest inherits QUnit::Test {
         assertEq("checkFile", check_file.getName());
         # only the policy answer: the check does no I/O
         string path = tmp_location() + DirSep + "jni-cross-program-call-denied";
+        if (sandboxClassesRefused()) {
+            # qore#7832: a sandbox that trusts its code with uncontrolled APIs but restricts the filesystem refuses
+            # Java code, so Java's file check cannot be reached from the sandboxed code; a sandbox that does not
+            # restrict the filesystem would have no policy to apply
+            assertThrows("INVALID-FUNCTION-ACCESS", "restricts FILESYSTEM.*SandboxIo::checkFile.*qore#7832",
+                \sandboxed.callFunction(), ("check_file_static", path), "static");
+            assertThrows("INVALID-FUNCTION-ACCESS", "restricts FILESYSTEM.*Method::invoke.*qore#7832",
+                \sandboxed.callFunction(), ("check_file_via_method", check_file, path), "an instance call");
+            testSkip("qore#7832: the sandbox that restricts the filesystem refuses Java code, so Java's file check "
+                "cannot apply its policy");
+        }
         assertThrows("FILESYSTEM-ACCESS-DENIED", \sandboxed.callFunction(), ("check_file_static", path), "static");
         string err;
         try {
@@ -708,6 +752,19 @@ class JniCrossProgramCallTest inherits QUnit::Test {
         }
         SandboxManager sm();
         call_object_method(sm, "setUncontrolledApiPolicy", True);
+        if (sandboxClassesRefused()) {
+            # qore#7832: a sandbox that trusts its code with uncontrolled APIs but restricts the filesystem or the
+            # network (as a new SandboxManager does) refuses Java code, also the owner's module commands; the
+            # subject of the case is that the owner's sandbox governs its callbacks, so its I/O policy is opened
+            Program refused(PO_NEW_STYLE);
+            refused.setSandboxManager(sm);
+            assertThrows("JNI-SANDBOX-ERROR", "\"import\" module command.*0x200000000000", \refused.parse(),
+                (OwnerSource, "sandboxed-owner"), "qore#7832: an owner whose sandbox restricts I/O");
+            sm = new SandboxManager();
+            call_object_method(sm, "setUncontrolledApiPolicy", True);
+            sm.setFilesystemDefaultPolicy(True);
+            sm.setNetworkDefaultPolicy(True);
+        }
         Program owner(PO_NEW_STYLE);
         owner.setSandboxManager(sm);
         owner.parse(OwnerSource, "sandboxed-owner");
@@ -773,6 +830,19 @@ class JniCrossProgramCallTest inherits QUnit::Test {
         Program owner = getOwner();
         code query = owner.callFunction("make_sandbox_query");
         code jc = owner.callFunction("make_java_closure", "probe");
+
+        if (sandboxClassesRefused()) {
+            # qore#7832: a Java object used as a Qore closure runs Java code, which the sandbox that restricts the
+            # filesystem and the network refuses to the code that it governs, as it refuses its Java method calls
+            foreach code c in (query, jc) {
+                assertThrows("JNI-SANDBOX-ERROR", "sandboxed code cannot call a Java object used as a Qore closure.*"
+                    "restricts the filesystem or the network", \sandboxed.callFunction(), ("call_code", c),
+                    "qore#7832: a sandbox that restricts I/O refuses the Java closure");
+            }
+            # the subject is which sandbox governs the code that the Java closure calls back: a sandbox that trusts the
+            # code and allows all I/O
+            sandboxed = getSandboxedAllowAll();
+        }
 
         assertFalse(owner.callFunction("call_code", query), "Java's query for the owner's own call");
         assertTrue(sandboxed.callFunction("call_code", query), "Java's query for a sandboxed caller");

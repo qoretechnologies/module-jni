@@ -71,8 +71,34 @@ public class JvmPrimarySandboxTrust {
         }
         ";
 
+        # true if a sandbox that trusts its code with uncontrolled APIs but restricts the filesystem or the network
+        # refuses Java code (qore#7832): the tenant's sandbox (a new manager, which restricts both) then refuses the
+        # tenant's every Java call
+        bool sub sandbox_classes() {
+            return get_module_hash().jni.info.sandbox_uncontrolled_api_classes ?? False;
+        }
+
+        # calls a function of the tenant; with the restriction classes of sandboxes, its refusal of Java code is
+        # returned as "refused-7832: <err>: <desc>"
+        auto sub tcall(Program t, string fn, ...) {
+            try {
+                return call_object_method_args(t, "callFunction", (fn,) + argv);
+            } catch (hash<ExceptionInfo> ex) {
+                if (sandbox_classes() && ex.err == "INVALID-FUNCTION-ACCESS" && ex.desc =~ /qore#7832/) {
+                    return sprintf("refused-7832: %s: %s", ex.err, ex.desc);
+                }
+                rethrow;
+            }
+        }
+
+        # runs the call that the tenant created, or returns the tenant's refusal
+        auto sub run_call(auto call) {
+            return call.typeCode() == NT_STRING ? call : ClassLoaderAccessProbe::runCall(call);
+        }
+
         hash<auto> sub drive() {
             hash<auto> h;
+            h.sandbox_classes = sandbox_classes();
             object host_loader = GovernedProgramProbe::currentLoader();
             h.trusted_before = JvmPrimarySandboxTrust::callCurrent();
             h.trusted_foreign = ClassLoaderAccessProbe::runCall(ClassLoaderAccessProbe::newForeignCall(host_loader));
@@ -81,15 +107,21 @@ public class JvmPrimarySandboxTrust {
             SandboxManager sm();
             sm.setUncontrolledApiPolicy(True);
             t.setSandboxManager(sm);
-            h.tenant = t.callFunction("benign");
+            h.tenant = tcall(t, "benign");
             h.trusted_after = JvmPrimarySandboxTrust::callCurrent();
-            h.tenant_reach = t.callFunction("reach_host");
+            h.tenant_reach = tcall(t, "reach_host");
+            # with the restriction classes of sandboxes (qore#7832), the tenant cannot use Java, so the state that a
+            # sandboxed Program's Java leaves (Java code of an unknown class loader is judged as possibly that code's,
+            # qore#7023) is set with the module command that sets it
+            if (h.sandbox_classes) {
+                Program::issueModuleCmd("jni", "set-java-thread-policy strict");
+            }
             h.unknown_loader = JvmPrimarySandboxTrust::callUnknownLoader();
-            h.parent_path = t.callFunction("add_parent", "/nonexistent/qore-7131");
-            h.register_host = t.callFunction("register_loader", host_loader);
+            h.parent_path = tcall(t, "add_parent", "/nonexistent/qore-7131");
+            h.register_host = tcall(t, "register_loader", host_loader);
             h.trusted_register = ClassLoaderAccessProbe::registerShared(host_loader);
-            h.define_shared = t.callFunction("define_own");
-            h.foreign_host = ClassLoaderAccessProbe::runCall(t.callFunction("foreign_call", host_loader));
+            h.define_shared = tcall(t, "define_own");
+            h.foreign_host = run_call(tcall(t, "foreign_call", host_loader));
             return h;
         }
 
@@ -100,6 +132,7 @@ public class JvmPrimarySandboxTrust {
         # Kotlin scripts of trusted and of sandboxed code
         hash<auto> sub drive_kotlin(string report, string reach) {
             hash<auto> h;
+            h.sandbox_classes = sandbox_classes();
             h.trusted_before = KotlinScriptEngine::eval(report);
             ClassLoaderAccessProbe::setHolder(GovernedProgramProbe::currentLoader());
             Program t(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
@@ -107,15 +140,16 @@ public class JvmPrimarySandboxTrust {
             SandboxManager sm();
             sm.setUncontrolledApiPolicy(True);
             t.setSandboxManager(sm);
-            h.tenant = t.callFunction("ev", report);
+            h.tenant = tcall(t, "ev", report);
             h.trusted_after = KotlinScriptEngine::eval(report);
-            h.tenant_reach = t.callFunction("ev", reach);
+            h.tenant_reach = tcall(t, "ev", reach);
             return h;
         }
 
         # a class loader created after the JVM's start, by trusted and by sandboxed code
         hash<auto> sub drive_new_loader() {
             hash<auto> h;
+            h.sandbox_classes = sandbox_classes();
             object host_loader = GovernedProgramProbe::currentLoader();
             h.trusted_new_loader = ClassLoaderAccessProbe::newLoader(host_loader);
             Program t(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
@@ -123,9 +157,9 @@ public class JvmPrimarySandboxTrust {
             SandboxManager sm();
             sm.setUncontrolledApiPolicy(True);
             t.setSandboxManager(sm);
-            h.tenant = t.callFunction("benign");
-            h.new_loader = t.callFunction("new_loader", host_loader);
-            h.constructors = map t.callFunction("try_constructor", $1, host_loader), (0, 1, 2);
+            h.tenant = tcall(t, "benign");
+            h.new_loader = tcall(t, "new_loader", host_loader);
+            h.constructors = map tcall(t, "try_constructor", $1, host_loader), (0, 1, 2);
             h.trusted_after = JvmPrimarySandboxTrust::callCurrent();
             return h;
         }
@@ -221,6 +255,19 @@ public class JvmPrimarySandboxTrust {
         check(isRefused(rv), "sandboxed class loader operation " + what, rv);
     }
 
+    //! true if the driver reports the restriction classes of sandboxes (qore#7832)
+    private static boolean sandboxClasses(Map<String, Object> h) {
+        return Boolean.TRUE.equals(h.get("sandbox_classes"));
+    }
+
+    //! with the restriction classes of sandboxes, the tenant's sandbox (a new manager, which restricts the filesystem
+    //! and the network) refuses the tenant's Java code (qore#7832)
+    private static void checkRefused7832(String what, Object rv) {
+        String s = String.valueOf(rv);
+        check(s.startsWith("refused-7832: INVALID-FUNCTION-ACCESS: ") && s.contains("restricts FILESYSTEM")
+            && s.contains("NETWORK") && s.contains("(qore#7832)"), "the tenant's Java code is refused: " + what, s);
+    }
+
     //! a class loader can be closed once the Qore library has been torn down, as a shutdown hook can do
     private static void checkCloseAfterShutdown() throws Throwable {
         QoreURLClassLoader loader = ClassLoaderAccessProbe.newDerived(
@@ -282,6 +329,13 @@ public class JvmPrimarySandboxTrust {
         Map<String, Object> h = (Map<String, Object>)pgm.callMethod("callFunction", "drive_kotlin", KOTLIN_REPORT,
             KOTLIN_REACH);
         check("QoreURLClassLoader:host".equals(h.get("trusted_before")), "trusted script", h.get("trusted_before"));
+        if (sandboxClasses(h)) {
+            checkRefused7832("sandboxed script", h.get("tenant"));
+            check("QoreURLClassLoader:host".equals(h.get("trusted_after")), "trusted script after the sandboxed script",
+                h.get("trusted_after"));
+            checkRefused7832("tenant_reach", h.get("tenant_reach"));
+            return;
+        }
         check("QoreURLClassLoader:tenant".equals(h.get("tenant")), "sandboxed script", h.get("tenant"));
         check("QoreURLClassLoader:host".equals(h.get("trusted_after")), "trusted script after sandboxed code used Java",
             h.get("trusted_after"));
@@ -295,6 +349,20 @@ public class JvmPrimarySandboxTrust {
         Map<String, Object> h = (Map<String, Object>)pgm.callMethod("callFunction", "drive_new_loader");
         check("ok: true".equals(h.get("trusted_new_loader")), "trusted class loader creation",
             h.get("trusted_new_loader"));
+        if (sandboxClasses(h)) {
+            checkRefused7832("benign", h.get("tenant"));
+            checkRefused7832("new_loader", h.get("new_loader"));
+            Object[] refused = (Object[])h.get("constructors");
+            check(refused.length == 3, "public constructors", refused.length);
+            for (Object rv : refused) {
+                checkRefused7832("public constructor", rv);
+            }
+            String after = (String)h.get("trusted_after");
+            check(after.startsWith("ok: "), "trusted call after the tenant was refused", after);
+            check(ClassLoader.getSystemClassLoader() == system, "system class loader",
+                ClassLoader.getSystemClassLoader());
+            return;
+        }
         checkRefused("new_loader", (String)h.get("new_loader"));
         Object[] constructors = (Object[])h.get("constructors");
         check(constructors.length == 3, "public constructors", constructors.length);
@@ -334,6 +402,24 @@ public class JvmPrimarySandboxTrust {
         String after = (String)h.get("trusted_after");
         String reach = (String)h.get("tenant_reach");
         check(before.startsWith("ok: "), "trusted call before sandboxed code used Java", before);
+        if (sandboxClasses(h)) {
+            // the tenant's every Java call is refused; the trusted calls are as before
+            for (String key : new String[] {"tenant", "tenant_reach", "parent_path", "register_host", "define_shared",
+                    "foreign_host"}) {
+                checkRefused7832(key, h.get(key));
+            }
+            check(after.startsWith("ok: "), "trusted call after the tenant was refused Java", after);
+            // the driver set the strict policy of the Java threads that governed Java would leave, so Java code of
+            // an unknown class loader is refused, as it is once sandboxed code has used Java (qore#7023)
+            String unknown7832 = (String)h.get("unknown_loader");
+            check(unknown7832.startsWith("refused: ") && unknown7832.contains("JNI-ERROR"),
+                "Java code of an unknown class loader reaching the host's Program", unknown7832);
+            check(((String)h.get("trusted_foreign")).startsWith("ok: "), "trusted class loader",
+                h.get("trusted_foreign"));
+            check("ok: registered".equals(h.get("trusted_register")), "trusted shared class registration",
+                h.get("trusted_register"));
+            return;
+        }
         check("benign".equals(h.get("tenant")), "sandboxed Java call", h.get("tenant"));
         check(after.startsWith("ok: "), "trusted call after sandboxed code used Java", after);
         check(reach.startsWith("refused: ") && reach.contains("JNI-ERROR"), "sandboxed code reaching the host's Program",

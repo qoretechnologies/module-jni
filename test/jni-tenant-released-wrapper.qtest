@@ -13,7 +13,10 @@
 #   test/jni-sandbox.qtest models sandboxed code) lets the tenant use JDK classes: with only its own closures and
 #   java.util.concurrent.CompletableFuture and java.util.Optional, it keeps the wrapper of a Qore exception that its
 #   closure raises, makes Java throw the wrapper back to Qore, and gets its message again, which crashed the process;
-#   it now gets the fixed message of a released exception.
+#   it now gets the fixed message of a released exception.  With the rule of qore#7832, a sandbox that restricts the
+#   filesystem or the network refuses Java code although it trusts the code with uncontrolled APIs, so the tenant
+#   whose sandbox denies the filesystem is refused the import of the classes; a tenant whose sandbox trusts it and
+#   restricts neither still reaches the wrapper, and gets the fixed message.
 #
 # Each case runs test/jni-tenant-released-wrapper-child.q in a new process, as a crash would end it.
 
@@ -33,6 +36,8 @@ class JniTenantReleasedWrapperTest inherits QUnit::Test {
         addTestCase("negative: a default sandbox cannot reach Java classes", \defaultCase());
         addTestCase("regression: a tenant trusted with uncontrolled APIs gets the message of a taken wrapper",
             \uncontrolledCase());
+        addTestCase("regression: a tenant trusted with uncontrolled APIs and an open sandbox gets the message of a "
+            "taken wrapper", \openCase());
         set_return_value(main());
     }
 
@@ -51,6 +56,22 @@ class JniTenantReleasedWrapperTest inherits QUnit::Test {
 
     uncontrolledCase() {
         string out = runChild("uncontrolled");
+        # the child reports the rule, as this script does not load the jni module
+        assertRegex("^classes-refused: (True|False)$", getLine(out, "classes-refused: "), out);
+        if (getLine(out, "classes-refused: ") == "classes-refused: True") {
+            # qore#7832: the sandbox denies the filesystem, which Java code does not enforce, so the module command
+            # that the tenant issues is refused as if the tenant were restricted from uncontrolled APIs
+            assertEq("tenant: JNI-SANDBOX-ERROR: cannot use the \"import\" module command, which imports Java classes: "
+                "the code that issued the command has parse options that forbid it (0x200000000000, 0x0)",
+                getLine(out, "tenant: "), out);
+            return;
+        }
+        assertEq("tenant: \"class: org.qore.jni.QoreExceptionWrapper; message: TENANT-ERROR: tenant; taken: "
+            "TENANT-ERROR: tenant; after: " + ReleasedMessage + "\"", getLine(out, "tenant: "), out);
+    }
+
+    openCase() {
+        string out = runChild("open");
         assertEq("tenant: \"class: org.qore.jni.QoreExceptionWrapper; message: TENANT-ERROR: tenant; taken: "
             "TENANT-ERROR: tenant; after: " + ReleasedMessage + "\"", getLine(out, "tenant: "), out);
     }

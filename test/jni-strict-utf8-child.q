@@ -96,6 +96,26 @@ string sub classpath_result(SandboxManager sm, string classpath, *reference<stri
     return sm;
 }
 
+#! Returns True if a sandbox that trusts its code with uncontrolled APIs but restricts the filesystem or the network
+#! refuses Java code (qore#7832)
+bool sub sandbox_classes_refused() {
+    return get_module_hash().jni.info.sandbox_uncontrolled_api_classes ?? False;
+}
+
+#! with qore#7832, checks that the sandbox, which restricts the filesystem, refuses the Program's first module command
+#! (the import that precedes add-classpath), so the entry is not checked against it, prints the result, and returns
+#! True; returns False otherwise
+bool sub check_classpath_refused(SandboxManager sm, string classpath, string name) {
+    if (!sandbox_classes_refused()) {
+        return False;
+    }
+    *string desc;
+    string rc = classpath_result(sm, classpath, \desc);
+    result(name + ": refused (qore#7832)", ("JNI-SANDBOX-ERROR", True),
+        (rc, (desc ?? "") =~ /cannot use the "import" module command.*\(0x200000000000, /));
+    return True;
+}
+
 #! makes a directory with the resource "res.txt" with the given content
 sub make_res_dir(string dir, string content) {
     mkdir(dir);
@@ -147,6 +167,9 @@ sub classpath_case() {
         printf("result: classpath: skipped (this Qore library cannot allow uncontrolled APIs in a sandbox)\n");
         return;
     }
+    if (check_classpath_refused(sm, allowed, "classpath entry in an allowed directory")) {
+        return;
+    }
     result("classpath entry in an allowed directory", "parsed: allowed", classpath_result(sm, allowed));
     result("classpath entry outside the allowed directory", "FILESYSTEM-ACCESS-DENIED",
         classpath_result(sm, outside));
@@ -191,8 +214,12 @@ sub classpath_unmappable_case() {
         printf("result: classpath: skipped (this Qore library cannot allow uncontrolled APIs in a sandbox)\n");
         return;
     }
+    string entry = allowed + DirSep + binary_to_string(EmojiUtf8, "UTF-8");
+    if (check_classpath_refused(sm, entry, "classpath entry that the JVM cannot represent")) {
+        return;
+    }
     *string desc;
-    string rc = classpath_result(sm, allowed + DirSep + binary_to_string(EmojiUtf8, "UTF-8"), \desc);
+    string rc = classpath_result(sm, entry, \desc);
     result("classpath entry that the JVM cannot represent", ("JNI-SANDBOX-ERROR", True),
         (rc, (desc ?? "") =~ /cannot be represented in the file name encoding of the JVM/));
 }

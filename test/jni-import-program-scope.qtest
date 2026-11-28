@@ -139,7 +139,16 @@ class JniImportProgramScopeTest inherits QUnit::Test {
 
         # nor does another Program see the class that a sandboxed Program imported
         importClass(s, OtherClass);
-        assertEq("LinkedList", lookup(s, "LinkedList"), "the sandboxed Program's own import");
+        if (sandboxClassesRefused()) {
+            # qore#7832: a sandbox that trusts its code with uncontrolled APIs but restricts the filesystem refuses
+            # Java code: the sandboxed Program finds its own import (the error is not UNKNOWN-CLASS), but may not use
+            # it
+            Expression e(s, sprintf(ForNameExpression, "LinkedList"), "lookup");
+            assertThrows("INVALID-FUNCTION-ACCESS", "restricts FILESYSTEM.*LinkedList.*qore#7832", \e.eval(),
+                NOTHING, "the sandboxed Program's own import");
+        } else {
+            assertEq("LinkedList", lookup(s, "LinkedList"), "the sandboxed Program's own import");
+        }
         Program c = getProgram();
         assertEq("UNKNOWN-CLASS", lookup(c, "LinkedList"), "the sandboxed Program's import in another Program");
     }
@@ -168,6 +177,12 @@ class JniImportProgramScopeTest inherits QUnit::Test {
         Program c = getProgram();
         assertEq("UNKNOWN-CLASS", lookup(c, ImportedShortName), "a later Program");
         assertEq("PARSE-EXCEPTION", parseUse(c, ImportedShortName), "a later Program, by full name");
+    }
+
+    #! Returns True if a sandbox that trusts its code with uncontrolled APIs but restricts the filesystem or the network
+    #! refuses Java code (qore#7832)
+    private static bool sandboxClassesRefused() {
+        return get_module_hash().jni.info.sandbox_uncontrolled_api_classes ?? False;
     }
 
     #! returns a new Program that loads the jni module itself

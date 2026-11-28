@@ -169,6 +169,13 @@ class KChild : TenantBase() {
 
         #! the error of an explicit call into another Program
         const NotGoverned = "cannot call into a Qore Program other than the one of the calling code";
+
+        #! the reason that a test case is skipped when the tenant's sandbox refuses Java code (qore#7832)
+        /** a sandbox that restricts nothing does not govern its code (qore#7041), so with qore#7832 no sandbox that
+            governs its code lets it use Java
+        */
+        const RefusedSkip = "qore#7832: a sandbox that trusts its code with uncontrolled APIs but restricts the "
+            + "filesystem or the network refuses Java code, so no Java code runs in a Program that a sandbox governs";
     }
 
     constructor() : QUnit::Test("jni sandbox compiler fallback", "1.0") {
@@ -183,6 +190,11 @@ class KChild : TenantBase() {
 
     optionalClassTest() {
         Program p = getTenant();
+        if (sandboxClassesRefused()) {
+            assertTenantRefused(p, "get_class_loader", "optional_class", "qore.TenantBase");
+            assertTenantRefused(p, "get_class_loader", "optional_class", Optional);
+            testSkip(RefusedSkip);
+        }
         assertTrue(p.callFunction("optional_class", "qore.TenantBase"));
         assertFalse(p.callFunction("optional_class", Optional));
         assertFalse(p.callFunction("optional_class", "qore.TenantAbsentClass"));
@@ -190,6 +202,10 @@ class KChild : TenantBase() {
 
     javaTest() {
         Program p = getTenant();
+        if (sandboxClassesRefused()) {
+            assertTenantRefused(p, "get_class_loader", "java_compile", (JavaSource, Optional));
+            testSkip(RefusedSkip);
+        }
         assertEq("hello java False", p.callFunction("java_compile", JavaSource, Optional));
         # the class that the Program has is found at runtime; a Program of its own, as the Java class of the same
         # name is compiled again
@@ -199,6 +215,10 @@ class KChild : TenantBase() {
 
     javaErrorTest() {
         Program p = getTenant();
+        if (sandboxClassesRefused()) {
+            assertTenantRefused(p, "get_class_loader", "java_compile_error", JavaMissingSource);
+            testSkip(RefusedSkip);
+        }
         string rv = p.callFunction("java_compile_error", JavaMissingSource);
         # the compiler reports the missing package as a compilation error; the package lookup is not refused
         assertRegex("^JNI-ERROR: QoreJavaCompilerException: .*Compilation failed", rv, rv);
@@ -211,6 +231,10 @@ class KChild : TenantBase() {
             testSkip("Kotlin compiler JAR not available");
         }
         Program p = getTenant(jars);
+        if (sandboxClassesRefused()) {
+            assertTenantRefused(p, "get_class_loader", "make_kotlin_compiler");
+            testSkip(RefusedSkip);
+        }
         # the compiler is created as Qorus creates it: with the Program's class loader, from the calling code
         object compiler = p.callFunction("make_kotlin_compiler");
         assertEq("hello kotlin False", p.callFunction("kotlin_compile", compiler, KotlinSource, Optional));
@@ -219,6 +243,14 @@ class KChild : TenantBase() {
     explicitTest() {
         Program p = getTenant();
         object host_loader = get_class_loader();
+        if (sandboxClassesRefused()) {
+            # qore#7832: the tenant cannot call Java code at all, so it cannot reach the host's Program through Java
+            assertTenantRefused(p, "get_class_loader", "java_explicit_load", (JavaSource, host_loader,
+                "qore.HostOnlyClass"));
+            assertTenantRefused(p, "GovernedProgramProbe::callIn\\(", "java_call_in", (host_loader, "host_fn"));
+            assertTenantRefused(p, "get_class_loader", "tenant_loader");
+            testSkip(RefusedSkip);
+        }
         # Java code that the tenant calls uses the host's class loader: the class load is refused, and is not
         # reported as a class that does not exist
         string rv = p.callFunction("java_explicit_load", JavaSource, host_loader, "qore.HostOnlyClass");
@@ -271,6 +303,32 @@ object sub make_kotlin_compiler() {
             p.setSandboxManager(sm);
         }
         return p;
+    }
+
+    #! returns the regex of the refusal of the given Java API by a sandbox that trusts its code with uncontrolled APIs
+    #! but restricts the filesystem and the network (qore#7832)
+    private static string refusedFor(string api) {
+        return "restricts FILESYSTEM \\(PO_NO_FILESYSTEM\\), NETWORK \\(PO_NO_NETWORK\\), which uncontrolled API .*"
+            + api + ".* does not enforce \\(qore#7832\\)";
+    }
+
+    #! asserts that the tenant's sandbox refuses the Java API that the given tenant function calls first (qore#7832)
+    /** the tenant's sandbox trusts it with uncontrolled APIs but restricts the filesystem and the network, which Java
+        code does not enforce
+    */
+    private assertTenantRefused(Program p, string api, string fn, *softlist<auto> args) {
+        list<auto> call_args = ();
+        push call_args, fn;
+        if (args) {
+            call_args += args;
+        }
+        assertThrows("INVALID-FUNCTION-ACCESS", refusedFor(api), \p.callFunction(), call_args);
+    }
+
+    #! Returns True if a sandbox that trusts its code with uncontrolled APIs but restricts the filesystem or the network
+    #! refuses Java code (qore#7832)
+    private static bool sandboxClassesRefused() {
+        return get_module_hash().jni.info.sandbox_uncontrolled_api_classes ?? False;
     }
 
     #! returns the Kotlin compiler and standard library JARs, if available

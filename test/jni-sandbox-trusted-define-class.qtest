@@ -180,7 +180,15 @@ sub store(string own, string host) {
         # the superclass is not found: the parent class loader, whose Program is the host's, is not asked
         Program p = getTarget(SbRestricting, False, False);
         string rv = parse(p, src);
-        assertRegex("NoClassDefFoundError: qore/HostOnlyBase", rv, SbRestricting + ": " + rv);
+        if (sandboxClassesRefused()) {
+            # qore#7832: the sandbox trusts the code with uncontrolled APIs but restricts I/O, so the code's module
+            # commands get PO_NO_UNCONTROLLED_APIS (0x200000000000) and the jni module refuses define-class itself
+            assertRegex("^JNI-SANDBOX-ERROR: cannot use the \"define-class\" module command, .*: the code that issued "
+                "the command has parse options that forbid it \\(0x200000000000, 0x0\\)$", rv,
+                SbRestricting + ": " + rv);
+        } else {
+            assertRegex("NoClassDefFoundError: qore/HostOnlyBase", rv, SbRestricting + ": " + rv);
+        }
         # a command that trusted code issues acts for the target Program only: the host's class is not found either
         foreach string sb in (SbRestricting, SbRefusing) {
             p = getTarget(sb, False);
@@ -230,6 +238,12 @@ sub store(string own, string host) {
             assertEq("ok: host", fields.HOST, sb);
             assertEq("ok: tenant", fields.OWN, sb);
         }
+    }
+
+    #! Returns True if a sandbox that trusts its code with uncontrolled APIs but restricts the filesystem or the network
+    #! refuses Java code (qore#7832)
+    private static bool sandboxClassesRefused() {
+        return get_module_hash().jni.info.sandbox_uncontrolled_api_classes ?? False;
     }
 
     #! issues define-class into the Program and checks the class

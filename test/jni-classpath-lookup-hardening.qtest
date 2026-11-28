@@ -63,6 +63,13 @@ object sub derived() {
         const MaxOutstandingCopies = 32;
         #! the locales that the cases that need UTF-8 file names try, in order
         const Utf8Locales = ("C.UTF-8", "C.utf8", "en_US.UTF-8", "en_US.utf8");
+        #! what the sandbox of a restricted Program restricts in the core's refusal of its Java code (qore#7832)
+        const RestrictsFilesystem = "FILESYSTEM \\(PO_NO_FILESYSTEM\\)";
+        #! what a sandbox that restricts only the network restricts in the core's refusal (qore#7832)
+        const RestrictsNetwork = "NETWORK \\(PO_NO_NETWORK\\)";
+        #! the reason of the skip of a case whose sandboxed code is refused Java code (qore#7832)
+        const RefusedSkip = "qore#7832: a sandbox that restricts the filesystem or the network refuses Java code, so "
+            "the classpath policy of its entries cannot be exercised";
     }
 
     private {
@@ -228,6 +235,34 @@ object sub derived() {
         return rv;
     }
 
+    #! Returns True if a sandbox that trusts its code with uncontrolled APIs but restricts the filesystem or the network
+    #! refuses Java code (qore#7832)
+    private static bool sandboxClassesRefused() {
+        return get_module_hash().jni.info.sandbox_uncontrolled_api_classes ?? False;
+    }
+
+    #! with qore#7832, asserts that the core refuses Java code to the Program, whose sandbox restricts what
+    #! \a restricts names, and skips the rest of the test case, whose classpath policy cannot be exercised
+    private checkRefused(Program p, string restricts = RestrictsFilesystem) {
+        if (!sandboxClassesRefused()) {
+            return;
+        }
+        assertThrows("INVALID-FUNCTION-ACCESS", "the sandbox that governs the calling code restricts " + restricts
+            + ".*\\(qore#7832\\)", \p.callFunction(), ("lookup", "getResource", "g.txt"));
+        testSkip(RefusedSkip);
+    }
+
+    #! with qore#7832, asserts that the child refused the case's Java code (see refused_case() in the child), and skips
+    #! the rest of the test case
+    private checkChildRefused(string name, string out, string label) {
+        if (!sandboxClassesRefused()) {
+            return;
+        }
+        list<string> lines = select out.split("\n"), $1 =~ /^result: /;
+        assertEq((sprintf("result: %s refused (qore#7832): OK", name),), lines, label + ": " + out);
+        testSkip(RefusedSkip);
+    }
+
     private Program newProgram(*SandboxManager sm) {
         Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
         p.parse(TenantSource, "tenant");
@@ -249,12 +284,14 @@ object sub derived() {
         assertFalse(ClasspathLookupProbe::hasCallerPathCopy());
         # a copy is ended only through the handle of its compilation, its class loader or its Program
         assertFalse(ClasspathLookupProbe::hasReleaseByPath());
+        checkRefused(p);
         assertEq("ok", ClasspathLookupProbe::checkCopy(p.callFunction("own_loader"), root + "/allowed", "pkg/Ok.class",
             "denied/Hidden.class", "g.txt"));
     }
 
     copyOtherProgramTest() {
         Program owner = restricted();
+        checkRefused(owner);
         Program other = newProgram(getPolicy());
         assertEq("no", other.callFunction("locations_hold", owner.callFunction("own_loader"),
             root + "/outside/other", "pkg/Ok.class"));
@@ -264,6 +301,7 @@ object sub derived() {
 
     copyReleaseTest() {
         Program p = restricted();
+        checkRefused(p);
         assertTrue(ClasspathLookupProbe::copiesReleased(p.callFunction("own_loader"), root + "/allowed"));
     }
 
@@ -275,6 +313,7 @@ object sub derived() {
     #! the outstanding copies of a Program are limited, and a released copy no longer counts
     copyCapTest() {
         Program p = restricted();
+        checkRefused(p);
         object loader = p.callFunction("own_loader");
         assertEq(MaxOutstandingCopies, p.callFunction("hold_copies", loader, MaxCopiesTried));
         assertEq(MaxOutstandingCopies, p.callFunction("hold_copies", loader, MaxCopiesTried),
@@ -284,6 +323,7 @@ object sub derived() {
     #! the limits apply across a chain of class loaders of a Program
     copyChainTest() {
         Program p = newProgram(getPolicy(("chain",)));
+        checkRefused(p);
         object loader = p.callFunction("own_loader");
         ClasspathLookupProbe::setProperty(EntriesProp, "15");
         on_exit ClasspathLookupProbe::setProperty(EntriesProp, NOTHING);
@@ -294,12 +334,14 @@ object sub derived() {
     #! closing a class loader removes its copies
     copyCloseTest() {
         Program p = newProgram(getPolicy());
+        checkRefused(p);
         assertTrue(p.callFunction("close_removes", p.callFunction("own_loader"), root + "/allowed"));
     }
 
     #! a compiler copy applies every policy of nested entries
     copyNestedTest() {
         Program outer = newProgram(getPolicy());
+        checkRefused(outer);
         SandboxManager wide();
         wide.setUncontrolledApiPolicy(True);
         wide.setFilesystemDefaultPolicy(False);
@@ -318,6 +360,7 @@ object sub derived() {
     #! a class from a later trusted entry that names no local file
     laterServedUrlTest() {
         Program p = newProgram(getPolicy());
+        checkRefused(p);
         object policy = p.callFunction("capture_policy");
         object loader = ClasspathLookupProbe::newSubLoader(p.callFunction("own_loader"));
         assertEq("ok", ClasspathLookupProbe::addUrlUnder(policy, loader, root + "/allowed/"));
@@ -391,6 +434,7 @@ object sub derived() {
         int rc;
         string out = backquote(cmd, \rc);
         assertEq(0, rc, label + ": " + out);
+        checkChildRefused(name, out, label);
         list<string> lines = select out.split("\n"), $1 =~ /^result: /;
         assertTrue(lines.size() > 0, label + ": " + out);
         map assertRegex(": OK$", $1, label + ": " + $1), lines;
@@ -449,6 +493,10 @@ object sub derived() {
                 shellQuote(root));
             int rc;
             string out = backquote(cmd, \rc);
+            if (sandboxClassesRefused()) {
+                assertEq(0, rc, out);
+                checkChildRefused(name, out, name);
+            }
             if (*string why = (out =~ x/^result: skipped: (.*)$/m)[0]) {
                 reason = locale ? sprintf("no UTF-8 locale is available: %s: %s", locale, why) : why;
                 continue;
@@ -478,6 +526,7 @@ object sub derived() {
 
     nestedPolicyTest() {
         Program outer = newProgram(getPolicy());
+        checkRefused(outer);
         # a second policy that allows the nested directory
         SandboxManager wide();
         wide.setUncontrolledApiPolicy(True);
@@ -495,6 +544,7 @@ object sub derived() {
 
     parentElementTest() {
         Program p = restricted();
+        checkRefused(p);
         foreach string op in ("getResource", "findResource", "getResources", "findResources",
                 "getResourceAsStream") {
             assertEq(p.callFunction("lookup", op, "up/../h.txt"), p.callFunction("lookup", op, "up/../g.txt"), op);
@@ -512,6 +562,7 @@ object sub derived() {
             testSkip("the open files of the process are not known");
         }
         Program p = newProgram(getPolicy(("allowed", "laterjar")));
+        checkRefused(p);
         object policy = p.callFunction("capture_policy");
         object loader = ClasspathLookupProbe::newSubLoader(p.callFunction("own_loader"));
         assertEq("ok", ClasspathLookupProbe::addUrlUnder(policy, loader, root + "/allowed/"));
@@ -523,6 +574,7 @@ object sub derived() {
 
     parentPathTest() {
         Program p = newProgram(getPolicy());
+        checkRefused(p);
         object child = p.callFunction("derived");
         assertEq("ok", p.callFunction("add_parent", child, root + "/allowed"));
         foreach object loader in (child, p.callFunction("own_loader")) {
@@ -539,6 +591,9 @@ object sub derived() {
         sm.setFilesystemDefaultPolicy(True);
         Program permissive = newProgram(sm);
         permissive.issueModuleCmd("jni", "add-classpath " + root + "/allowed");
+        # qore#7832: a new sandbox restricts the network by default, and the policy that this case changes then
+        # restricts the filesystem too, so the core refuses the Program's Java code
+        checkRefused(permissive, RestrictsNetwork);
         sm.addFilesystemDeniedPath(root + "/allowed/denied");
         assertEq("found", permissive.callFunction("lookup", "getResource", "denied/g.txt"));
 
