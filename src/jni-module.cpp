@@ -1347,6 +1347,22 @@ static void qore_jni_mc_import(const QoreString& cmd_arg, QoreProgram* pgm, JniE
     }
 }
 
+//! Returns true if a sandbox that governs the issuer of the module command being handled restricts it
+/** As jni_sandbox_restricts_caller(QoreSandboxManagerHelper::All), and, with a %Qore library that has the restriction
+    classes of sandboxes (qore#7832), also if the issuer's sandbox allows uncontrolled APIs but restricts a class that
+    the Java code does not enforce (QoreModuleCommandContext::getSandboxRestrictedClasses(), which %Qore keeps for a
+    command that a handler issues while it handles another)
+*/
+static bool jni_cmd_sandbox_restricts() {
+#if defined(QORE_HAVE_SANDBOX_UNCONTROLLED_API_CLASSES) && defined(QORE_JNI_HAS_COMMAND_CONTEXT)
+    const QoreModuleCommandContext* ctx = QoreModuleCommandContext::get();
+    if (ctx && (ctx->getSandboxRestrictedClasses() & ~static_cast<int64>(QORE_JNI_ENFORCED_DOMAINS))) {
+        return true;
+    }
+#endif
+    return jni_sandbox_restricts_caller(QoreSandboxManagerHelper::All);
+}
+
 //! Refuses a module command that runs Java code, or changes state of the JVM, to sandboxed and restricted code
 /** These commands do what an uncontrolled API does: they change state that every Program shares (the parent
     classpath, JVM system properties, the owners of shared dynamic classes), or they run Java code that the module
@@ -1364,22 +1380,6 @@ static void qore_jni_mc_import(const QoreString& cmd_arg, QoreProgram* pgm, JniE
 
     @throw JNI-SANDBOX-ERROR the command is issued in a restricted Program or under a sandbox
 */
-//! Returns true if a sandbox that governs the issuer of the module command being handled restricts it
-/** As jni_sandbox_restricts_caller(QoreSandboxManagerHelper::All), and, with a %Qore library that has the restriction
-    classes of sandboxes (qore#7832), also if the issuer's sandbox allows uncontrolled APIs but restricts a class that
-    the Java code does not enforce (QoreModuleCommandContext::getSandboxRestrictedClasses(), which %Qore keeps for a
-    command that a handler issues while it handles another)
-*/
-static bool jni_cmd_sandbox_restricts() {
-#if defined(QORE_HAVE_SANDBOX_UNCONTROLLED_API_CLASSES) && defined(QORE_JNI_HAS_COMMAND_CONTEXT)
-    const QoreModuleCommandContext* ctx = QoreModuleCommandContext::get();
-    if (ctx && (ctx->getSandboxRestrictedClasses() & ~static_cast<int64>(QORE_JNI_ENFORCED_DOMAINS))) {
-        return true;
-    }
-#endif
-    return jni_sandbox_restricts_caller(QoreSandboxManagerHelper::All);
-}
-
 static void jni_check_uncontrolled_cmd(const char* cmd, const QoreProgram* pgm, const char* what) {
     if (pgm && jni_check_target_options()) {
         std::string why = jni_program_java_refusal(pgm);
@@ -1964,6 +1964,22 @@ QoreClass* jni_class_handler(QoreNamespace* ns, const char* cname) {
     if (qore_program_refuses_uncontrolled_apis(pgm, QORE_JNI_ENFORCED_DOMAINS)) {
         printd(LogLevel, "jni_class_handler() cp: %s: the Program is refused Java code\n", cp.c_str());
         return nullptr;
+    }
+#endif
+#ifdef QORE_HAVE_SANDBOX_UNCONTROLLED_API_CLASSES
+    // the same for a Program whose sandbox refuses Java code: one that refuses uncontrolled APIs, or that trusts its
+    // code with them but restricts the filesystem or the network, which Java code does its I/O around (qore#7832).  A
+    // name is resolved for the Program, also when trusted code parses the Program's code, so the Program's own
+    // sandbox decides; and so does the sandbox of the code that resolves the name (code that a sandbox governs that
+    // parses into the Program)
+    {
+        QoreSandboxManagerHelper psm(pgm);
+        if ((psm && (!psm->trustsUncontrolledApis() || psm->filesystemRestricts() || psm->networkRestricts()))
+                || qore_sandbox_refuses_uncontrolled_api_classes(QORE_JNI_ENFORCED_DOMAINS,
+                    QoreSandboxManagerHelper::All)) {
+            printd(LogLevel, "jni_class_handler() cp: %s: a sandbox refuses the Program Java code\n", cp.c_str());
+            return nullptr;
+        }
     }
 #endif
     try {

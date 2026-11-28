@@ -103,6 +103,7 @@ class JniUncontrolledApiClassesTest inherits QUnit::Test {
         addTestCase("a restricted Program cannot use Java classes imported into it", \importedClassTest());
         addTestCase("a library module trusted with uncontrolled APIs keeps Java code", \libraryTest());
         addTestCase("a name that a restricted Program resolves loads no Java class", \classHandlerTest());
+        addTestCase("a name that a sandboxed Program resolves loads no Java class", \sandboxClassHandlerTest());
         addTestCase("Java creates no object of a refused class in a restricted Program", \newObjectTest());
         addTestCase("the jdbc classpath option is refused to a setter that restricts a class", \jdbcClasspathTest());
         set_return_value(main());
@@ -312,6 +313,32 @@ class JniUncontrolledApiClassesTest inherits QUnit::Test {
             assertEq("ok", runLibrary("JniUcTrustedLibFixture", kind, "caller-only"), "trusted library: called by a "
                 + kind + " Program");
         }
+        # a restriction that a sandboxed caller imposes on the trusted library's code is not relieved: the sandbox of
+        # the caller governs the library's Java calls for it, and, for a sandboxed caller, its PO_NO_EXTERNAL_PROCESS
+        # restricts the module code that it calls (the filesystem and the network options of the caller are not
+        # imposed on module code, which has its own access)
+        assertEq("ok", runLibrary("JniUcTrustedLibFixture", "none", "sandboxed-caller open"),
+            "trusted library: called by a Program whose sandbox trusts it and restricts nothing");
+        assertEq("ok", runLibrary("JniUcTrustedLibFixture", "no-filesystem", "sandboxed-caller open"),
+            "trusted library: called by a no-filesystem Program whose sandbox trusts it and restricts nothing");
+        string sb_restricting = runLibrary("JniUcTrustedLibFixture", "none", "sandboxed-caller restricting");
+        string sb_xp = runLibrary("JniUcTrustedLibFixture", "no-external-process", "sandboxed-caller open");
+        if (sandboxClassesRefused()) {
+            assertRegex("^INVALID-FUNCTION-ACCESS: the sandbox that governs the calling code restricts FILESYSTEM "
+                "\\(PO_NO_FILESYSTEM\\), NETWORK \\(PO_NO_NETWORK\\), which uncontrolled API .* \\(qore#7832\\)$",
+                sb_restricting, "trusted library: called by a Program whose sandbox trusts it and restricts the "
+                "filesystem and the network");
+        } else {
+            assertEq("ok", sb_restricting, "trusted library: called by a Program whose sandbox trusts it, without the "
+                "restriction classes of sandboxes");
+        }
+        if (enforced()) {
+            assertRegex("^INVALID-FUNCTION-ACCESS: .*EXTERNAL_PROCESS \\(restricted by PO_NO_EXTERNAL_PROCESS\\)",
+                sb_xp, "trusted library: called by a sandboxed no-external-process Program");
+        } else {
+            assertEq("ok", sb_xp, "trusted library: called by a sandboxed no-external-process Program, without the "
+                "restriction classes");
+        }
         # a library module that is not trusted with uncontrolled APIs: its Java code is refused when a loader that
         # restricts a class loads it first, as when a PO_NO_UNCONTROLLED_APIS loader does
         assertEq("ok", runLibrary("JniUcLibFixture", "none"), "untrusted library: an unrestricted loader");
@@ -398,6 +425,66 @@ class JniUncontrolledApiClassesTest inherits QUnit::Test {
         }
     }
 
+    #! Returns True if a sandbox that trusts its code with uncontrolled APIs but restricts the filesystem or the
+    #! network refuses Java code (qore#7832)
+    private static bool sandboxClassesRefused() {
+        return get_module_hash().jni.info.sandbox_uncontrolled_api_classes ?? False;
+    }
+
+    sandboxClassHandlerTest() {
+        # as classHandlerTest(), for a Program whose sandbox refuses Java code: one that refuses uncontrolled APIs, and
+        # one that trusts its code with them but restricts the filesystem and the network (a new manager); trusted
+        # code parses the Program's code, so the name is resolved for the Program, which the class handler judges by
+        # its sandbox (qore#7832)
+        string jar = get_script_dir() + "qore-jni-test.jar";
+        # the sandboxes: whether the class handler refuses the Program with the restriction classes of sandboxes
+        hash<string, hash<auto>> sandboxes = {
+            "refusing": {"trust": False, "open": False, "refused": True},
+            "trusting-restricting": {"trust": True, "open": False, "refused": True},
+            "trusting-open": {"trust": True, "open": True, "refused": False},
+        };
+        # a class of the jar that nothing else in the process loads, for each sandbox (see classHandlerTest())
+        hash<string, string> jar_classes = {
+            "refusing": "VarargsLeaf",
+            "trusting-restricting": "VarargsMid",
+            "trusting-open": "VarargsGrand",
+        };
+        foreach hash<auto> sb in (sandboxes.pairIterator()) {
+            string jcls = jar_classes{sb.key};
+            Program p(PO_NEW_STYLE);
+            p.loadModule("jni");
+            p.issueModuleCmd("jni", "add-classpath " + jar);
+            p.issueModuleCmd("jni", "import org.qore.jni.test.*");
+            object loader = p.callFunction("get_class_loader");
+            SandboxManager sm();
+            if (sb.value.trust) {
+                sm.setUncontrolledApiPolicy(True);
+            }
+            if (sb.value.open) {
+                sm.setFilesystemDefaultPolicy(True);
+                sm.setNetworkDefaultPolicy(True);
+            }
+            p.setSandboxManager(sm);
+            string desc;
+            try {
+                p.parse("auto sub u(Jni::org::qore::jni::test::" + jcls + " x) { return x; }",
+                    "jni-uncontrolled-api-sandbox-handler-" + sb.key);
+            } catch (hash<ExceptionInfo> ex) {
+                desc = ex.desc;
+            }
+            auto loaded = loadedClass(loader, "org.qore.jni.test." + jcls);
+            if (!sb.value.refused) {
+                # the control: the class is loaded for the Program
+                assertNeq(NOTHING, loaded, sb.key + ": the class is loaded: " + (desc ?? ""));
+            } else if (sandboxClassesRefused()) {
+                # the name is not resolved, and no Java class was loaded for it (its static initializer did not run)
+                assertRegex("reference to undefined type 'Jni::org::qore::jni::test::" + jcls + "'", desc ?? "",
+                    sb.key + ": the name is not found");
+                assertEq(NOTHING, loaded, sb.key + ": no Java class was loaded");
+            }
+        }
+    }
+
     newObjectTest() {
         # Java code that runs on a Java thread whose class loader context is a Program's has Java create a Qore object
         # in that Program (QoreJavaApi.newObjectSave()); the Program's restrictions are checked as for a class that
@@ -460,6 +547,10 @@ class JniUncontrolledApiClassesTest inherits QUnit::Test {
             if (refused) {
                 assertRegex(classpath_refusal, opened, kind.key + ": opened by the code that set it");
                 assertRegex(classpath_refusal, set_for, kind.key + ": set for trusted code to open");
+            } else if (kind.key == "none") {
+                # unrestricted code: only the driver that is not found
+                assertRegex("^JNI-ERROR: ", opened, kind.key + ": opened by the code that set it");
+                assertRegex("^JNI-ERROR: ", set_for, kind.key + ": set for trusted code to open");
             } else {
                 assertFalse(opened =~ /the jdbc 'classpath' option/, kind.key + ": opened by the code that set it: "
                     + opened);

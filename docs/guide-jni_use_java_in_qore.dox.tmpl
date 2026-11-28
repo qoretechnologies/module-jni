@@ -280,7 +280,11 @@ JNI-SANDBOX-ERROR: a Java object or closure whose origin cannot be determined ca
     @par
     A host that wants Java or sandboxed code to call it hands over a %Qore closure or object that it controls, or an
     interface that it implements with a \c QoreInvocationHandler: such callbacks run in the host's Program, whatever
-    code or thread calls them.  The origin follows the objects that the module creates or hands over, and applies where
+    code or thread calls them.  With a %Qore library that has \c QORE_HAVE_SANDBOX_UNCONTROLLED_API_CLASSES
+    (qore#7832), the sandbox of a sandboxed caller still governs the call: when it refuses Java code (it does not trust
+    its code with uncontrolled APIs, or it restricts the filesystem or the network), a host callback's own Java calls
+    are refused while that caller calls it, and so is the call of a Java object that the host obtained as a %Qore
+    closure, which runs Java code itself.  The origin follows the objects that the module creates or hands over, and applies where
     the module calls them, not to the state that Java code moves between objects: Java code of a trusted class that
     calls into %Qore with values that its caller chose acts for whoever runs it, an object that Java code (ex: a
     factory method or reflection) created for sandboxed code has no origin, and Java code that a host runs (ex: a
@@ -399,7 +403,10 @@ JNI-SANDBOX-ERROR: a Java object or closure whose origin cannot be determined ca
     allow) refuses Java code as a sandbox that refuses uncontrolled APIs does: the %Qore library refuses the Java
     classes and the module's functions to such code, and the module commands of such an issuer, and the module's own
     sandbox checks refuse it the same way (the \c jdbc driver and its choosers, \c check_class_option(), the commands
-    that change the JVM or the classpath of every Program, a class definition in another Program's class loader), so
+    that change the JVM or the classpath of every Program, a class definition in another Program's class loader, the
+    call of a Java object used as a %Qore closure, and the class handler of wildcard imports, which loads no Java
+    class while a name is resolved in a Program whose own sandbox refuses Java code, also when trusted code parses
+    the Program's code), so
     a sandbox only trusts code with Java when it opens both the filesystem and the network.  The module reports it with
     the \c sandbox_uncontrolled_api_classes key of its \c info hash.  Without it, a trusting sandbox allows Java code,
     whose file and network access its policy then reaches only where this module checks it (see below).

@@ -53,6 +53,16 @@
 #define QORE_JNI_ENFORCED_DOMAINS 0
 #endif
 
+#ifdef QORE_HAVE_SANDBOX_UNCONTROLLED_API_CLASSES
+//! The part of the refusals of the sandbox gates that names a trusting sandbox that restricts a class (qore#7832),
+//! as an inserted clause (with its closing comma) and as a trailing phrase
+#define JNI_SANDBOX_CLASSES_CLAUSE ", or whose sandbox restricts the filesystem or the network,"
+#define JNI_SANDBOX_CLASSES_PHRASE ", or whose sandbox restricts the filesystem or the network"
+#else
+#define JNI_SANDBOX_CLASSES_CLAUSE ""
+#define JNI_SANDBOX_CLASSES_PHRASE ""
+#endif
+
 //! Returns true if a sandbox that does not trust the calling code governs it
 /** With a %Qore that has the uncontrolled-API policy of sandboxes (\c SandboxManager::setUncontrolledApiPolicy()),
     code counts as restricted only if a governing sandbox refuses uncontrolled APIs (the default), so that code that a

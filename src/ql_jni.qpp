@@ -227,8 +227,8 @@ nothing check_class_option(string provider, string option, *string what) [flags=
     // (jni_sandbox_refuses_uncontrolled_code())
     if (jni_sandbox_refuses_uncontrolled_code(QoreSandboxManagerHelper::Policy)) {
         xsink->raiseException("JNI-SANDBOX-ERROR", "%s option '%s' %s, which code that a sandbox does not trust "
-            "with uncontrolled APIs, or whose sandbox restricts the filesystem or the network, cannot use",
-            provider->c_str(), option->c_str(), desc);
+            "with uncontrolled APIs" JNI_SANDBOX_CLASSES_CLAUSE " cannot use", provider->c_str(), option->c_str(),
+            desc);
     }
 #else
     // without the restriction API, module code cannot judge a composition of sandboxes, so the check keeps its

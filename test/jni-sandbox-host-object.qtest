@@ -1141,9 +1141,14 @@ nothing sub hold_context(Queue ready, Queue done) {
             QoreInvocationHandler handler(auto sub (object method, *list<auto> args) { return host_fn(); });
             object supplier = implement_interface(handler, Class::forName("java.util.function.Supplier"));
             assertRefusedCall("HostObjectProbe::supply\\(", "supplier_get", supplier);
+            # a Java object that the host obtained as a Qore closure runs Java code when it is called: the tenant's
+            # sandbox refuses it to the tenant as it refuses the tenant's other Java calls (qore#7832)
+            auto jc = HostObjectProbe::caller();
+            assertThrows("JNI-SANDBOX-ERROR", "cannot call a Java object used as a Qore closure.*restricts the "
+                "filesystem or the network", \tenant.callFunction(), ("call_code_arg", jc, "host_fn"),
+                "the tenant calls the host's Java object used as a Qore closure");
             # the host's own calls
             assertEq("ok: host", hc());
-            auto jc = HostObjectProbe::caller();
             assertEq("ok: host", jc("host_fn"));
             testSkip(RefusedSkip);
         }

@@ -125,6 +125,19 @@ QoreJniFunctionalInterface::~QoreJniFunctionalInterface() {
 
 QoreValue QoreJniFunctionalInterface::execValue(const QoreListNode* args, ExceptionSink* xsink) const {
     QoreSandboxProvenanceHelper provenance(this);
+#ifdef QORE_HAVE_SANDBOX_UNCONTROLLED_API_CLASSES
+    // the call runs Java code, as a call of a Java method does, which the Qore library refuses to code whose sandbox
+    // refuses uncontrolled APIs or restricts a class that Java code does not enforce; a Java object used as a Qore
+    // closure is called without the checks of the builtins, so it is refused here in the same way, also when another
+    // Program handed it over (qore#7832); resolved for a policy check, as the builtins are, so that a system-policy
+    // capability of trusted code is not refused
+    if (jni_sandbox_refuses_uncontrolled_code(QoreSandboxManagerHelper::Policy)) {
+        xsink->raiseException("JNI-SANDBOX-ERROR", "sandboxed code cannot call a Java object used as a Qore closure: "
+            "its sandbox does not trust it with uncontrolled APIs, or restricts the filesystem or the network, and "
+            "the call runs Java code");
+        return QoreValue();
+    }
+#endif
     try {
         ReferenceHolder<QoreListNode> evaluated_args(args ? args->evalList(xsink) : nullptr, xsink);
         if (*xsink) {

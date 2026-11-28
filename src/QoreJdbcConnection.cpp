@@ -655,8 +655,8 @@ int QoreJdbcConnection::checkSandbox(ExceptionSink* xsink) {
     // report its destinations
     if (jni_sandbox_refuses_uncontrolled_code(QoreSandboxManagerHelper::Policy)) {
         xsink->raiseException("NETWORK-ACCESS-DENIED", "the jdbc driver cannot connect for code that a sandbox "
-            "does not trust with uncontrolled APIs, or whose sandbox restricts the filesystem or the network, "
-            "because the JDBC driver is uncontrolled Java code: it resolves "
+            "does not trust with uncontrolled APIs" JNI_SANDBOX_CLASSES_PHRASE ", because the JDBC driver is "
+            "uncontrolled Java code: it resolves "
             "and connects to its destinations, and does its other I/O, in Java, where the sandbox policy and limits "
             "cannot be applied to it");
         return -1;
@@ -736,9 +736,9 @@ int QoreJdbcConnection::checkChoosers(bool& restricted, ExceptionSink* xsink) {
         ReferenceHolder<QoreSandboxManager> mgr(choosers.getPolicyManagerRef(i), xsink);
         if (jdbc_chooser_refused(choosers.allowsUncontrolledApis(i), *mgr)) {
             xsink->raiseException("JNI-SANDBOX-ERROR", "the jdbc driver cannot connect to a destination that code "
-                "chose that a sandbox does not trust with uncontrolled APIs, or whose sandbox restricts the filesystem "
-                "or the network (the code that created the datasource, or set its database name, connection values or "
-                "'%s' option)", JDBC_OPT_URL);
+                "chose that a sandbox does not trust with uncontrolled APIs" JNI_SANDBOX_CLASSES_PHRASE " (the code "
+                "that created the datasource, or set its database name, connection values or '%s' option)",
+                JDBC_OPT_URL);
             return -1;
         }
         if (!restricted) {
@@ -771,8 +771,8 @@ int QoreJdbcConnection::checkChoosers(bool& restricted, ExceptionSink* xsink) {
 #endif
             if (jdbc_chooser_refused(trusted, *mgr)) {
                 xsink->raiseException("JNI-SANDBOX-ERROR", "the jdbc '%s' option chooses the destination of the "
-                    "connection, which code that a sandbox does not trust with uncontrolled APIs, or whose sandbox "
-                    "restricts the filesystem or the network, cannot choose", JDBC_OPT_URL);
+                    "connection, which code that a sandbox does not trust with uncontrolled APIs"
+                    JNI_SANDBOX_CLASSES_CLAUSE " cannot choose", JDBC_OPT_URL);
                 return -1;
             }
             restricted = setter.hasAny(restricting_options);
