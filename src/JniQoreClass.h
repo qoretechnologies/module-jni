@@ -5,7 +5,7 @@
 
     Qore Programming Language JNI Module
 
-    Copyright (C) 2016 - 2022 Qore Technologies, s.r.o.
+    Copyright (C) 2016 - 2026 Qore Technologies, s.r.o.
 
     This library is free software; you can redistribute it and/or
     modify it under the terms of the GNU Lesser General Public
@@ -27,6 +27,10 @@
 #define _QORE_JNI_QORECLASS_H
 
 #include <string>
+
+// QORE_JNI_ENFORCED_DOMAINS and the feature macros of the Qore library, so that the inline constructor below is
+// compiled the same way in every translation unit (qore#7832)
+#include "defs.h"
 
 namespace jni {
 
