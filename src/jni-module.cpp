@@ -428,6 +428,14 @@ void jni_qore_module_desc(QoreModuleInfo& mod_info) {
     }
     info->setKeyValue("jdbc_connect_choosers", true, nullptr);
 #endif
+#ifdef _QORE_HAS_DATASOURCE_CHOOSER_CALLER_DOMAINS
+    // "jdbc_chooser_caller_domains": the jdbc driver limits a connection that library code chose for restricted code
+    // to the allow-listed drivers (qore#7910, QoreJdbcConnection::checkChoosers())
+    if (!info) {
+        info = new QoreHashNode(autoTypeInfo);
+    }
+    info->setKeyValue("jdbc_chooser_caller_domains", true, nullptr);
+#endif
 #ifdef _QORE_HAS_SANDBOX_RESTRICTS_API
     // "sandbox_restricts_api": uncontrolled code (the jdbc driver, check_class_option()) is refused unless the
     // governing sandbox trusts the code with uncontrolled APIs, as aggregated over compositions by

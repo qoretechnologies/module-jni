@@ -342,11 +342,21 @@ class JniModuleCmdIssuerTest inherits QUnit::Test {
         # that its Program inherited from the code that loaded it first (for example a %no-filesystem loader);
         # JNI-ERROR is the error of the jdbc driver that is not found after the option was accepted; the jdbc driver
         # does not connect for a sandboxed caller at all (qore#5747), which refuses it before the option is processed
+        # With a Qore library that records the domains of the code that library code acts for (qore#7910), the
+        # connection that the library code chose for a caller restricted by parse options is limited to the
+        # allow-listed jdbc drivers (qore#7867), which the qore-none URL of the fixture is not: the classpath option
+        # was still accepted, as the refusal comes from the driver check, not from the classpath option's
+        bool caller_domains = get_module_hash().jni.info.jdbc_chooser_caller_domains ?? False;
         foreach hash<auto> c in ({"kind": "trusted", "expected": "JNI-ERROR"},
-                {"kind": "no-filesystem", "expected": "JNI-ERROR"},
-                {"kind": "no-uncontrolled", "expected": "JNI-ERROR"},
+                {"kind": "no-filesystem", "expected": caller_domains ? "JNI-SANDBOX-ERROR" : "JNI-ERROR"},
+                {"kind": "no-uncontrolled", "expected": caller_domains ? "JNI-SANDBOX-ERROR" : "JNI-ERROR"},
                 {"kind": "sandboxed", "expected": "NETWORK-ACCESS-DENIED"}) {
-            assertEq(c.expected, runLibrary(c.kind, "jdbc").split(":")[0], c.kind + " first loader");
+            string rv = runLibrary(c.kind, "jdbc");
+            assertEq(c.expected, rv.split(":")[0], c.kind + " first loader");
+            if (c.expected == "JNI-SANDBOX-ERROR") {
+                assertRegex("allow-listed client/server driver", rv, c.kind + ": refused by the driver check");
+                assertFalse(rv =~ /classpath/, c.kind + ": the classpath option was accepted");
+            }
         }
     }
 

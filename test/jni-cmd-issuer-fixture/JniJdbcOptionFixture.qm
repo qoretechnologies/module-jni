@@ -15,14 +15,16 @@ module JniJdbcOptionFixture {
 }
 
 public namespace JniJdbcOptionFixture {
-#! Opens a jdbc Datasource with the classpath option from this module's code; returns the error code, or "ok"
+#! Opens a jdbc Datasource with the classpath option from this module's code; returns "<error code>: <description>",
+#! or "ok"
 public string sub openJdbc(string cp) {
     Datasource ds("jdbc:u/p@jdbc:qore-none://x{classpath=" + cp + "}");
     try {
         ds.open();
         return "ok";
     } catch (hash<ExceptionInfo> ex) {
-        return ex.err;
+        # on one line: the caller reads the last line of the output
+        return ex.err + ": " + replace(ex.desc, "\n", " ");
     }
 }
 
