@@ -831,6 +831,19 @@ class JniCrossProgramCallTest inherits QUnit::Test {
         code query = owner.callFunction("make_sandbox_query");
         code jc = owner.callFunction("make_java_closure", "probe");
 
+        if (sandboxClassesRefused()) {
+            # qore#7832: a Java object used as a Qore closure runs Java code, which the sandbox that restricts the
+            # filesystem and the network refuses to the code that it governs, as it refuses its Java method calls
+            foreach code c in (query, jc) {
+                assertThrows("JNI-SANDBOX-ERROR", "sandboxed code cannot call a Java object used as a Qore closure.*"
+                    "restricts the filesystem or the network", \sandboxed.callFunction(), ("call_code", c),
+                    "qore#7832: a sandbox that restricts I/O refuses the Java closure");
+            }
+            # the subject is which sandbox governs the code that the Java closure calls back: a sandbox that trusts the
+            # code and allows all I/O
+            sandboxed = getSandboxedAllowAll();
+        }
+
         assertFalse(owner.callFunction("call_code", query), "Java's query for the owner's own call");
         assertTrue(sandboxed.callFunction("call_code", query), "Java's query for a sandboxed caller");
 
